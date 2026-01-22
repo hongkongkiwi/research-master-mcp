@@ -85,6 +85,55 @@ cd research-master-mcp
 cargo install --path .
 ```
 
+### Compile-Time Feature Flags
+
+Individual research sources can be disabled at compile time using Cargo features. By default, all 11 sources are included.
+
+#### Available Features
+
+| Feature | Description |
+|---------|-------------|
+| `arxiv` | Enable arXiv source |
+| `pubmed` | Enable PubMed source |
+| `biorxiv` | Enable bioRxiv source |
+| `semantic` | Enable Semantic Scholar source |
+| `openalex` | Enable OpenAlex source |
+| `crossref` | Enable CrossRef source |
+| `iacr` | Enable IACR ePrint source |
+| `pmc` | Enable PMC source |
+| `hal` | Enable HAL source |
+| `dblp` | Enable DBLP source |
+| `ssrn` | Enable SSRN source |
+
+#### Feature Groups
+
+| Group | Description |
+|-------|-------------|
+| `core` | arxiv, pubmed, semantic |
+| `preprints` | arxiv, biorxiv |
+| `full` | All sources (default) |
+
+#### Build Examples
+
+```bash
+# Build with all sources (default)
+cargo build --release
+
+# Build with only core sources (smaller binary)
+cargo build --release --no-default-features --features core
+
+# Build with specific sources
+cargo build --release --no-default-features --features arxiv,semantic,openalex
+
+# Build with all sources except dblp
+cargo build --release --features -dblp
+
+# Install from source with only core sources
+cargo install --path . --no-default-features --features core
+```
+
+**Note:** Feature flags affect which sources are **compiled into the binary**. This is different from the `RESEARCH_MASTER_ENABLED_SOURCES` environment variable, which filters sources at **runtime**. You can use both together for maximum control.
+
 ### Dependencies for PDF Extraction
 
 PDF text extraction requires native poppler libraries:
