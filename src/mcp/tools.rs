@@ -7,10 +7,18 @@ use serde_json::Value;
 
 use crate::sources::SourceRegistry;
 
+pub use super::unified_tools::{
+
+pub use unified_tools::{
+    SearchByAuthorHandler, SearchPapersHandler, GetPaperHandler, DownloadPaperHandler,
+    ReadPaperHandler, GetCitationsHandler, GetReferencesHandler, LookupByDoiHandler,
+    DeduplicatePapersHandler,
+};
+
 /// An MCP tool that can be called by the client
 #[derive(Clone)]
 pub struct Tool {
-    /// Tool name (e.g., "search_arxiv")
+    /// Tool name (e.g., "search_papers")
     pub name: String,
 
     /// Human-readable description
@@ -47,215 +55,281 @@ pub struct ToolRegistry {
 }
 
 impl ToolRegistry {
-    /// Create a new tool registry and register all tools from the source registry
+    /// Create a new tool registry and register all unified tools from the source registry
     pub fn from_sources(sources: &SourceRegistry) -> Self {
         let mut registry = Self {
             tools: HashMap::new(),
         };
 
-        // Register tools for each source
-        for source in sources.all() {
-            registry.register_source_tools(source);
-        }
+        // Convert sources to a shared Arc<Vec>
+        let sources_vec: Vec<Arc<dyn crate::sources::Source>> =
+            sources.all().cloned().collect();
+        let sources_arc = Arc::new(sources_vec);
 
-        // Register utility tools
-        registry.register_utility_tools();
+        // Register unified tools
+        registry.register_unified_tools(&sources_arc);
 
         registry
     }
 
-    /// Register all tools for a specific source
-    fn register_source_tools(&mut self, source: &Arc<dyn crate::sources::Source>) {
-        let source_id = source.id();
+    /// Register unified tools (9 tools total instead of per-source tools)
+    fn register_unified_tools(&mut self, sources: &Arc<Vec<Arc<dyn crate::sources::Source>>>) {
+        let sources_count = sources.len();
 
-        // Search tool (if supported)
-        if source.supports_search() {
-            self.register(Tool {
-                name: format!("search_{}", source_id),
-                description: format!("Search {} for papers", source.name()),
-                input_schema: serde_json::json!({
-                    "type": "object",
-                    "properties": {
-                        "query": {
-                            "type": "string",
-                            "description": "Search query"
-                        },
-                        "max_results": {
-                            "type": "integer",
-                            "description": "Maximum number of results",
-                            "default": 10
-                        },
-                        "year": {
-                            "type": "string",
-                            "description": "Year filter (e.g., '2020', '2018-2022', '2010-', '-2015')"
-                        },
-                        "category": {
-                            "type": "string",
-                            "description": "Category/subject filter"
-                        }
+        // 1. search_papers - Search across all or specific sources
+        self.register(Tool {
+            name: "search_papers".to_string(),
+            description: format!(
+                "Search for papers across {} available research sources",
+                sources_count
+            ),
+            input_schema: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "Search query string"
                     },
-                    "required": ["query"]
-                }),
-                handler: Arc::new(SearchToolHandler {
-                    source: source.clone(),
-                }),
-            });
-        }
-
-        // Download tool (if supported)
-        if source.supports_download() {
-            self.register(Tool {
-                name: format!("download_{}", source_id),
-                description: format!("Download a paper from {}", source.name()),
-                input_schema: serde_json::json!({
-                    "type": "object",
-                    "properties": {
-                        "paper_id": {
-                            "type": "string",
-                            "description": "Paper ID"
-                        },
-                        "save_path": {
-                            "type": "string",
-                            "description": "Directory to save the PDF",
-                            "default": "./downloads"
-                        }
+                    "source": {
+                        "type": "string",
+                        "description": "Specific source to search (e.g., 'arxiv', 'semantic', 'pubmed'). If not specified, searches all sources."
                     },
-                    "required": ["paper_id"]
-                }),
-                handler: Arc::new(DownloadToolHandler {
-                    source: source.clone(),
-                }),
-            });
-        }
-
-        // Read tool (if supported)
-        if source.supports_read() {
-            self.register(Tool {
-                name: format!("read_{}_paper", source_id),
-                description: format!("Read and extract text from a {} paper", source.name()),
-                input_schema: serde_json::json!({
-                    "type": "object",
-                    "properties": {
-                        "paper_id": {
-                            "type": "string",
-                            "description": "Paper ID"
-                        },
-                        "save_path": {
-                            "type": "string",
-                            "description": "Directory for downloaded PDFs",
-                            "default": "./downloads"
-                        }
+                    "max_results": {
+                        "type": "integer",
+                        "description": "Maximum number of results per source",
+                        "default": 10
                     },
-                    "required": ["paper_id"]
-                }),
-                handler: Arc::new(ReadToolHandler {
-                    source: source.clone(),
-                }),
-            });
-        }
-
-        // Citation tools (if supported)
-        if source.supports_citations() {
-            for (tool_suffix, desc) in [
-                ("citations", "papers that cite this paper"),
-                ("references", "papers referenced by this paper"),
-                ("related", "related papers"),
-            ] {
-                self.register(Tool {
-                    name: format!("get_{}_{}", source_id, tool_suffix),
-                    description: format!("Get {} from {}", desc, source.name()),
-                    input_schema: serde_json::json!({
-                        "type": "object",
-                        "properties": {
-                            "paper_id": {
-                                "type": "string",
-                                "description": "Paper ID"
-                            },
-                            "max_results": {
-                                "type": "integer",
-                                "description": "Maximum number of results",
-                                "default": 20
-                            }
-                        },
-                        "required": ["paper_id"]
-                    }),
-                    handler: Arc::new(CitationToolHandler {
-                        source: source.clone(),
-                        citation_type: tool_suffix.to_string(),
-                    }),
-                });
-            }
-        }
-
-        // Author search (if supported)
-        if source.supports_author_search() {
-            self.register(Tool {
-                name: format!("search_{}_by_author", source_id),
-                description: format!("Search {} by author name", source.name()),
-                input_schema: serde_json::json!({
-                    "type": "object",
-                    "properties": {
-                        "author_name": {
-                            "type": "string",
-                            "description": "Author name"
-                        },
-                        "max_results": {
-                            "type": "integer",
-                            "description": "Maximum number of results",
-                            "default": 20
-                        }
+                    "year": {
+                        "type": "string",
+                        "description": "Year filter (e.g., '2020', '2018-2022', '2010-', '-2015')"
                     },
-                    "required": ["author_name"]
-                }),
-                handler: Arc::new(AuthorSearchToolHandler {
-                    source: source.clone(),
-                }),
-            });
-        }
+                    "category": {
+                        "type": "string",
+                        "description": "Category/subject filter"
+                    }
+                },
+                "required": ["query"]
+            }),
+            handler: Arc::new(SearchPapersHandler {
+                sources: sources.clone(),
+            }),
+        });
 
-        // DOI lookup (if supported)
-        if source.supports_doi_lookup() {
-            self.register(Tool {
-                name: format!("get_{}_by_doi", source_id),
-                description: format!("Get a paper from {} by DOI", source.name()),
-                input_schema: serde_json::json!({
-                    "type": "object",
-                    "properties": {
-                        "doi": {
-                            "type": "string",
-                            "description": "Digital Object Identifier"
-                        }
+        // 2. search_by_author - Author search across sources
+        self.register(Tool {
+            name: "search_by_author".to_string(),
+            description: format!(
+                "Search for papers by author across {} research sources",
+                sources_count
+            ),
+            input_schema: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "author": {
+                        "type": "string",
+                        "description": "Author name"
                     },
-                    "required": ["doi"]
-                }),
-                handler: Arc::new(DoiLookupHandler {
-                    source: source.clone(),
-                }),
-            });
-        }
-    }
+                    "source": {
+                        "type": "string",
+                        "description": "Specific source to search. If not specified, searches all sources with author search capability."
+                    },
+                    "max_results": {
+                        "type": "integer",
+                        "description": "Maximum results per source",
+                        "default": 10
+                    }
+                },
+                "required": ["author"]
+            }),
+            handler: Arc::new(SearchByAuthorHandler {
+                sources: sources.clone(),
+            }),
+        });
 
-    /// Register utility tools (deduplication, etc.)
-    fn register_utility_tools(&mut self) {
+        // 3. get_paper - Get paper metadata with auto-detection
+        self.register(Tool {
+            name: "get_paper".to_string(),
+            description: "Get detailed metadata for a specific paper. Source is auto-detected from paper ID format.".to_string(),
+            input_schema: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "paper_id": {
+                        "type": "string",
+                        "description": "Paper identifier (e.g., '2301.12345', 'arXiv:2301.12345', 'PMC12345678')"
+                    },
+                    "source": {
+                        "type": "string",
+                        "description": "Override auto-detection and use specific source"
+                    }
+                },
+                "required": ["paper_id"]
+            }),
+            handler: Arc::new(GetPaperHandler {
+                sources: sources.clone(),
+            }),
+        });
+
+        // 4. download_paper - Download with auto-detection
+        self.register(Tool {
+            name: "download_paper".to_string(),
+            description: "Download a paper PDF to your local filesystem. Source is auto-detected from paper ID format.".to_string(),
+            input_schema: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "paper_id": {
+                        "type": "string",
+                        "description": "Paper identifier"
+                    },
+                    "source": {
+                        "type": "string",
+                        "description": "Override auto-detection and use specific source"
+                    },
+                    "output_path": {
+                        "type": "string",
+                        "description": "Save path for the PDF",
+                        "default": "./downloads"
+                    },
+                    "auto_filename": {
+                        "type": "boolean",
+                        "description": "Auto-generate filename from paper title",
+                        "default": true
+                    }
+                },
+                "required": ["paper_id"]
+            }),
+            handler: Arc::new(DownloadPaperHandler {
+                sources: sources.clone(),
+            }),
+        });
+
+        // 5. read_paper - PDF text extraction with auto-detection
+        self.register(Tool {
+            name: "read_paper".to_string(),
+            description: "Extract and return the full text content from a paper PDF. Source is auto-detected from paper ID format. Requires poppler to be installed.".to_string(),
+            input_schema: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "paper_id": {
+                        "type": "string",
+                        "description": "Paper identifier"
+                    },
+                    "source": {
+                        "type": "string",
+                        "description": "Override auto-detection and use specific source"
+                    }
+                },
+                "required": ["paper_id"]
+            }),
+            handler: Arc::new(ReadPaperHandler {
+                sources: sources.clone(),
+            }),
+        });
+
+        // 6. get_citations - Get papers that cite a given paper
+        self.register(Tool {
+            name: "get_citations".to_string(),
+            description: "Get papers that cite a specific paper. Prefers Semantic Scholar for best results.".to_string(),
+            input_schema: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "paper_id": {
+                        "type": "string",
+                        "description": "Paper identifier"
+                    },
+                    "source": {
+                        "type": "string",
+                        "description": "Specific source (default: 'semantic')",
+                        "default": "semantic"
+                    },
+                    "max_results": {
+                        "type": "integer",
+                        "description": "Maximum results",
+                        "default": 20
+                    }
+                },
+                "required": ["paper_id"]
+            }),
+            handler: Arc::new(GetCitationsHandler {
+                sources: sources.clone(),
+            }),
+        });
+
+        // 7. get_references - Get papers referenced by a given paper
+        self.register(Tool {
+            name: "get_references".to_string(),
+            description: "Get papers referenced by a specific paper. Prefers Semantic Scholar for best results.".to_string(),
+            input_schema: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "paper_id": {
+                        "type": "string",
+                        "description": "Paper identifier"
+                    },
+                    "source": {
+                        "type": "string",
+                        "description": "Specific source (default: 'semantic')",
+                        "default": "semantic"
+                    },
+                    "max_results": {
+                        "type": "integer",
+                        "description": "Maximum results",
+                        "default": 20
+                    }
+                },
+                "required": ["paper_id"]
+            }),
+            handler: Arc::new(GetReferencesHandler {
+                sources: sources.clone(),
+            }),
+        });
+
+        // 8. lookup_by_doi - DOI lookup across all sources
+        self.register(Tool {
+            name: "lookup_by_doi".to_string(),
+            description: "Look up a paper by its DOI across all sources that support DOI lookup.".to_string(),
+            input_schema: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "doi": {
+                        "type": "string",
+                        "description": "Digital Object Identifier (e.g., '10.48550/arXiv.2301.12345')"
+                    },
+                    "source": {
+                        "type": "string",
+                        "description": "Specific source to query. If not specified, queries all sources with DOI lookup capability."
+                    }
+                },
+                "required": ["doi"]
+            }),
+            handler: Arc::new(LookupByDoiHandler {
+                sources: sources.clone(),
+            }),
+        });
+
+        // 9. deduplicate_papers - Remove duplicates
         self.register(Tool {
             name: "deduplicate_papers".to_string(),
-            description: "Remove duplicate papers from a list".to_string(),
+            description: "Remove duplicate papers from a list using DOI matching and title similarity.".to_string(),
             input_schema: serde_json::json!({
                 "type": "object",
                 "properties": {
                     "papers": {
                         "type": "array",
-                        "description": "Array of paper objects"
+                        "description": "Array of paper objects",
+                        "items": {
+                            "type": "object"
+                        }
                     },
-                    "keep": {
+                    "strategy": {
                         "type": "string",
-                        "description": "Which papers to keep ('first' or 'last')",
+                        "description": "Deduplication strategy: 'first' (keep first), 'last' (keep last), or 'mark' (add is_duplicate flag)",
+                        "enum": ["first", "last", "mark"],
                         "default": "first"
                     }
                 },
                 "required": ["papers"]
             }),
-            handler: Arc::new(DeduplicateToolHandler),
+            handler: Arc::new(DeduplicatePapersHandler),
         });
     }
 
@@ -281,210 +355,5 @@ impl ToolRegistry {
             .ok_or_else(|| format!("Tool '{}' not found", name))?;
 
         tool.handler.execute(args).await
-    }
-}
-
-// ===== Tool Handlers =====
-
-#[derive(Debug)]
-struct SearchToolHandler {
-    source: Arc<dyn crate::sources::Source>,
-}
-
-#[async_trait::async_trait]
-impl ToolHandler for SearchToolHandler {
-    async fn execute(&self, args: Value) -> Result<Value, String> {
-        let query = args
-            .get("query")
-            .and_then(|v| v.as_str())
-            .ok_or("Missing 'query' parameter")?;
-
-        let max_results = args
-            .get("max_results")
-            .and_then(|v| v.as_u64())
-            .unwrap_or(10) as usize;
-
-        let year = args.get("year").and_then(|v| v.as_str()).map(|s| s.to_string());
-
-        let category = args
-            .get("category")
-            .and_then(|v| v.as_str())
-            .map(|s| s.to_string());
-
-        let mut search_query = crate::models::SearchQuery::new(query).max_results(max_results);
-
-        if let Some(year) = year {
-            search_query = search_query.year(year);
-        }
-        if let Some(cat) = category {
-            search_query = search_query.category(cat);
-        }
-
-        let response = self.source.search(&search_query).await.map_err(|e| e.to_string())?;
-
-        serde_json::to_value(response).map_err(|e| e.to_string())
-    }
-}
-
-#[derive(Debug)]
-struct DownloadToolHandler {
-    source: Arc<dyn crate::sources::Source>,
-}
-
-#[async_trait::async_trait]
-impl ToolHandler for DownloadToolHandler {
-    async fn execute(&self, args: Value) -> Result<Value, String> {
-        let paper_id = args
-            .get("paper_id")
-            .and_then(|v| v.as_str())
-            .ok_or("Missing 'paper_id' parameter")?;
-
-        let save_path = args
-            .get("save_path")
-            .and_then(|v| v.as_str())
-            .unwrap_or("./downloads");
-
-        let request = crate::models::DownloadRequest::new(paper_id, save_path);
-
-        let result = self.source.download(&request).await.map_err(|e| e.to_string())?;
-
-        serde_json::to_value(result).map_err(|e| e.to_string())
-    }
-}
-
-#[derive(Debug)]
-struct ReadToolHandler {
-    source: Arc<dyn crate::sources::Source>,
-}
-
-#[async_trait::async_trait]
-impl ToolHandler for ReadToolHandler {
-    async fn execute(&self, args: Value) -> Result<Value, String> {
-        let paper_id = args
-            .get("paper_id")
-            .and_then(|v| v.as_str())
-            .ok_or("Missing 'paper_id' parameter")?;
-
-        let save_path = args
-            .get("save_path")
-            .and_then(|v| v.as_str())
-            .unwrap_or("./downloads");
-
-        let request = crate::models::ReadRequest::new(paper_id, save_path);
-
-        let result = self.source.read(&request).await.map_err(|e| e.to_string())?;
-
-        serde_json::to_value(result).map_err(|e| e.to_string())
-    }
-}
-
-#[derive(Debug)]
-struct CitationToolHandler {
-    source: Arc<dyn crate::sources::Source>,
-    citation_type: String,
-}
-
-#[async_trait::async_trait]
-impl ToolHandler for CitationToolHandler {
-    async fn execute(&self, args: Value) -> Result<Value, String> {
-        let paper_id = args
-            .get("paper_id")
-            .and_then(|v| v.as_str())
-            .ok_or("Missing 'paper_id' parameter")?;
-
-        let max_results = args
-            .get("max_results")
-            .and_then(|v| v.as_u64())
-            .unwrap_or(20) as usize;
-
-        let request = crate::models::CitationRequest::new(paper_id).max_results(max_results);
-
-        let response = match self.citation_type.as_str() {
-            "citations" => self.source.get_citations(&request).await,
-            "references" => self.source.get_references(&request).await,
-            "related" => self.source.get_related(&request).await,
-            _ => Err(crate::sources::SourceError::InvalidRequest(
-                "Unknown citation type".to_string(),
-            )),
-        }
-        .map_err(|e| e.to_string())?;
-
-        serde_json::to_value(response).map_err(|e| e.to_string())
-    }
-}
-
-#[derive(Debug)]
-struct AuthorSearchToolHandler {
-    source: Arc<dyn crate::sources::Source>,
-}
-
-#[async_trait::async_trait]
-impl ToolHandler for AuthorSearchToolHandler {
-    async fn execute(&self, args: Value) -> Result<Value, String> {
-        let author_name = args
-            .get("author_name")
-            .and_then(|v| v.as_str())
-            .ok_or("Missing 'author_name' parameter")?;
-
-        let max_results = args
-            .get("max_results")
-            .and_then(|v| v.as_u64())
-            .unwrap_or(20) as usize;
-
-        let response = self
-            .source
-            .search_by_author(author_name, max_results)
-            .await
-            .map_err(|e| e.to_string())?;
-
-        serde_json::to_value(response).map_err(|e| e.to_string())
-    }
-}
-
-#[derive(Debug)]
-struct DoiLookupHandler {
-    source: Arc<dyn crate::sources::Source>,
-}
-
-#[async_trait::async_trait]
-impl ToolHandler for DoiLookupHandler {
-    async fn execute(&self, args: Value) -> Result<Value, String> {
-        let doi = args
-            .get("doi")
-            .and_then(|v| v.as_str())
-            .ok_or("Missing 'doi' parameter")?;
-
-        let paper = self.source.get_by_doi(doi).await.map_err(|e| e.to_string())?;
-
-        serde_json::to_value(paper).map_err(|e| e.to_string())
-    }
-}
-
-#[derive(Debug)]
-struct DeduplicateToolHandler;
-
-#[async_trait::async_trait]
-impl ToolHandler for DeduplicateToolHandler {
-    async fn execute(&self, args: Value) -> Result<Value, String> {
-        let papers: Vec<crate::models::Paper> = serde_json::from_value(
-            args.get("papers")
-                .ok_or("Missing 'papers' parameter")?
-                .clone(),
-        )
-        .map_err(|e| format!("Invalid papers array: {}", e))?;
-
-        let keep = args
-            .get("keep")
-            .and_then(|v| v.as_str())
-            .unwrap_or("first");
-
-        let strategy = match keep {
-            "last" => crate::utils::DuplicateStrategy::Last,
-            _ => crate::utils::DuplicateStrategy::First,
-        };
-
-        let deduped = crate::utils::deduplicate_papers(papers, strategy);
-
-        serde_json::to_value(deduped).map_err(|e| e.to_string())
     }
 }
