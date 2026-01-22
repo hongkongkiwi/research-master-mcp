@@ -14,6 +14,8 @@ use super::biorxiv::BiorxivSource;
 use super::crossref::CrossRefSource;
 #[cfg(feature = "source-dblp")]
 use super::dblp::DblpSource;
+#[cfg(feature = "source-dimensions")]
+use super::dimensions::DimensionsSource;
 #[cfg(feature = "source-hal")]
 use super::hal::HalSource;
 #[cfg(feature = "source-iacr")]
@@ -28,6 +30,16 @@ use super::pubmed::PubMedSource;
 use super::semantic::SemanticScholarSource;
 #[cfg(feature = "source-ssrn")]
 use super::ssrn::SsrnSource;
+#[cfg(feature = "source-ieee_xplore")]
+use super::ieee_xplore::IeeeXploreSource;
+#[cfg(feature = "source-core-repo")]
+use super::core::CoreSource;
+#[cfg(feature = "source-zenodo")]
+use super::zenodo::ZenodoSource;
+#[cfg(feature = "source-unpaywall")]
+use super::unpaywall::UnpaywallSource;
+#[cfg(feature = "source-mdpi")]
+use super::mdpi::MdpiSource;
 
 /// Environment variable for filtering enabled sources
 /// Comma-separated list of source IDs to enable (e.g., "arxiv,pubmed,semantic")
@@ -122,6 +134,24 @@ impl SourceRegistry {
 
         #[cfg(feature = "source-dblp")]
         try_register!(DblpSource::new());
+
+        #[cfg(feature = "source-dimensions")]
+        try_register!(DimensionsSource::new());
+
+        #[cfg(feature = "source-ieee_xplore")]
+        try_register!(IeeeXploreSource::new());
+
+        #[cfg(feature = "source-core-repo")]
+        try_register!(CoreSource::new());
+
+        #[cfg(feature = "source-zenodo")]
+        try_register!(ZenodoSource::new());
+
+        #[cfg(feature = "source-unpaywall")]
+        try_register!(UnpaywallSource::new());
+
+        #[cfg(feature = "source-mdpi")]
+        try_register!(MdpiSource::new());
 
         #[cfg(feature = "source-ssrn")]
         try_register!(SsrnSource::new());

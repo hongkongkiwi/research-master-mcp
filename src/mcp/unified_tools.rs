@@ -5,7 +5,7 @@ use std::sync::Arc;
 use serde_json::Value;
 use async_trait::async_trait;
 
-use super::ToolHandler;
+use super::tools::ToolHandler;
 
 /// Handler for searching papers across all or specific sources
 #[derive(Debug)]

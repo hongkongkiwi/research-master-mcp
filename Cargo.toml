@@ -83,6 +83,12 @@ pmc = ["source-pmc"]
 hal = ["source-hal"]
 dblp = ["source-dblp"]
 ssrn = ["source-ssrn"]
+dimensions = ["source-dimensions"]
+ieee_xplore = ["source-ieee_xplore"]
+core_repo = ["source-core-repo"]
+zenodo = ["source-zenodo"]
+unpaywall = ["source-unpaywall"]
+mdpi = ["source-mdpi"]
 
 # Internal feature names (to avoid conflicts with source IDs)
 source-arxiv = []
@@ -96,6 +102,12 @@ source-pmc = []
 source-hal = []
 source-dblp = []
 source-ssrn = []
+source-dimensions = []
+source-ieee_xplore = []
+source-core-repo = []
+source-zenodo = []
+source-unpaywall = []
+source-mdpi = []
 
 # Default feature: all sources enabled
 default = [
@@ -110,6 +122,12 @@ default = [
     "source-hal",
     "source-dblp",
     "source-ssrn",
+    "source-dimensions",
+    "source-ieee_xplore",
+    "source-core-repo",
+    "source-zenodo",
+    "source-unpaywall",
+    "source-mdpi",
 ]
 
 # Convenience feature groups

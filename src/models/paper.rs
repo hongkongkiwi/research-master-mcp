@@ -23,6 +23,11 @@ pub enum SourceType {
     SciHub,
     CORE,
     EuropePMC,
+    Dimensions,
+    IeeeXplore,
+    Zenodo,
+    Unpaywall,
+    MDPI,
     #[serde(untagged)]
     Other(String),
 }
@@ -47,6 +52,11 @@ impl SourceType {
             SourceType::SciHub => "Sci-Hub",
             SourceType::CORE => "CORE",
             SourceType::EuropePMC => "Europe PMC",
+            SourceType::Dimensions => "Dimensions",
+            SourceType::IeeeXplore => "IEEE Xplore",
+            SourceType::Zenodo => "Zenodo",
+            SourceType::Unpaywall => "Unpaywall",
+            SourceType::MDPI => "MDPI",
             SourceType::Other(s) => s,
         }
     }
@@ -70,6 +80,11 @@ impl SourceType {
             SourceType::SciHub => "sci_hub",
             SourceType::CORE => "core",
             SourceType::EuropePMC => "europe_pmc",
+            SourceType::Dimensions => "dimensions",
+            SourceType::IeeeXplore => "ieee_xplore",
+            SourceType::Zenodo => "zenodo",
+            SourceType::Unpaywall => "unpaywall",
+            SourceType::MDPI => "mdpi",
             SourceType::Other(s) => s,
         }
     }

@@ -19,6 +19,12 @@
 //! - `hal` - Enable HAL source (default: enabled)
 //! - `dblp` - Enable DBLP source (default: enabled)
 //! - `ssrn` - Enable SSRN source (default: enabled)
+//! - `dimensions` - Enable Dimensions source (default: enabled)
+//! - `ieee_xplore` - Enable IEEE Xplore source (default: enabled)
+//! - `core` - Enable CORE source (default: enabled)
+//! - `zenodo` - Enable Zenodo source (default: enabled)
+//! - `unpaywall` - Enable Unpaywall source (default: enabled)
+//! - `mdpi` - Enable MDPI source (default: enabled)
 //!
 //! # Feature Groups
 //!
@@ -47,6 +53,18 @@ mod biorxiv;
 mod crossref;
 #[cfg(feature = "source-dblp")]
 mod dblp;
+#[cfg(feature = "source-dimensions")]
+mod dimensions;
+#[cfg(feature = "source-ieee_xplore")]
+mod ieee_xplore;
+#[cfg(feature = "source-core-repo")]
+mod core;
+#[cfg(feature = "source-zenodo")]
+mod zenodo;
+#[cfg(feature = "source-unpaywall")]
+mod unpaywall;
+#[cfg(feature = "source-mdpi")]
+mod mdpi;
 #[cfg(feature = "source-hal")]
 mod hal;
 #[cfg(feature = "source-iacr")]

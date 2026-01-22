@@ -8,8 +8,6 @@ use serde_json::Value;
 use crate::sources::SourceRegistry;
 
 pub use super::unified_tools::{
-
-pub use unified_tools::{
     SearchByAuthorHandler, SearchPapersHandler, GetPaperHandler, DownloadPaperHandler,
     ReadPaperHandler, GetCitationsHandler, GetReferencesHandler, LookupByDoiHandler,
     DeduplicatePapersHandler,
