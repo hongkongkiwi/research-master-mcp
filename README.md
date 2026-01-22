@@ -8,13 +8,13 @@ A Model Context Protocol (MCP) server for searching and downloading academic pap
 
 ## Overview
 
-Research Master MCP is a comprehensive academic research server that provides unified access to 11 major research repositories and databases. It implements the Model Context Protocol (MCP) to integrate seamlessly with AI assistants like Claude Desktop, enabling powerful literature search, paper discovery, and citation analysis capabilities.
+Research Master MCP is a comprehensive academic research server that provides unified access to **26 major research repositories and databases**. It implements the Model Context Protocol (MCP) to integrate seamlessly with AI assistants like Claude Desktop, enabling powerful literature search, paper discovery, and citation analysis capabilities.
 
 ## Features
 
 ### Multi-Source Search
 
-Search across **11 academic research sources** simultaneously:
+Search across **26 academic research sources** simultaneously:
 
 | Source | Search | Download | Read* | Citations | DOI Lookup | Author Search |
 |--------|--------|----------|-------|-----------|------------|---------------|
@@ -24,11 +24,29 @@ Search across **11 academic research sources** simultaneously:
 | [PubMed](https://pubmed.ncbi.nlm.nih.gov) | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ |
 | [PMC](https://www.ncbi.nlm.nih.gov/pmc) | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ |
 | [bioRxiv](https://biorxiv.org) | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ |
+| [medRxiv](https://medrxiv.org) | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ |
 | [HAL](https://hal.science) | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ |
 | [DBLP](https://dblp.org) | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
 | [CrossRef](https://www.crossref.org) | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ |
 | [IACR ePrint](https://eprint.iacr.org) | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ |
 | [SSRN](https://www.ssrn.com) | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ |
+| [CORE](https://core.ac.uk) | ✅ | ✅ | ✅ | ❌ | ✅ | ❌ |
+| [EuropePMC](https://europepmc.org) | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ |
+| [Dimensions](https://app.dimensions.ai) | ✅ | ❌ | ❌ | ✅ | ❌ | ❌ |
+| [IEEE Xplore](https://ieeexplore.ieee.org) | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| [Zenodo](https://zenodo.org) | ✅ | ✅ | ✅ | ❌ | ✅ | ❌ |
+| [Unpaywall](https://unpaywall.org) | ❌ | ✅ | ❌ | ❌ | ✅ | ❌ |
+| [MDPI](https://mdpi.com) | ✅ | ✅ | ✅ | ❌ | ✅ | ❌ |
+| [JSTOR](https://www.jstor.org) | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| [SciSpace](https://scispace.net) | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ |
+| [ACM DL](https://dl.acm.org) | ✅ | ❌ | ❌ | ❌ | ✅ | ❌ |
+| [Connected Papers](https://www.connectedpapers.com) | ✅ | ❌ | ❌ | ✅ | ❌ | ❌ |
+| [DOAJ](https://doaj.org) | ✅ | ✅ | ✅ | ❌ | ✅ | ❌ |
+| [WorldWideScience](https://www.worldwidescience.org) | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| [OSF Preprints](https://osf.io/preprints) | ✅ | ✅ | ✅ | ❌ | ✅ | ❌ |
+| [BASE](https://www.base-search.net) | ✅ | ✅ | ✅ | ❌ | ✅ | ❌ |
+| [Springer](https://link.springer.com) | ✅ | ❌ | ❌ | ❌ | ✅ | ❌ |
+| [Google Scholar](https://scholar.google.com) | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
 
 *PDF text extraction requires poppler/libpoppler to be installed on your system.
 
@@ -68,6 +86,7 @@ Intelligent duplicate detection across sources:
 - **Auto-disable sources** that fail to initialize (e.g., missing API keys)
 - **Enable specific sources** via environment variable
 - Graceful degradation when some sources are unavailable
+- **Google Scholar** is disabled by default and requires `GOOGLE_SCHOLAR_ENABLED=true` to activate
 
 ## Installation
 
@@ -87,7 +106,7 @@ cargo install --path .
 
 ### Compile-Time Feature Flags
 
-Individual research sources can be disabled at compile time using Cargo features. By default, all 11 sources are included.
+Individual research sources can be disabled at compile time using Cargo features. By default, all sources are included except Google Scholar (requires `GOOGLE_SCHOLAR_ENABLED=true`).
 
 #### Available Features
 
@@ -104,6 +123,22 @@ Individual research sources can be disabled at compile time using Cargo features
 | `hal` | Enable HAL source |
 | `dblp` | Enable DBLP source |
 | `ssrn` | Enable SSRN source |
+| `dimensions` | Enable Dimensions source |
+| `ieee_xplore` | Enable IEEE Xplore source |
+| `core_repo` | Enable CORE source |
+| `zenodo` | Enable Zenodo source |
+| `unpaywall` | Enable Unpaywall source |
+| `mdpi` | Enable MDPI source |
+| `jstor` | Enable JSTOR source |
+| `scispace` | Enable SciSpace source |
+| `acm` | Enable ACM Digital Library source |
+| `connected_papers` | Enable Connected Papers source |
+| `doaj` | Enable DOAJ source |
+| `worldwidescience` | Enable WorldWideScience source |
+| `osf` | Enable OSF Preprints source |
+| `base` | Enable BASE source |
+| `springer` | Enable Springer source |
+| `google_scholar` | Enable Google Scholar source (disabled by default) |
 
 #### Feature Groups
 
@@ -130,6 +165,9 @@ cargo build --release --features -dblp
 
 # Install from source with only core sources
 cargo install --path . --no-default-features --features core
+
+# Build with Google Scholar enabled (requires environment variable at runtime)
+cargo build --release --features google_scholar
 ```
 
 **Note:** Feature flags affect which sources are **compiled into the binary**. This is different from the `RESEARCH_MASTER_ENABLED_SOURCES` environment variable, which filters sources at **runtime**. You can use both together for maximum control.
@@ -197,9 +235,11 @@ max_concurrent_requests = 10
 [api_keys]
 semantic_scholar = "your-semantic-scholar-api-key"
 core = "your-core-api-key"
-
-# OpenAlex email for "polite pool" access
 openalex_email = "your@email.com"
+
+# Source-specific settings
+[sources]
+google_scholar_enabled = true
 ```
 
 ### Environment Variables
@@ -221,7 +261,8 @@ export RESEARCH_MASTER_ENABLED_SOURCES="arxiv,pubmed,semantic"
 # unset RESEARCH_MASTER_ENABLED_SOURCES
 ```
 
-**Available source IDs:** `arxiv`, `pubmed`, `biorxiv`, `semantic`, `openalex`, `crossref`, `iacr`, `pmc`, `hal`, `dblp`, `ssrn`
+**Available source IDs:**
+`arxiv`, `pubmed`, `biorxiv`, `semantic`, `openalex`, `crossref`, `iacr`, `pmc`, `hal`, `dblp`, `ssrn`, `core`, `europe_pmc`, `dimensions`, `ieee_xplore`, `zenodo`, `unpaywall`, `mdpi`, `jstor`, `scispace`, `acm`, `connected_papers`, `doaj`, `worldwidescience`, `osf`, `base`, `springer`, `google_scholar`
 
 #### API Keys (Optional)
 
@@ -230,14 +271,30 @@ export RESEARCH_MASTER_ENABLED_SOURCES="arxiv,pubmed,semantic"
 | `SEMANTIC_SCHOLAR_API_KEY` | API key for Semantic Scholar (higher rate limits) |
 | `CORE_API_KEY` | API key for CORE service |
 | `OPENALEX_EMAIL` | Email for OpenAlex "polite pool" access |
+| `IEEEXPLORE_API_KEY` | API key for IEEE Xplore |
+| `JSTOR_API_KEY` | API key for JSTOR |
+| `ACM_API_KEY` | API key for ACM Digital Library |
+| `SPRINGER_API_KEY` | API key for Springer |
 
 **Note:** Sources work without API keys but may have lower rate limits. If a source requires an API key that isn't provided, it will be automatically disabled during initialization.
+
+#### Source-Specific Settings
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `GOOGLE_SCHOLAR_ENABLED` | Enable Google Scholar (requires compile-time feature) | `false` |
+
+**Note:** Google Scholar is disabled by default both at compile-time and runtime. To enable it:
+1. Build with `--features google_scholar`
+2. Set `GOOGLE_SCHOLAR_ENABLED=true` at runtime
 
 #### Source-Specific Rate Limits
 
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `SEMANTIC_SCHOLAR_RATE_LIMIT` | Semantic Scholar requests per second | `1` |
+| `IEEEXPLORE_RATE_LIMIT` | IEEE Xplore requests per second | `3` |
+| `ACMRATE_LIMIT` | ACM Digital Library requests per second | `3` |
 
 **Note:** Without an API key, Semantic Scholar limits you to 1 request per second. Set to a higher value if you have an API key.
 
@@ -423,6 +480,22 @@ To enable only specific sources:
 }
 ```
 
+To enable Google Scholar (requires compile-time feature):
+
+```json
+{
+  "mcpServers": {
+    "research-master": {
+      "command": "research-master-mcp",
+      "args": ["serve"],
+      "env": {
+        "GOOGLE_SCHOLAR_ENABLED": "true"
+      }
+    }
+  }
+}
+```
+
 To set custom rate limits:
 
 ```json
@@ -486,6 +559,9 @@ Get detailed metadata for a specific paper. The source is auto-detected from the
 - `PMCxxxxxxx` → PMC
 - `10.xxxx/xxxxxx` (DOI) → Source with DOI lookup capability
 - `CORX:xxxxx` → CORE
+- `hal-xxxxxxx` → HAL
+- `xxxx/xxxx` (IACR format) → IACR
+- `DOI:10.xxxx` → DOI-based lookup
 - etc.
 
 #### `download_paper`
@@ -533,7 +609,7 @@ Look up a paper by its DOI across all sources that support DOI lookup.
 - `doi` (required): Digital Object Identifier (e.g., "10.48550/arXiv.2301.12345")
 - `source` (optional): Specific source to query (default: all)
 
-**Supported sources:** semantic, openalex, crossref, hal
+**Supported sources:** semantic, openalex, crossref, hal, doaj, osf, springer, mdpi, zenodo, acm, base, unpaywall
 
 ### Utility Tools
 
@@ -555,13 +631,15 @@ The unified tools use intelligent source auto-detection:
 
 | Paper ID Format | Detected Source |
 |-----------------|-----------------|
-| `arXiv:1234.5678` | arXiv |
-| `1234.5678` (numeric) | arXiv |
+| `arXiv:1234.5678` or `1234.5678` | arXiv |
 | `PMC12345678` | PMC |
 | `10.xxxx/xxxxxx` | Source with DOI lookup |
 | `CORX:xxxxx` | CORE |
 | `hal-xxxxxxx` | HAL |
 | `xxxx/xxxx` (IACR format) | IACR |
+| `doi:10.xxxx` or `https://doi.org/10.xxxx` | DOI lookup |
+| `ZENODO:xxxxx` | Zenodo |
+| etc. |
 
 You can always override auto-detection by specifying the `source` parameter explicitly.
 
@@ -595,35 +673,52 @@ The unified tools automatically detect the appropriate source, so you don't need
 
 ```
 src/
-├── main.rs           # CLI entry point
-├── lib.rs            # Library exports
-├── mcp/              # MCP protocol implementation
-│   ├── server.rs     # MCP server (stdio/SSE)
-│   ├── tools.rs      # Tool registry
-│   ├── unified_tools.rs  # Unified tool handlers with smart source selection
+├── main.rs                    # CLI entry point
+├── lib.rs                     # Library exports
+├── mcp/                       # MCP protocol implementation
+│   ├── server.rs              # MCP server (stdio/SSE)
+│   ├── tools.rs               # Tool registry
+│   ├── unified_tools.rs       # Unified tool handlers with smart source selection
 │   └── mod.rs
-├── sources/          # Research source implementations
-│   ├── mod.rs        # Source trait definition
-│   ├── registry.rs   # Source registry with filtering
-│   ├── arxiv.rs      # arXiv
-│   ├── dblp.rs       # DBLP
-│   ├── biorxiv.rs    # bioRxiv/medRxiv
-│   ├── hal.rs        # HAL
-│   ├── iacr.rs       # IACR
-│   ├── semantic.rs   # Semantic Scholar
-│   ├── openalex.rs   # OpenAlex
-│   ├── crossref.rs   # CrossRef
-│   ├── pubmed.rs     # PubMed
-│   ├── pmc.rs        # PMC
-│   └── ssrn.rs       # SSRN
-├── models/           # Data models
-│   ├── paper.rs      # Paper model
-│   ├── search.rs     # Search request/response
+├── sources/                   # Research source implementations
+│   ├── mod.rs                 # Source trait definition
+│   ├── registry.rs            # Source registry with filtering
+│   ├── arxiv.rs               # arXiv
+│   ├── pubmed.rs              # PubMed
+│   ├── biorxiv.rs             # bioRxiv/medRxiv
+│   ├── semantic.rs            # Semantic Scholar
+│   ├── openalex.rs            # OpenAlex
+│   ├── crossref.rs            # CrossRef
+│   ├── iacr.rs                # IACR
+│   ├── pmc.rs                 # PMC
+│   ├── hal.rs                 # HAL
+│   ├── dblp.rs                # DBLP
+│   ├── ssrn.rs                # SSRN
+│   ├── core.rs                # CORE
+│   ├── europepmc.rs           # EuropePMC
+│   ├── dimensions.rs          # Dimensions
+│   ├── ieee_xplore.rs         # IEEE Xplore
+│   ├── zenodo.rs              # Zenodo
+│   ├── unpaywall.rs           # Unpaywall
+│   ├── mdpi.rs                # MDPI
+│   ├── jstor.rs               # JSTOR
+│   ├── scispace.rs            # SciSpace
+│   ├── acm.rs                 # ACM Digital Library
+│   ├── connected_papers.rs    # Connected Papers
+│   ├── doaj.rs                # DOAJ
+│   ├── worldwidescience.rs    # WorldWideScience
+│   ├── osf.rs                 # OSF Preprints
+│   ├── base.rs                # BASE
+│   ├── springer.rs            # Springer
+│   └── google_scholar.rs      # Google Scholar
+├── models/                    # Data models
+│   ├── paper.rs               # Paper model
+│   ├── search.rs              # Search request/response
 │   └── mod.rs
-└── utils/            # Utilities
-    ├── http.rs       # HTTP client with rate limiting
-    ├── dedup.rs      # Deduplication logic
-    ├── pdf.rs        # PDF text extraction
+└── utils/                     # Utilities
+    ├── http.rs                # HTTP client with rate limiting
+    ├── dedup.rs               # Deduplication logic
+    ├── pdf.rs                 # PDF text extraction
     └── mod.rs
 ```
 
@@ -644,7 +739,7 @@ impl Source for MySource {
         "mysource"
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> str {
         "My Research Source"
     }
 
@@ -684,7 +779,17 @@ use super::mysource::MySource;
 try_register!(MySource::new());
 ```
 
-5. Rebuild - the unified MCP tools will automatically include your new source
+5. Add the SourceType variant in `src/models/paper.rs`:
+
+```rust
+pub enum SourceType {
+    // ... existing variants
+    MySource,
+    // ...
+}
+```
+
+6. Rebuild - the unified MCP tools will automatically include your new source
 
 ### Running Tests
 
