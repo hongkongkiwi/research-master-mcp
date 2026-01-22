@@ -1,6 +1,6 @@
 //! Deduplication utilities for papers across sources.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use strsim::jaro_winkler;
 
 use crate::models::Paper;

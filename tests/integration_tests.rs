@@ -5,12 +5,13 @@
 use research_master_mcp::mcp::server::McpServer;
 use research_master_mcp::models::{SearchQuery, SourceType};
 use research_master_mcp::sources::{SourceRegistry, SourceCapabilities};
+use std::sync::Arc;
 
 /// Test that the server can be created successfully
 #[tokio::test]
 async fn test_server_initialization() {
     let registry = SourceRegistry::new();
-    let server = McpServer::new(registry);
+    let server = McpServer::new(Arc::new(registry));
     assert!(server.is_ok());
 }
 

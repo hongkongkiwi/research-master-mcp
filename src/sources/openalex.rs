@@ -1,7 +1,6 @@
 //! OpenAlex research source implementation.
 
 use async_trait::async_trait;
-use reqwest::Client;
 use serde::Deserialize;
 use std::sync::Arc;
 
@@ -10,6 +9,7 @@ use crate::sources::{
     CitationRequest, DownloadRequest, DownloadResult, ReadRequest, ReadResult, Source,
     SourceCapabilities, SourceError,
 };
+use crate::utils::{api_retry_config, with_retry, HttpClient};
 
 const OPENALEX_API_BASE: &str = "https://api.openalex.org";
 
@@ -18,45 +18,32 @@ const OPENALEX_API_BASE: &str = "https://api.openalex.org";
 /// Uses the OpenAlex REST API.
 #[derive(Debug, Clone)]
 pub struct OpenAlexSource {
-    client: Arc<Client>,
+    client: Arc<HttpClient>,
     email: Option<String>,
 }
 
 impl OpenAlexSource {
     /// Create a new OpenAlex source
-    pub fn new() -> Self {
-        Self {
-            client: Arc::new(
-                Client::builder()
-                    .user_agent(concat!(
-                        env!("CARGO_PKG_NAME"),
-                        "/",
-                        env!("CARGO_PKG_VERSION"),
-                        " (mailto:)" // Placeholder for polite pool
-                    ))
-                    .build()
-                    .expect("Failed to create HTTP client"),
-            ),
+    pub fn new() -> Result<Self, SourceError> {
+        Ok(Self {
+            client: Arc::new(HttpClient::new()?),
             email: std::env::var("OPENALEX_EMAIL").ok(),
-        }
+        })
     }
 
     /// Create with an email (recommended for better rate limits)
-    pub fn with_email(email: String) -> Self {
-        Self {
-            client: Arc::new(
-                Client::builder()
-                    .user_agent(format!(
-                        "{}/{} (mailto:{})",
-                        env!("CARGO_PKG_NAME"),
-                        env!("CARGO_PKG_VERSION"),
-                        email
-                    ))
-                    .build()
-                    .expect("Failed to create HTTP client"),
-            ),
+    #[allow(dead_code)]
+    pub fn with_email(email: String) -> Result<Self, SourceError> {
+        let user_agent = format!(
+            "{}/{} (mailto:{})",
+            env!("CARGO_PKG_NAME"),
+            env!("CARGO_PKG_VERSION"),
+            email
+        );
+        Ok(Self {
+            client: Arc::new(HttpClient::with_user_agent(&user_agent)?),
             email: Some(email),
-        }
+        })
     }
 
     /// Build request URL
@@ -109,7 +96,7 @@ impl OpenAlexSource {
 
 impl Default for OpenAlexSource {
     fn default() -> Self {
-        Self::new()
+        Self::new().expect("Failed to create OpenAlexSource")
     }
 }
 
@@ -158,24 +145,34 @@ impl Source for OpenAlexSource {
 
         url = self.add_email_if_present(&url);
 
-        let response = self
-            .client
-            .get(&self.build_url(&url))
-            .send()
-            .await
-            .map_err(|e| SourceError::Network(format!("Failed to search OpenAlex: {}", e)))?;
+        // Clone values for retry closure
+        let client = Arc::clone(&self.client);
+        let url_for_retry = url.clone();
 
-        if !response.status().is_success() {
-            return Err(SourceError::Api(format!(
-                "OpenAlex API returned status: {}",
-                response.status()
-            )));
-        }
+        let data: WorksResponse = with_retry(api_retry_config(), || {
+            let client = Arc::clone(&client);
+            let url = url_for_retry.clone();
+            async move {
+                let response = client
+                    .get(&format!("{}{}", OPENALEX_API_BASE, url))
+                    .send()
+                    .await
+                    .map_err(|e| SourceError::Network(format!("Failed to search OpenAlex: {}", e)))?;
 
-        let data: WorksResponse = response
-            .json()
-            .await
-            .map_err(|e| SourceError::Parse(format!("Failed to parse JSON: {}", e)))?;
+                if !response.status().is_success() {
+                    return Err(SourceError::Api(format!(
+                        "OpenAlex API returned status: {}",
+                        response.status()
+                    )));
+                }
+
+                response
+                    .json()
+                    .await
+                    .map_err(|e| SourceError::Parse(format!("Failed to parse JSON: {}", e)))
+            }
+        })
+        .await?;
 
         let papers: Result<Vec<Paper>, SourceError> = data
             .results
@@ -306,11 +303,18 @@ impl Source for OpenAlexSource {
 
     async fn read(&self, request: &ReadRequest) -> Result<ReadResult, SourceError> {
         let download_request = DownloadRequest::new(&request.paper_id, &request.save_path);
-        self.download(&download_request).await?;
+        let download_result = self.download(&download_request).await?;
 
-        Ok(ReadResult::success(
-            "PDF text extraction not yet fully implemented".to_string(),
-        ))
+        let pdf_path = std::path::Path::new(&download_result.path);
+        match crate::utils::extract_text(pdf_path) {
+            Ok(text) => {
+                let pages = (text.len() / 3000).max(1);
+                Ok(ReadResult::success(text).pages(pages))
+            }
+            Err(e) => {
+                Ok(ReadResult::error(format!("PDF downloaded but text extraction failed: {}", e)))
+            }
+        }
     }
 
     async fn get_citations(

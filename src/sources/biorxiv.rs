@@ -4,13 +4,13 @@
 //! since they use the same API with just a different server prefix.
 
 use async_trait::async_trait;
-use reqwest::Client;
 use serde::Deserialize;
 use std::sync::Arc;
 
 use crate::models::{Paper, PaperBuilder, SearchQuery, SearchResponse, SourceType};
 use crate::sources::{DownloadRequest, DownloadResult, ReadRequest, ReadResult, Source,
                    SourceCapabilities, SourceError};
+use crate::utils::{api_retry_config, with_retry, HttpClient};
 
 const BIORXIV_API_URL: &str = "https://api.biorxiv.org";
 const MEDRXIV_API_URL: &str = "https://api.medrxiv.org";
@@ -63,25 +63,16 @@ impl ServerType {
 /// Shared implementation for bioRxiv/medRxiv
 #[derive(Debug, Clone)]
 struct BiorxivMedrxivSource {
-    client: Arc<Client>,
+    client: Arc<HttpClient>,
     server_type: ServerType,
 }
 
 impl BiorxivMedrxivSource {
-    fn new(server_type: ServerType) -> Self {
-        Self {
-            client: Arc::new(
-                Client::builder()
-                    .user_agent(concat!(
-                        env!("CARGO_PKG_NAME"),
-                        "/",
-                        env!("CARGO_PKG_VERSION")
-                    ))
-                    .build()
-                    .expect("Failed to create HTTP client"),
-            ),
+    fn new(server_type: ServerType) -> Result<Self, SourceError> {
+        Ok(Self {
+            client: Arc::new(HttpClient::new()?),
             server_type,
-        }
+        })
     }
 
     /// Get papers from the server (cursor-based pagination)
@@ -98,20 +89,34 @@ impl BiorxivMedrxivSource {
             cursor
         );
 
-        let response = self
-            .client
-            .get(&url)
-            .send()
-            .await
-            .map_err(|e| SourceError::Network(format!("Failed to fetch from {}: {}", self.server_type.display_name(), e)))?;
+        // Clone values for retry closure
+        let client = Arc::clone(&self.client);
+        let url_for_retry = url.clone();
+        let display_name = self.server_type.display_name().to_string();
 
-        if !response.status().is_success() {
-            return Err(SourceError::Api(format!(
-                "{} API returned status: {}",
-                self.server_type.display_name(),
-                response.status()
-            )));
-        }
+        let response = with_retry(api_retry_config(), || {
+            let client = Arc::clone(&client);
+            let url = url_for_retry.clone();
+            let display_name = display_name.clone();
+            async move {
+                let response = client
+                    .get(&url)
+                    .send()
+                    .await
+                    .map_err(|e| SourceError::Network(format!("Failed to fetch from {}: {}", display_name, e)))?;
+
+                if !response.status().is_success() {
+                    return Err(SourceError::Api(format!(
+                        "{} API returned status: {}",
+                        display_name,
+                        response.status()
+                    )));
+                }
+
+                Ok(response)
+            }
+        })
+        .await?;
 
         let json: ApiResponse = response
             .json()
@@ -178,7 +183,7 @@ impl BiorxivMedrxivSource {
 
 impl Default for BiorxivMedrxivSource {
     fn default() -> Self {
-        Self::new(ServerType::BioRxiv)
+        Self::new(ServerType::BioRxiv).expect("Failed to create BiorxivMedrxivSource")
     }
 }
 
@@ -297,12 +302,18 @@ impl Source for BiorxivMedrxivSource {
 
     async fn read(&self, request: &ReadRequest) -> Result<ReadResult, SourceError> {
         let download_request = DownloadRequest::new(&request.paper_id, &request.save_path);
-        self.download(&download_request).await?;
+        let download_result = self.download(&download_request).await?;
 
-        // Extract text from PDF (placeholder - actual implementation would use pdf-extract)
-        Ok(ReadResult::success(
-            "PDF text extraction not yet fully implemented".to_string(),
-        ))
+        let pdf_path = std::path::Path::new(&download_result.path);
+        match crate::utils::extract_text(pdf_path) {
+            Ok(text) => {
+                let pages = (text.len() / 3000).max(1);
+                Ok(ReadResult::success(text).pages(pages))
+            }
+            Err(e) => {
+                Ok(ReadResult::error(format!("PDF downloaded but text extraction failed: {}", e)))
+            }
+        }
     }
 }
 
@@ -311,6 +322,7 @@ impl Source for BiorxivMedrxivSource {
 struct ApiResponse {
     #[serde(rename = "collection")]
     collection: Vec<Collection>,
+    #[allow(dead_code)]
     messages: Vec<Message>,
 }
 
@@ -339,8 +351,10 @@ struct Article {
 }
 
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 struct Message {
     #[serde(rename = "text")]
+    #[allow(dead_code)]
     text: String,
 }
 
@@ -351,16 +365,16 @@ pub struct BiorxivSource {
 }
 
 impl BiorxivSource {
-    pub fn new() -> Self {
-        Self {
-            inner: BiorxivMedrxivSource::new(ServerType::BioRxiv),
-        }
+    pub fn new() -> Result<Self, SourceError> {
+        Ok(Self {
+            inner: BiorxivMedrxivSource::new(ServerType::BioRxiv)?,
+        })
     }
 }
 
 impl Default for BiorxivSource {
     fn default() -> Self {
-        Self::new()
+        Self::new().expect("Failed to create BiorxivSource")
     }
 }
 
@@ -393,21 +407,23 @@ impl Source for BiorxivSource {
 
 /// medRxiv research source
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct MedrxivSource {
     inner: BiorxivMedrxivSource,
 }
 
+#[allow(dead_code)]
 impl MedrxivSource {
-    pub fn new() -> Self {
-        Self {
-            inner: BiorxivMedrxivSource::new(ServerType::MedRxiv),
-        }
+    pub fn new() -> Result<Self, SourceError> {
+        Ok(Self {
+            inner: BiorxivMedrxivSource::new(ServerType::MedRxiv)?,
+        })
     }
 }
 
 impl Default for MedrxivSource {
     fn default() -> Self {
-        Self::new()
+        Self::new().expect("Failed to create MedrxivSource")
     }
 }
 

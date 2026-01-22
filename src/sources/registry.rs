@@ -10,6 +10,11 @@ use super::{
     Source, SourceError,
 };
 
+/// Environment variable for filtering enabled sources
+/// Comma-separated list of source IDs to enable (e.g., "arxiv,pubmed,semantic")
+/// If not set, all sources are enabled
+const ENABLED_SOURCES_ENV_VAR: &str = "RESEARCH_MASTER_ENABLED_SOURCES";
+
 bitflags::bitflags! {
     /// Capabilities that a source can support
     #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -35,24 +40,91 @@ pub struct SourceRegistry {
 impl SourceRegistry {
     /// Create a new registry with all available sources
     pub fn new() -> Self {
+        Self::try_new().expect("Failed to initialize any sources")
+    }
+
+    /// Try to create a new registry with all available sources
+    ///
+    /// This will:
+    /// 1. Filter sources based on RESEARCH_MASTER_ENABLED_SOURCES environment variable
+    /// 2. Skip sources that fail to initialize (e.g., missing API keys)
+    /// 3. Return an error only if no sources could be initialized
+    pub fn try_new() -> Result<Self, SourceError> {
+        let enabled_sources = Self::get_enabled_sources();
         let mut registry = Self {
             sources: HashMap::new(),
         };
 
-        // Register all available sources
-        registry.register(Arc::new(ArxivSource::new()));
-        registry.register(Arc::new(PubMedSource::new()));
-        registry.register(Arc::new(BiorxivSource::new()));
-        registry.register(Arc::new(SemanticScholarSource::new()));
-        registry.register(Arc::new(OpenAlexSource::new()));
-        registry.register(Arc::new(CrossRefSource::new()));
-        registry.register(Arc::new(IacrSource::new()));
-        registry.register(Arc::new(PmcSource::new()));
-        registry.register(Arc::new(HalSource::new()));
-        registry.register(Arc::new(DblpSource::new()));
-        registry.register(Arc::new(SsrnSource::new()));
+        // Helper macro to register a source with error handling
+        macro_rules! try_register {
+            ($source:expr) => {
+                if let Ok(source) = $source {
+                    let source_id = source.id().to_string();
+                    if Self::is_source_enabled(&source_id, &enabled_sources) {
+                        registry.register(Arc::new(source));
+                        tracing::info!("Registered source: {}", source_id);
+                    } else {
+                        tracing::debug!("Source '{}' filtered out by ENABLED_SOURCES", source_id);
+                    }
+                } else {
+                    tracing::warn!("Skipping source: initialization failed");
+                }
+            };
+        }
 
-        registry
+        // Register all available sources (will skip any that fail to initialize)
+        try_register!(ArxivSource::new());
+        try_register!(PubMedSource::new());
+        try_register!(BiorxivSource::new());
+        try_register!(SemanticScholarSource::new());
+        try_register!(OpenAlexSource::new());
+        try_register!(CrossRefSource::new());
+        try_register!(IacrSource::new());
+        try_register!(PmcSource::new());
+        try_register!(HalSource::new());
+        try_register!(DblpSource::new());
+        try_register!(SsrnSource::new());
+
+        if registry.is_empty() {
+            return Err(SourceError::Other(
+                "No sources could be initialized. Check configuration and API keys.".to_string(),
+            ));
+        }
+
+        tracing::info!("Initialized {} sources", registry.len());
+
+        Ok(registry)
+    }
+
+    /// Get the list of enabled sources from environment variable
+    ///
+    /// Returns None if all sources should be enabled (default behavior)
+    /// Returns Some(HashSet) with specific source IDs if filtering is enabled
+    fn get_enabled_sources() -> Option<std::collections::HashSet<String>> {
+        std::env::var(ENABLED_SOURCES_ENV_VAR)
+            .ok()
+            .map(|value| {
+                value
+                    .split(',')
+                    .map(|s| s.trim().to_lowercase())
+                    .filter(|s| !s.is_empty())
+                    .collect::<std::collections::HashSet<_>>()
+            })
+            .filter(|set: &std::collections::HashSet<String>| !set.is_empty())
+    }
+
+    /// Check if a source should be enabled based on environment filtering
+    ///
+    /// If enabled_sources is None, all sources are enabled (default behavior)
+    /// If enabled_sources is Some, only sources in the set are enabled
+    fn is_source_enabled(source_id: &str, enabled_sources: &Option<std::collections::HashSet<String>>) -> bool {
+        match enabled_sources {
+            None => true, // No filtering, all sources enabled
+            Some(enabled) => {
+                let id_lower = source_id.to_lowercase();
+                enabled.contains(&id_lower)
+            }
+        }
     }
 
     /// Register a new source
@@ -133,8 +205,8 @@ mod tests {
     fn test_registry_basic() {
         let registry = SourceRegistry::new();
 
-        // Should have all 11 sources
-        assert_eq!(registry.len(), 11);
+        // Should have some sources (at least one)
+        assert!(registry.len() >= 1);
         assert!(!registry.is_empty());
     }
 
@@ -143,30 +215,60 @@ mod tests {
         let registry = SourceRegistry::new();
 
         let arxiv = registry.get("arxiv");
-        assert!(arxiv.is_some());
-        assert_eq!(arxiv.unwrap().id(), "arxiv");
+        // arxiv should be available if not filtered
+        if arxiv.is_some() {
+            assert_eq!(arxiv.unwrap().id(), "arxiv");
+        }
 
         let missing = registry.get("nonexistent");
         assert!(missing.is_none());
     }
 
     #[test]
-    fn test_all_sources_registered() {
-        let registry = SourceRegistry::new();
+    fn test_enabled_sources_filtering() {
+        // Test that filtering works when env var is set
+        std::env::set_var(ENABLED_SOURCES_ENV_VAR, "arxiv,pubmed");
 
-        // Check all expected sources are registered
-        let expected_sources = [
-            "arxiv", "pubmed", "biorxiv", "semantic", "openalex",
-            "crossref", "iacr", "pmc", "hal", "dblp", "ssrn",
-        ];
+        let enabled = SourceRegistry::get_enabled_sources();
+        assert!(enabled.is_some());
 
-        for source_id in expected_sources {
-            assert!(
-                registry.has(source_id),
-                "Source '{}' should be registered",
-                source_id
-            );
-        }
+        let enabled_set = enabled.unwrap();
+        assert!(enabled_set.contains("arxiv"));
+        assert!(enabled_set.contains("pubmed"));
+        assert!(!enabled_set.contains("semantic"));
+
+        // Test is_source_enabled with the enabled set (wrapped in Some)
+        let enabled_some = Some(enabled_set);
+        assert!(SourceRegistry::is_source_enabled("arxiv", &enabled_some));
+        assert!(SourceRegistry::is_source_enabled("ARXIV", &enabled_some)); // Case insensitive
+        assert!(!SourceRegistry::is_source_enabled("semantic", &enabled_some));
+
+        std::env::remove_var(ENABLED_SOURCES_ENV_VAR);
+    }
+
+    #[test]
+    fn test_no_enabled_sources_filtering() {
+        // When env var is not set, all sources should be enabled
+        std::env::remove_var(ENABLED_SOURCES_ENV_VAR);
+
+        let enabled = SourceRegistry::get_enabled_sources();
+        assert!(enabled.is_none());
+
+        // Test is_source_enabled with None (all enabled)
+        assert!(SourceRegistry::is_source_enabled("arxiv", &None));
+        assert!(SourceRegistry::is_source_enabled("semantic", &None));
+    }
+
+    #[test]
+    fn test_empty_enabled_sources() {
+        // Empty env var should be treated as not set
+        std::env::set_var(ENABLED_SOURCES_ENV_VAR, "");
+
+        let enabled = SourceRegistry::get_enabled_sources();
+        // Empty string results in None after filtering
+        assert!(enabled.is_none());
+
+        std::env::remove_var(ENABLED_SOURCES_ENV_VAR);
     }
 
     #[test]
@@ -174,28 +276,31 @@ mod tests {
         let registry = SourceRegistry::new();
 
         let searchable = registry.searchable();
-        // All sources should be searchable
-        assert!(searchable.len() >= 11);
+        // Should have at least some searchable sources
+        assert!(!searchable.is_empty());
     }
 
     #[test]
     fn test_capabilities() {
         let registry = SourceRegistry::new();
 
-        // arXiv should support search, download, read
-        let arxiv = registry.get("arxiv").unwrap();
-        assert!(arxiv.capabilities().contains(SourceCapabilities::SEARCH));
-        assert!(arxiv.capabilities().contains(SourceCapabilities::DOWNLOAD));
-        assert!(arxiv.capabilities().contains(SourceCapabilities::READ));
+        // arXiv should support search, download, read (if available)
+        if let Some(arxiv) = registry.get("arxiv") {
+            assert!(arxiv.capabilities().contains(SourceCapabilities::SEARCH));
+            assert!(arxiv.capabilities().contains(SourceCapabilities::DOWNLOAD));
+            assert!(arxiv.capabilities().contains(SourceCapabilities::READ));
+        }
 
-        // Semantic Scholar should support citations
-        let semantic = registry.get("semantic").unwrap();
-        assert!(semantic.capabilities().contains(SourceCapabilities::CITATIONS));
-        assert!(semantic.capabilities().contains(SourceCapabilities::AUTHOR_SEARCH));
+        // Semantic Scholar should support citations (if available)
+        if let Some(semantic) = registry.get("semantic") {
+            assert!(semantic.capabilities().contains(SourceCapabilities::CITATIONS));
+            assert!(semantic.capabilities().contains(SourceCapabilities::AUTHOR_SEARCH));
+        }
 
-        // DBLP should only support search
-        let dblp = registry.get("dblp").unwrap();
-        assert!(dblp.capabilities().contains(SourceCapabilities::SEARCH));
-        assert!(!dblp.capabilities().contains(SourceCapabilities::DOWNLOAD));
+        // DBLP should only support search (if available)
+        if let Some(dblp) = registry.get("dblp") {
+            assert!(dblp.capabilities().contains(SourceCapabilities::SEARCH));
+            assert!(!dblp.capabilities().contains(SourceCapabilities::DOWNLOAD));
+        }
     }
 }

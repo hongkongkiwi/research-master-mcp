@@ -2,11 +2,11 @@
 
 use async_trait::async_trait;
 use feed_rs::parser;
-use reqwest::Client;
 use std::sync::Arc;
 
-use crate::models::{Paper, PaperBuilder, SearchQuery, SearchResponse, SourceType};
+use crate::models::{Paper, PaperBuilder, ReadRequest, ReadResult, SearchQuery, SearchResponse, SourceType};
 use crate::sources::{DownloadRequest, DownloadResult, Source, SourceCapabilities, SourceError};
+use crate::utils::{api_retry_config, with_retry, HttpClient};
 
 /// Base URL for arXiv API
 const ARXIV_API_URL: &str = "http://export.arxiv.org/api/query";
@@ -21,28 +21,20 @@ const ARXIV_PDF_URL: &str = "https://arxiv.org/pdf";
 /// - Read paper text
 #[derive(Debug, Clone)]
 pub struct ArxivSource {
-    client: Arc<Client>,
+    client: Arc<HttpClient>,
 }
 
 impl ArxivSource {
     /// Create a new arXiv source
-    pub fn new() -> Self {
-        Self {
-            client: Arc::new(
-                Client::builder()
-                    .user_agent(concat!(
-                        env!("CARGO_PKG_NAME"),
-                        "/",
-                        env!("CARGO_PKG_VERSION")
-                    ))
-                    .build()
-                    .expect("Failed to create HTTP client"),
-            ),
-        }
+    pub fn new() -> Result<Self, SourceError> {
+        Ok(Self {
+            client: Arc::new(HttpClient::new()?),
+        })
     }
 
-    /// Create with a custom HTTP client
-    pub fn with_client(client: Arc<Client>) -> Self {
+    /// Create with a custom HTTP client (for testing)
+    #[allow(dead_code)]
+    pub fn with_client(client: Arc<HttpClient>) -> Self {
         Self { client }
     }
 
@@ -210,7 +202,7 @@ impl ArxivSource {
 
 impl Default for ArxivSource {
     fn default() -> Self {
-        Self::new()
+        Self::new().expect("Failed to create ArxivSource")
     }
 }
 
@@ -260,28 +252,41 @@ impl Source for ArxivSource {
             sort_order
         );
 
-        let response = self
-            .client
-            .get(&url)
-            .header("Accept", "application/atom+xml")
-            .send()
-            .await
-            .map_err(|e| SourceError::Network(format!("Failed to fetch arXiv results: {}", e)))?;
+        // Clone values needed for retry closure
+        let client = Arc::clone(&self.client);
+        let url_for_retry = url.clone();
 
-        if !response.status().is_success() {
-            return Err(SourceError::Api(format!(
-                "arXiv API returned status: {}",
-                response.status()
-            )));
-        }
+        // Execute search with retry logic for transient errors
+        let feed = with_retry(api_retry_config(), || {
+            let client = Arc::clone(&client);
+            let url = url_for_retry.clone();
+            async move {
+                let response = client
+                    .get(&url)
+                    .header("Accept", "application/atom+xml")
+                    .send()
+                    .await
+                    .map_err(|e| SourceError::Network(format!("Failed to fetch arXiv results: {}", e)))?;
 
-        let bytes = response
-            .bytes()
-            .await
-            .map_err(|e| SourceError::Network(format!("Failed to read response: {}", e)))?;
+                if !response.status().is_success() {
+                    return Err(SourceError::Api(format!(
+                        "arXiv API returned status: {}",
+                        response.status()
+                    )));
+                }
 
-        let feed = parser::parse(bytes.as_ref())
-            .map_err(|e| SourceError::Parse(format!("Failed to parse Atom feed: {}", e)))?;
+                let bytes = response
+                    .bytes()
+                    .await
+                    .map_err(|e| SourceError::Network(format!("Failed to read response: {}", e)))?;
+
+                let feed = parser::parse(bytes.as_ref())
+                    .map_err(|e| SourceError::Parse(format!("Failed to parse Atom feed: {}", e)))?;
+
+                Ok(feed)
+            }
+        })
+        .await?;
 
         let papers: Result<Vec<Paper>, SourceError> = feed
             .entries
@@ -296,43 +301,24 @@ impl Source for ArxivSource {
 
     async fn download(&self, request: &DownloadRequest) -> Result<DownloadResult, SourceError> {
         let paper_id = Self::parse_id(&request.paper_id)?;
-
         let pdf_url = format!("{}/{}.pdf", ARXIV_PDF_URL, paper_id);
+        self.client.download_pdf(&pdf_url, request, &paper_id).await
+    }
 
-        let response = self
-            .client
-            .get(&pdf_url)
-            .send()
-            .await
-            .map_err(|e| SourceError::Network(format!("Failed to download PDF: {}", e)))?;
+    async fn read(&self, request: &ReadRequest) -> Result<ReadResult, SourceError> {
+        let download_request = DownloadRequest::new(&request.paper_id, &request.save_path);
+        let download_result = self.download(&download_request).await?;
 
-        if !response.status().is_success() {
-            return Err(SourceError::NotFound(format!(
-                "Paper not found: {}",
-                paper_id
-            )));
+        let pdf_path = std::path::Path::new(&download_result.path);
+        match crate::utils::extract_text(pdf_path) {
+            Ok(text) => {
+                let pages = (text.len() / 3000).max(1);
+                Ok(ReadResult::success(text).pages(pages))
+            }
+            Err(e) => {
+                Ok(ReadResult::error(format!("PDF downloaded but text extraction failed: {}", e)))
+            }
         }
-
-        let bytes = response
-            .bytes()
-            .await
-            .map_err(|e| SourceError::Network(format!("Failed to read PDF: {}", e)))?;
-
-        // Create download directory if it doesn't exist
-        std::fs::create_dir_all(&request.save_path).map_err(|e| {
-            SourceError::Io(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                format!("Failed to create directory: {}", e),
-            ))
-        })?;
-
-        let filename = format!("{}.pdf", paper_id.replace('/', "_"));
-        let path = std::path::Path::new(&request.save_path).join(&filename);
-
-        std::fs::write(&path, bytes.as_ref())
-            .map_err(|e| SourceError::Io(e.into()))?;
-
-        Ok(DownloadResult::success(path.to_string_lossy().to_string(), bytes.len() as u64))
     }
 
     fn validate_id(&self, id: &str) -> Result<(), SourceError> {

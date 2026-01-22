@@ -1,12 +1,12 @@
 //! CrossRef research source implementation.
 
 use async_trait::async_trait;
-use reqwest::Client;
 use serde::Deserialize;
 use std::sync::Arc;
 
 use crate::models::{Paper, PaperBuilder, SearchQuery, SearchResponse, SourceType};
 use crate::sources::{Source, SourceCapabilities, SourceError};
+use crate::utils::{api_retry_config, with_retry, HttpClient};
 
 const CROSSREF_API_BASE: &str = "https://api.crossref.org";
 
@@ -15,30 +15,25 @@ const CROSSREF_API_BASE: &str = "https://api.crossref.org";
 /// Uses CrossRef REST API for DOI metadata lookup and search.
 #[derive(Debug, Clone)]
 pub struct CrossRefSource {
-    client: Arc<Client>,
+    client: Arc<HttpClient>,
 }
 
 impl CrossRefSource {
-    pub fn new() -> Self {
-        Self {
-            client: Arc::new(
-                Client::builder()
-                    .user_agent(concat!(
-                        env!("CARGO_PKG_NAME"),
-                        "/",
-                        env!("CARGO_PKG_VERSION"),
-                        " (mailto:crossref@crossref.org)"
-                    ))
-                    .build()
-                    .expect("Failed to create HTTP client"),
-            ),
-        }
+    pub fn new() -> Result<Self, SourceError> {
+        let user_agent = format!(
+            "{} / {} (mailto:crossref@crossref.org)",
+            env!("CARGO_PKG_NAME"),
+            env!("CARGO_PKG_VERSION")
+        );
+        Ok(Self {
+            client: Arc::new(HttpClient::with_user_agent(&user_agent)?),
+        })
     }
 }
 
 impl Default for CrossRefSource {
     fn default() -> Self {
-        Self::new()
+        Self::new().expect("Failed to create CrossRefSource")
     }
 }
 
@@ -69,19 +64,31 @@ impl Source for CrossRefSource {
             url = format!("{}&filter=from-pub-date-year:{}", url, year);
         }
 
-        let response = self
-            .client
-            .get(&url)
-            .send()
-            .await
-            .map_err(|e| SourceError::Network(format!("Failed to search CrossRef: {}", e)))?;
+        // Clone values for retry closure
+        let client = Arc::clone(&self.client);
+        let url_for_retry = url.clone();
 
-        if !response.status().is_success() {
-            return Err(SourceError::Api(format!(
-                "CrossRef API returned status: {}",
-                response.status()
-            )));
-        }
+        let response = with_retry(api_retry_config(), || {
+            let client = Arc::clone(&client);
+            let url = url_for_retry.clone();
+            async move {
+                let response = client
+                    .get(&url)
+                    .send()
+                    .await
+                    .map_err(|e| SourceError::Network(format!("Failed to search CrossRef: {}", e)))?;
+
+                if !response.status().is_success() {
+                    return Err(SourceError::Api(format!(
+                        "CrossRef API returned status: {}",
+                        response.status()
+                    )));
+                }
+
+                Ok(response)
+            }
+        })
+        .await?;
 
         let data: CRResponse = response
             .json()

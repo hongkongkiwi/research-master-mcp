@@ -1,12 +1,14 @@
 //! PubMed Central (PMC) research source implementation.
 
 use async_trait::async_trait;
-use reqwest::Client;
+use quick_xml::events::{Event, BytesStart};
+use quick_xml::reader::Reader;
 use serde::Deserialize;
 use std::sync::Arc;
 
 use crate::models::{Paper, PaperBuilder, ReadRequest, ReadResult, SearchQuery, SearchResponse, SourceType};
 use crate::sources::{DownloadRequest, DownloadResult, Source, SourceCapabilities, SourceError};
+use crate::utils::{api_retry_config, with_retry, HttpClient};
 
 const PMC_EUTILS_BASE: &str = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils";
 const PMC_BASE_URL: &str = "https://www.ncbi.nlm.nih.gov/pmc";
@@ -16,23 +18,14 @@ const PMC_BASE_URL: &str = "https://www.ncbi.nlm.nih.gov/pmc";
 /// Uses NCBI E-utilities API for PubMed Central full-text papers.
 #[derive(Debug, Clone)]
 pub struct PmcSource {
-    client: Arc<Client>,
+    client: Arc<HttpClient>,
 }
 
 impl PmcSource {
-    pub fn new() -> Self {
-        Self {
-            client: Arc::new(
-                Client::builder()
-                    .user_agent(concat!(
-                        env!("CARGO_PKG_NAME"),
-                        "/",
-                        env!("CARGO_PKG_VERSION")
-                    ))
-                    .build()
-                    .expect("Failed to create HTTP client"),
-            ),
-        }
+    pub fn new() -> Result<Self, SourceError> {
+        Ok(Self {
+            client: Arc::new(HttpClient::new()?),
+        })
     }
 
     /// Clean PMCID (remove PMC prefix if present)
@@ -40,106 +33,202 @@ impl PmcSource {
         pmcid.replace("PMC", "").trim().to_string()
     }
 
-    /// Parse PMC XML response into Paper
+    /// Parse PMC XML response into Paper using quick-xml
     fn parse_pmc_xml(&self, xml_content: &str, pmcid: &str) -> Result<Paper, SourceError> {
-        // For simplicity, we'll extract key data using regex patterns
-        // A production implementation would use a proper XML parser
+        let mut reader = Reader::from_str(xml_content);
+        let mut buf = Vec::new();
 
-        let title = self
-            .extract_xml_text(xml_content, "article-title")
-            .unwrap_or_default();
+        let mut title = String::new();
+        let mut abstract_text = String::new();
+        let mut authors: Vec<String> = Vec::new();
+        let mut current_given = String::new();
+        let mut current_surname = String::new();
+        let mut in_contrib = false;
+        let mut journal = String::new();
+        let mut year = String::new();
+        let mut month = String::new();
+        let mut day = String::new();
+        let mut doi = String::new();
 
-        let abstract_text = self
-            .extract_xml_text(xml_content, "abstract")
-            .unwrap_or_default();
-
-        let authors = self.extract_authors(xml_content);
-
-        let published_date = self.extract_date(xml_content);
-
-        let doi = self
-            .extract_attribute(xml_content, "article-id", "pub-id-type", "doi")
-            .unwrap_or_default();
-
-        let journal = self
-            .extract_xml_text(xml_content, "journal-title")
-            .unwrap_or_default();
-
-        let full_pmcid = format!("PMC{}", pmcid);
-        let url = format!("{}/{}", PMC_BASE_URL, full_pmcid);
-        let pdf_url = format!("{}/articles/{}/pdf/", PMC_BASE_URL, full_pmcid);
-
-        Ok(PaperBuilder::new(full_pmcid.clone(), title, url, SourceType::PMC)
-            .authors(authors)
-            .abstract_text(abstract_text)
-            .doi(doi)
-            .published_date(published_date)
-            .categories(journal)
-            .pdf_url(pdf_url)
-            .build())
-    }
-
-    /// Extract text content from an XML element
-    fn extract_xml_text(&self, xml: &str, tag_name: &str) -> Option<String> {
-        let start_pattern = format!("<{}>", tag_name);
-        let end_pattern = format!("</{}>", tag_name);
-
-        let start = xml.find(&start_pattern)?;
-        let end = xml.find(&end_pattern)?;
-
-        if end > start {
-            let content = &xml[start + start_pattern.len()..end];
-            // Strip inner tags
-            let text = regex::Regex::new(r"<[^>]+>")
-                .ok()?
-                .replace_all(content, " ")
-                .to_string();
-            Some(text.trim().to_string())
-        } else {
-            None
+        // Track what element we're currently in for text parsing
+        enum Element {
+            None,
+            ArticleTitle,
+            Abstract,
+            Contrib,
+            GivenNames,
+            Surname,
+            JournalTitle,
+            Year,
+            Month,
+            Day,
+            ArticleId,
         }
-    }
+        let mut current_element = Element::None;
 
-    /// Extract authors from XML
-    fn extract_authors(&self, xml: &str) -> String {
-        let mut authors = Vec::new();
-
-        // Find all contrib elements with contrib-type="author"
-        let pattern = r#"<contrib[^>]*contrib-type\s*=\s*["']author["'][^>]*>"#;
-        if let Ok(re) = regex::Regex::new(pattern) {
-            for mut match_cap in re.find_iter(xml) {
-                let start = match_cap.end();
-                // Find closing </contrib>
-                if let Some(end) = xml[start..].find("</contrib>") {
-                    let contrib_xml = &xml[start..start + end];
-
-                    // Extract given-names and surname
-                    let given = self
-                        .extract_xml_text(contrib_xml, "given-names")
-                        .unwrap_or_default();
-                    let surname = self
-                        .extract_xml_text(contrib_xml, "surname")
-                        .unwrap_or_default();
-
-                    if !given.is_empty() && !surname.is_empty() {
-                        authors.push(format!("{} {}", given, surname));
-                    } else if !surname.is_empty() {
-                        authors.push(surname);
+        loop {
+            match reader.read_event_into(&mut buf) {
+                Ok(Event::Start(ref e)) => {
+                    // Convert element name to owned String to avoid lifetime issues
+                    let tag_name = String::from_utf8_lossy(e.name().as_ref()).to_string();
+                    match tag_name.as_str() {
+                        "article-title" => {
+                            current_element = Element::ArticleTitle;
+                        }
+                        "abstract" => {
+                            current_element = Element::Abstract;
+                        }
+                        "contrib" => {
+                            // Check if this is an author contrib
+                            if let Some(contrib_type) = get_attr(e, "contrib-type") {
+                                if contrib_type == "author" {
+                                    in_contrib = true;
+                                    current_given.clear();
+                                    current_surname.clear();
+                                    current_element = Element::Contrib;
+                                } else {
+                                    current_element = Element::None;
+                                }
+                            } else {
+                                current_element = Element::None;
+                            }
+                        }
+                        "given-names" => {
+                            current_element = Element::GivenNames;
+                        }
+                        "surname" => {
+                            current_element = Element::Surname;
+                        }
+                        "journal-title" => {
+                            current_element = Element::JournalTitle;
+                        }
+                        "year" => {
+                            current_element = Element::Year;
+                        }
+                        "month" => {
+                            current_element = Element::Month;
+                        }
+                        "day" => {
+                            current_element = Element::Day;
+                        }
+                        "article-id" => {
+                            if let Some(pub_id_type) = get_attr(e, "pub-id-type") {
+                                if pub_id_type == "doi" {
+                                    current_element = Element::ArticleId;
+                                } else {
+                                    current_element = Element::None;
+                                }
+                            } else {
+                                current_element = Element::None;
+                            }
+                        }
+                        _ => current_element = Element::None,
                     }
                 }
+                Ok(Event::Text(e)) => {
+                    let text = e.unescape().unwrap_or_default().trim().to_string();
+                    if text.is_empty() {
+                        continue;
+                    }
+
+                    match current_element {
+                        Element::ArticleTitle => {
+                            title = text;
+                        }
+                        Element::Abstract => {
+                            if !abstract_text.is_empty() {
+                                abstract_text.push(' ');
+                            }
+                            abstract_text.push_str(&text);
+                        }
+                        Element::Contrib => {
+                            if current_surname.is_empty() {
+                                current_surname = text;
+                            } else if current_given.is_empty() {
+                                current_given = text;
+                            }
+                        }
+                        Element::GivenNames => {
+                            current_given = text;
+                        }
+                        Element::Surname => {
+                            current_surname = text;
+                        }
+                        Element::JournalTitle => {
+                            journal = text;
+                        }
+                        Element::Year => {
+                            year = text;
+                        }
+                        Element::Month => {
+                            month = text;
+                        }
+                        Element::Day => {
+                            day = text;
+                        }
+                        Element::ArticleId => {
+                            doi = text;
+                        }
+                        Element::None => {}
+                    }
+                }
+                Ok(Event::End(ref e)) => {
+                    // Convert element name to owned String to avoid lifetime issues
+                    let tag_name = String::from_utf8_lossy(e.name().as_ref()).to_string();
+                    match tag_name.as_str() {
+                        "article-title" => {
+                            current_element = Element::None;
+                        }
+                        "abstract" => {
+                            current_element = Element::None;
+                        }
+                        "contrib" => {
+                            if in_contrib {
+                                // Combine given names and surname
+                                if !current_given.is_empty() && !current_surname.is_empty() {
+                                    authors.push(format!("{} {}", current_given, current_surname));
+                                } else if !current_surname.is_empty() {
+                                    authors.push(current_surname.clone());
+                                }
+                                in_contrib = false;
+                            }
+                            current_element = Element::None;
+                        }
+                        "given-names" => {
+                            current_element = Element::None;
+                        }
+                        "surname" => {
+                            current_element = Element::None;
+                        }
+                        "journal-title" => {
+                            current_element = Element::None;
+                        }
+                        "year" => {
+                            current_element = Element::None;
+                        }
+                        "month" => {
+                            current_element = Element::None;
+                        }
+                        "day" => {
+                            current_element = Element::None;
+                        }
+                        "article-id" => {
+                            current_element = Element::None;
+                        }
+                        _ => current_element = Element::None,
+                    }
+                }
+                Ok(Event::Eof) => break,
+                Ok(_) => {}
+                Err(e) => {
+                    return Err(SourceError::Parse(format!("XML parsing error: {}", e)));
+                }
             }
+            buf.clear();
         }
 
-        authors.join("; ")
-    }
-
-    /// Extract publication date from XML
-    fn extract_date(&self, xml: &str) -> String {
-        let year = self.extract_xml_text(xml, "year").unwrap_or_default();
-        let month = self.extract_xml_text(xml, "month").unwrap_or_default();
-        let day = self.extract_xml_text(xml, "day").unwrap_or_default();
-
-        if !year.is_empty() {
+        // Build date string
+        let published_date = if !year.is_empty() {
             if !month.is_empty() && !day.is_empty() {
                 format!("{}-{}-{}", year, month, day)
             } else {
@@ -147,24 +236,26 @@ impl PmcSource {
             }
         } else {
             String::new()
-        }
-    }
+        };
 
-    /// Extract attribute value from an element
-    fn extract_attribute(&self, xml: &str, tag: &str, attr: &str, value: &str) -> Option<String> {
-        let pattern = format!(r#"<{}[^>]*{}\s*=\s*["']([^"']*{})[^"']*["'][^>]*>([^<]*)</{}>"#, tag, attr, value, tag);
-        if let Ok(re) = regex::Regex::new(&pattern) {
-            if let Some(caps) = re.captures(xml) {
-                return caps.get(1).map(|m| m.as_str().to_string());
-            }
-        }
-        None
+        let full_pmcid = format!("PMC{}", pmcid);
+        let url = format!("{}/{}", PMC_BASE_URL, full_pmcid);
+        let pdf_url = format!("{}/articles/{}/pdf/", PMC_BASE_URL, full_pmcid);
+
+        Ok(PaperBuilder::new(full_pmcid.clone(), title, url, SourceType::PMC)
+            .authors(authors.join("; "))
+            .abstract_text(abstract_text)
+            .doi(doi)
+            .published_date(published_date)
+            .categories(journal)
+            .pdf_url(pdf_url)
+            .build())
     }
 }
 
 impl Default for PmcSource {
     fn default() -> Self {
-        Self::new()
+        Self::new().expect("Failed to create PmcSource")
     }
 }
 
@@ -207,19 +298,31 @@ impl Source for PmcSource {
             }
         }
 
-        let response = self
-            .client
-            .get(&url)
-            .send()
-            .await
-            .map_err(|e| SourceError::Network(format!("Failed to search PMC: {}", e)))?;
+        // Clone values for retry closure
+        let client = Arc::clone(&self.client);
+        let url_for_retry = url.clone();
 
-        if !response.status().is_success() {
-            return Err(SourceError::Api(format!(
-                "PMC API returned status: {}",
-                response.status()
-            )));
-        }
+        let response = with_retry(api_retry_config(), || {
+            let client = Arc::clone(&client);
+            let url = url_for_retry.clone();
+            async move {
+                let response = client
+                    .get(&url)
+                    .send()
+                    .await
+                    .map_err(|e| SourceError::Network(format!("Failed to search PMC: {}", e)))?;
+
+                if !response.status().is_success() {
+                    return Err(SourceError::Api(format!(
+                        "PMC API returned status: {}",
+                        response.status()
+                    )));
+                }
+
+                Ok(response)
+            }
+        })
+        .await?;
 
         let data: ESearchResponse = response
             .json()
@@ -291,11 +394,21 @@ impl Source for PmcSource {
 
     async fn read(&self, request: &ReadRequest) -> Result<ReadResult, SourceError> {
         let download_request = DownloadRequest::new(&request.paper_id, &request.save_path);
-        self.download(&download_request).await?;
+        let download_result = self.download(&download_request).await?;
 
-        Ok(ReadResult::success(
-            "PDF text extraction not yet fully implemented".to_string(),
-        ))
+        // Extract text from the downloaded PDF
+        let pdf_path = std::path::Path::new(&download_result.path);
+        match crate::utils::extract_text(pdf_path) {
+            Ok(text) => {
+                // Estimate page count (rough approximation based on text length)
+                let pages = (text.len() / 3000).max(1);
+                Ok(ReadResult::success(text).pages(pages))
+            }
+            Err(e) => {
+                // If extraction fails, return a result indicating partial success
+                Ok(ReadResult::error(format!("PDF downloaded but text extraction failed: {}", e)))
+            }
+        }
     }
 }
 
@@ -324,6 +437,14 @@ impl PmcSource {
 
         Ok(Some(self.parse_pmc_xml(&xml_content, pmcid)?))
     }
+}
+
+/// Get attribute value from a BytesStart element
+fn get_attr<'a>(e: &BytesStart<'a>, attr_name: &str) -> Option<String> {
+    e.attributes()
+        .filter_map(|a| a.ok())
+        .find(|a| a.key.as_ref() == attr_name.as_bytes())
+        .and_then(|a| std::str::from_utf8(a.value.as_ref()).ok().map(|s| s.to_string()))
 }
 
 // ===== PMC API Types =====

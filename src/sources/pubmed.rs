@@ -2,12 +2,12 @@
 
 use async_trait::async_trait;
 use quick_xml::de::from_str;
-use reqwest::Client;
 use serde::Deserialize;
 use std::sync::Arc;
 
 use crate::models::{Paper, PaperBuilder, SearchQuery, SearchResponse, SourceType};
 use crate::sources::{Source, SourceCapabilities, SourceError};
+use crate::utils::{api_retry_config, with_retry, HttpClient};
 
 /// PubMed E-utilities API base URLs
 const PUBMED_ESEARCH_URL: &str = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi";
@@ -18,28 +18,20 @@ const PUBMED_EFETCH_URL: &str = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/e
 /// Uses NCBI E-utilities API for searching and fetching PubMed records.
 #[derive(Debug, Clone)]
 pub struct PubMedSource {
-    client: Arc<Client>,
+    client: Arc<HttpClient>,
 }
 
 impl PubMedSource {
     /// Create a new PubMed source
-    pub fn new() -> Self {
-        Self {
-            client: Arc::new(
-                Client::builder()
-                    .user_agent(concat!(
-                        env!("CARGO_PKG_NAME"),
-                        "/",
-                        env!("CARGO_PKG_VERSION")
-                    ))
-                    .build()
-                    .expect("Failed to create HTTP client"),
-            ),
-        }
+    pub fn new() -> Result<Self, SourceError> {
+        Ok(Self {
+            client: Arc::new(HttpClient::new()?),
+        })
     }
 
-    /// Create with a custom HTTP client
-    pub fn with_client(client: Arc<Client>) -> Self {
+    /// Create with a custom HTTP client (for testing)
+    #[allow(dead_code)]
+    pub fn with_client(client: Arc<HttpClient>) -> Self {
         Self { client }
     }
 
@@ -92,11 +84,13 @@ impl PubMedSource {
     /// Parse E-utilities search response XML
     fn parse_search_response(xml: &str) -> Result<Vec<String>, SourceError> {
         #[derive(Debug, Deserialize)]
+        #[allow(non_snake_case)]
         struct ESearchResult {
             IdList: IdList,
         }
 
         #[derive(Debug, Deserialize)]
+        #[allow(non_snake_case)]
         struct IdList {
             #[serde(rename = "Id", default)]
             ids: Vec<String>,
@@ -120,30 +114,35 @@ impl PubMedSource {
     /// Parse E-utilities fetch response XML
     fn parse_fetch_response(xml: &str) -> Result<Vec<Paper>, SourceError> {
         #[derive(Debug, Deserialize)]
+        #[allow(non_snake_case)]
         struct PubmedArticleSet {
             #[serde(rename = "PubmedArticle", default)]
             articles: Vec<PubmedArticle>,
         }
 
         #[derive(Debug, Deserialize)]
+        #[allow(non_snake_case)]
         struct PubmedArticle {
             MedlineCitation: Option<MedlineCitation>,
             PubmedData: Option<PubmedData>,
         }
 
         #[derive(Debug, Deserialize)]
+        #[allow(non_snake_case)]
         struct MedlineCitation {
             PMID: Option<Pmid>,
             Article: Option<Article>,
         }
 
         #[derive(Debug, Deserialize)]
+        #[allow(non_snake_case)]
         struct Pmid {
             #[serde(rename = "$text")]
             id: String,
         }
 
         #[derive(Debug, Deserialize)]
+        #[allow(non_snake_case)]
         struct Article {
             Journal: Option<Journal>,
             ArticleTitle: Option<ArticleTitle>,
@@ -152,16 +151,19 @@ impl PubMedSource {
         }
 
         #[derive(Debug, Deserialize)]
+        #[allow(non_snake_case)]
         struct Journal {
             JournalIssue: Option<JournalIssue>,
         }
 
         #[derive(Debug, Deserialize)]
+        #[allow(non_snake_case)]
         struct JournalIssue {
             PubDate: Option<PubDate>,
         }
 
         #[derive(Debug, Deserialize)]
+        #[allow(non_snake_case)]
         struct PubDate {
             Year: Option<String>,
             #[serde(rename = "MedlineDate")]
@@ -169,29 +171,34 @@ impl PubMedSource {
         }
 
         #[derive(Debug, Deserialize)]
+        #[allow(non_snake_case)]
         struct ArticleTitle {
             #[serde(rename = "$text")]
             title: String,
         }
 
         #[derive(Debug, Deserialize)]
+        #[allow(non_snake_case)]
         struct Abstract {
             AbstractText: Option<AbstractText>,
         }
 
         #[derive(Debug, Deserialize)]
+        #[allow(non_snake_case)]
         struct AbstractText {
             #[serde(rename = "$text")]
             text: String,
         }
 
         #[derive(Debug, Deserialize)]
+        #[allow(non_snake_case)]
         struct AuthorList {
             #[serde(rename = "Author", default)]
             authors: Vec<Author>,
         }
 
         #[derive(Debug, Deserialize)]
+        #[allow(non_snake_case)]
         struct Author {
             LastName: Option<LastName>,
             ForeName: Option<ForeName>,
@@ -200,35 +207,41 @@ impl PubMedSource {
         }
 
         #[derive(Debug, Deserialize)]
+        #[allow(non_snake_case)]
         struct LastName {
             #[serde(rename = "$text")]
             name: String,
         }
 
         #[derive(Debug, Deserialize)]
+        #[allow(non_snake_case)]
         struct ForeName {
             #[serde(rename = "$text")]
             name: String,
         }
 
         #[derive(Debug, Deserialize)]
+        #[allow(non_snake_case)]
         struct Initials {
             #[serde(rename = "$text")]
             initials: String,
         }
 
         #[derive(Debug, Deserialize)]
+        #[allow(non_snake_case)]
         struct CollectiveName {
             #[serde(rename = "$text")]
             name: String,
         }
 
         #[derive(Debug, Deserialize)]
+        #[allow(non_snake_case)]
         struct PubmedData {
             ArticleIdList: Option<ArticleIdList>,
         }
 
         #[derive(Debug, Deserialize)]
+        #[allow(non_snake_case)]
         struct ArticleIdList {
             #[serde(rename = "ArticleId", default)]
             ids: Vec<ArticleId>,
@@ -332,7 +345,7 @@ impl PubMedSource {
 
 impl Default for PubMedSource {
     fn default() -> Self {
-        Self::new()
+        Self::new().expect("Failed to create PubMedSource")
     }
 }
 
@@ -353,24 +366,34 @@ impl Source for PubMedSource {
     async fn search(&self, query: &SearchQuery) -> Result<SearchResponse, SourceError> {
         let search_url = format!("{}?{}", PUBMED_ESEARCH_URL, self.build_search_url(query));
 
-        let response = self
-            .client
-            .get(&search_url)
-            .send()
-            .await
-            .map_err(|e| SourceError::Network(format!("Failed to search PubMed: {}", e)))?;
+        // Clone values for retry closure
+        let client = Arc::clone(&self.client);
+        let search_url_for_retry = search_url.clone();
 
-        if !response.status().is_success() {
-            return Err(SourceError::Api(format!(
-                "PubMed API returned status: {}",
-                response.status()
-            )));
-        }
+        let xml = with_retry(api_retry_config(), || {
+            let client = Arc::clone(&client);
+            let url = search_url_for_retry.clone();
+            async move {
+                let response = client
+                    .get(&url)
+                    .send()
+                    .await
+                    .map_err(|e| SourceError::Network(format!("Failed to search PubMed: {}", e)))?;
 
-        let xml = response
-            .text()
-            .await
-            .map_err(|e| SourceError::Network(format!("Failed to read response: {}", e)))?;
+                if !response.status().is_success() {
+                    return Err(SourceError::Api(format!(
+                        "PubMed API returned status: {}",
+                        response.status()
+                    )));
+                }
+
+                response
+                    .text()
+                    .await
+                    .map_err(|e| SourceError::Network(format!("Failed to read response: {}", e)))
+            }
+        })
+        .await?;
 
         let ids = Self::parse_search_response(&xml)?;
 
@@ -381,24 +404,33 @@ impl Source for PubMedSource {
         // Fetch details for each paper (batch request)
         let fetch_url = Self::build_fetch_url(&ids);
 
-        let fetch_response = self
-            .client
-            .get(&fetch_url)
-            .send()
-            .await
-            .map_err(|e| SourceError::Network(format!("Failed to fetch PubMed details: {}", e)))?;
+        let client = Arc::clone(&self.client);
+        let fetch_url_for_retry = fetch_url.clone();
 
-        if !fetch_response.status().is_success() {
-            return Err(SourceError::Api(format!(
-                "PubMed API returned status: {}",
-                fetch_response.status()
-            )));
-        }
+        let fetch_xml = with_retry(api_retry_config(), || {
+            let client = Arc::clone(&client);
+            let url = fetch_url_for_retry.clone();
+            async move {
+                let response = client
+                    .get(&url)
+                    .send()
+                    .await
+                    .map_err(|e| SourceError::Network(format!("Failed to fetch PubMed details: {}", e)))?;
 
-        let fetch_xml = fetch_response
-            .text()
-            .await
-            .map_err(|e| SourceError::Network(format!("Failed to read response: {}", e)))?;
+                if !response.status().is_success() {
+                    return Err(SourceError::Api(format!(
+                        "PubMed API returned status: {}",
+                        response.status()
+                    )));
+                }
+
+                response
+                    .text()
+                    .await
+                    .map_err(|e| SourceError::Network(format!("Failed to read response: {}", e)))
+            }
+        })
+        .await?;
 
         let papers = Self::parse_fetch_response(&fetch_xml)?;
 
@@ -412,7 +444,7 @@ mod tests {
 
     #[test]
     fn test_build_search_url() {
-        let source = PubMedSource::new();
+        let source = PubMedSource::new().unwrap();
         let query = SearchQuery::new("machine learning").max_results(10);
         let url = source.build_search_url(&query);
 
@@ -424,7 +456,7 @@ mod tests {
 
     #[test]
     fn test_build_search_url_with_year() {
-        let source = PubMedSource::new();
+        let source = PubMedSource::new().unwrap();
         let query = SearchQuery::new("cancer").year("2020");
         let url = source.build_search_url(&query);
 
@@ -434,7 +466,7 @@ mod tests {
 
     #[test]
     fn test_build_search_url_with_year_range() {
-        let source = PubMedSource::new();
+        let source = PubMedSource::new().unwrap();
         let query = SearchQuery::new("cancer").year("2015-2020");
         let url = source.build_search_url(&query);
 
@@ -444,7 +476,7 @@ mod tests {
 
     #[test]
     fn test_build_search_url_with_year_from() {
-        let source = PubMedSource::new();
+        let source = PubMedSource::new().unwrap();
         let query = SearchQuery::new("cancer").year("2020-");
         let url = source.build_search_url(&query);
 
@@ -453,7 +485,7 @@ mod tests {
 
     #[test]
     fn test_build_search_url_with_year_until() {
-        let source = PubMedSource::new();
+        let source = PubMedSource::new().unwrap();
         let query = SearchQuery::new("cancer").year("-2020");
         let url = source.build_search_url(&query);
 
@@ -463,7 +495,7 @@ mod tests {
 
     #[test]
     fn test_build_search_url_with_author() {
-        let source = PubMedSource::new();
+        let source = PubMedSource::new().unwrap();
         let query = SearchQuery::new("cancer").author("Smith J");
         let url = source.build_search_url(&query);
 
@@ -472,7 +504,7 @@ mod tests {
 
     #[test]
     fn test_build_search_url_complex() {
-        let source = PubMedSource::new();
+        let source = PubMedSource::new().unwrap();
         let query = SearchQuery::new("cancer")
             .year("2019-2021")
             .author("Smith J")

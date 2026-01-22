@@ -1,7 +1,6 @@
 //! Semantic Scholar research source implementation.
 
 use async_trait::async_trait;
-use reqwest::Client;
 use serde::Deserialize;
 use std::sync::Arc;
 
@@ -10,51 +9,55 @@ use crate::sources::{
     CitationRequest, DownloadRequest, DownloadResult, ReadRequest, ReadResult, Source,
     SourceCapabilities, SourceError,
 };
+use crate::utils::{api_retry_config, with_retry, HttpClient, RateLimitedRequestBuilder};
 
 const SEMANTIC_API_BASE: &str = "https://api.semanticscholar.org/graph/v1";
+
+/// Environment variable for Semantic Scholar rate limit (requests per second)
+const SEMANTIC_SCHOLAR_RATE_LIMIT_ENV: &str = "SEMANTIC_SCHOLAR_RATE_LIMIT";
+
+/// Default rate limit for Semantic Scholar (1 request per second without API key)
+const DEFAULT_SEMANTIC_RATE_LIMIT: u32 = 1;
 
 /// Semantic Scholar research source
 ///
 /// Uses Semantic Scholar GraphQL/REST API.
 #[derive(Debug, Clone)]
 pub struct SemanticScholarSource {
-    client: Arc<Client>,
+    client: Arc<HttpClient>,
     api_key: Option<String>,
 }
 
 impl SemanticScholarSource {
+    /// Get the rate limit from environment variable or use default
+    fn get_rate_limit() -> u32 {
+        std::env::var(SEMANTIC_SCHOLAR_RATE_LIMIT_ENV)
+            .ok()
+            .and_then(|s| s.parse::<u32>().ok())
+            .unwrap_or(DEFAULT_SEMANTIC_RATE_LIMIT)
+    }
+
     /// Create a new Semantic Scholar source
-    pub fn new() -> Self {
-        Self {
-            client: Arc::new(
-                Client::builder()
-                    .user_agent(concat!(
-                        env!("CARGO_PKG_NAME"),
-                        "/",
-                        env!("CARGO_PKG_VERSION")
-                    ))
-                    .build()
-                    .expect("Failed to create HTTP client"),
-            ),
+    pub fn new() -> Result<Self, SourceError> {
+        let rate_limit = Self::get_rate_limit();
+        let user_agent = concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION"));
+
+        Ok(Self {
+            client: Arc::new(HttpClient::with_rate_limit(user_agent, rate_limit)?),
             api_key: std::env::var("SEMANTIC_SCHOLAR_API_KEY").ok(),
-        }
+        })
     }
 
     /// Create with an API key (optional, for higher rate limits)
-    pub fn with_api_key(api_key: String) -> Self {
-        Self {
-            client: Arc::new(
-                Client::builder()
-                    .user_agent(concat!(
-                        env!("CARGO_PKG_NAME"),
-                        "/",
-                        env!("CARGO_PKG_VERSION")
-                    ))
-                    .build()
-                    .expect("Failed to create HTTP client"),
-            ),
+    #[allow(dead_code)]
+    pub fn with_api_key(api_key: String) -> Result<Self, SourceError> {
+        let rate_limit = Self::get_rate_limit();
+        let user_agent = concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION"));
+
+        Ok(Self {
+            client: Arc::new(HttpClient::with_rate_limit(user_agent, rate_limit)?),
             api_key: Some(api_key),
-        }
+        })
     }
 
     /// Build request URL with optional API key
@@ -63,7 +66,7 @@ impl SemanticScholarSource {
     }
 
     /// Add API key to request headers if available
-    fn add_api_key_if_present(&self, builder: reqwest::RequestBuilder) -> reqwest::RequestBuilder {
+    fn add_api_key_if_present(&self, builder: RateLimitedRequestBuilder) -> RateLimitedRequestBuilder {
         if let Some(ref key) = self.api_key {
             builder.header("x-api-key", key)
         } else {
@@ -113,7 +116,7 @@ impl SemanticScholarSource {
 
 impl Default for SemanticScholarSource {
     fn default() -> Self {
-        Self::new()
+        Self::new().expect("Failed to create SemanticScholarSource")
     }
 }
 
@@ -143,23 +146,39 @@ impl Source for SemanticScholarSource {
             query.max_results
         );
 
-        let response = self
-            .add_api_key_if_present(self.client.get(&self.build_url(&url)))
-            .send()
-            .await
-            .map_err(|e| SourceError::Network(format!("Failed to search Semantic Scholar: {}", e)))?;
+        // Clone values for retry closure
+        let client = Arc::clone(&self.client);
+        let api_key = self.api_key.clone();
+        let url_for_retry = url.clone();
 
-        if !response.status().is_success() {
-            return Err(SourceError::Api(format!(
-                "Semantic Scholar API returned status: {}",
-                response.status()
-            )));
-        }
+        let data: S2SearchResponse = with_retry(api_retry_config(), || {
+            let client = Arc::clone(&client);
+            let api_key = api_key.clone();
+            let url = url_for_retry.clone();
+            async move {
+                let mut request = client.get(&format!("{}{}", SEMANTIC_API_BASE, url));
+                if let Some(ref key) = api_key {
+                    request = request.header("x-api-key", key);
+                }
+                let response = request
+                    .send()
+                    .await
+                    .map_err(|e| SourceError::Network(format!("Failed to search Semantic Scholar: {}", e)))?;
 
-        let data: S2SearchResponse = response
-            .json()
-            .await
-            .map_err(|e| SourceError::Parse(format!("Failed to parse JSON: {}", e)))?;
+                if !response.status().is_success() {
+                    return Err(SourceError::Api(format!(
+                        "Semantic Scholar API returned status: {}",
+                        response.status()
+                    )));
+                }
+
+                response
+                    .json()
+                    .await
+                    .map_err(|e| SourceError::Parse(format!("Failed to parse JSON: {}", e)))
+            }
+        })
+        .await?;
 
         let papers: Result<Vec<Paper>, SourceError> = data
             .data
@@ -175,22 +194,34 @@ impl Source for SemanticScholarSource {
         author: &str,
         max_results: usize,
     ) -> Result<SearchResponse, SourceError> {
+        // Clone values for retry closure
+        let client = Arc::clone(&self.client);
+        let api_key = self.api_key.clone();
+
         // First, search for the author
-        let url = format!(
-            "/author/search?query={}&limit=1",
-            urlencoding::encode(author)
-        );
+        let author_url = format!("/author/search?query={}&limit=1", urlencoding::encode(author));
 
-        let response = self
-            .add_api_key_if_present(self.client.get(&self.build_url(&url)))
-            .send()
-            .await
-            .map_err(|e| SourceError::Network(format!("Failed to search author: {}", e)))?;
+        let author_data: AuthorSearchResponse = with_retry(api_retry_config(), || {
+            let client = Arc::clone(&client);
+            let api_key = api_key.clone();
+            let url = author_url.clone();
+            async move {
+                let mut request = client.get(&format!("{}{}", SEMANTIC_API_BASE, url));
+                if let Some(ref key) = api_key {
+                    request = request.header("x-api-key", key);
+                }
+                let response = request
+                    .send()
+                    .await
+                    .map_err(|e| SourceError::Network(format!("Failed to search author: {}", e)))?;
 
-        let author_data: AuthorSearchResponse = response
-            .json()
-            .await
-            .map_err(|e| SourceError::Parse(format!("Failed to parse JSON: {}", e)))?;
+                response
+                    .json()
+                    .await
+                    .map_err(|e| SourceError::Parse(format!("Failed to parse JSON: {}", e)))
+            }
+        })
+        .await?;
 
         let author_id = author_data
             .data
@@ -204,16 +235,27 @@ impl Source for SemanticScholarSource {
             author_id, max_results
         );
 
-        let papers_response = self
-            .add_api_key_if_present(self.client.get(&self.build_url(&papers_url)))
-            .send()
-            .await
-            .map_err(|e| SourceError::Network(format!("Failed to fetch author papers: {}", e)))?;
+        let papers_data: PapersResponse = with_retry(api_retry_config(), || {
+            let client = Arc::clone(&client);
+            let api_key = api_key.clone();
+            let url = papers_url.clone();
+            async move {
+                let mut request = client.get(&format!("{}{}", SEMANTIC_API_BASE, url));
+                if let Some(ref key) = api_key {
+                    request = request.header("x-api-key", key);
+                }
+                let response = request
+                    .send()
+                    .await
+                    .map_err(|e| SourceError::Network(format!("Failed to fetch author papers: {}", e)))?;
 
-        let papers_data: PapersResponse = papers_response
-            .json()
-            .await
-            .map_err(|e| SourceError::Parse(format!("Failed to parse JSON: {}", e)))?;
+                response
+                    .json()
+                    .await
+                    .map_err(|e| SourceError::Parse(format!("Failed to parse JSON: {}", e)))
+            }
+        })
+        .await?;
 
         let papers: Result<Vec<Paper>, SourceError> = papers_data
             .data
@@ -286,11 +328,18 @@ impl Source for SemanticScholarSource {
 
     async fn read(&self, request: &ReadRequest) -> Result<ReadResult, SourceError> {
         let download_request = DownloadRequest::new(&request.paper_id, &request.save_path);
-        self.download(&download_request).await?;
+        let download_result = self.download(&download_request).await?;
 
-        Ok(ReadResult::success(
-            "PDF text extraction not yet fully implemented".to_string(),
-        ))
+        let pdf_path = std::path::Path::new(&download_result.path);
+        match crate::utils::extract_text(pdf_path) {
+            Ok(text) => {
+                let pages = (text.len() / 3000).max(1);
+                Ok(ReadResult::success(text).pages(pages))
+            }
+            Err(e) => {
+                Ok(ReadResult::error(format!("PDF downloaded but text extraction failed: {}", e)))
+            }
+        }
     }
 
     async fn get_citations(

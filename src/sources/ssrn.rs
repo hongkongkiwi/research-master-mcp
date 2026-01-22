@@ -1,13 +1,14 @@
 //! SSRN research source implementation.
 
 use async_trait::async_trait;
-use reqwest::Client;
 use scraper::{ElementRef, Html, Selector};
 use std::sync::Arc;
 
 use crate::models::{Paper, PaperBuilder, ReadRequest, ReadResult, SearchQuery, SearchResponse, SourceType};
 use crate::sources::{DownloadRequest, DownloadResult, Source, SourceCapabilities, SourceError};
+use crate::utils::{api_retry_config, with_retry, HttpClient};
 
+#[allow(dead_code)]
 const SSRN_BASE_URL: &str = "https://papers.ssrn.com";
 const SSRN_ABSTRACT_URL: &str = "https://papers.ssrn.com/abstract";
 
@@ -16,23 +17,14 @@ const SSRN_ABSTRACT_URL: &str = "https://papers.ssrn.com/abstract";
 /// SSRN doesn't have a public API, so we use web scraping with proper rate limiting.
 #[derive(Debug, Clone)]
 pub struct SsrnSource {
-    client: Arc<Client>,
+    client: Arc<HttpClient>,
 }
 
 impl SsrnSource {
-    pub fn new() -> Self {
-        Self {
-            client: Arc::new(
-                Client::builder()
-                    .user_agent(concat!(
-                        env!("CARGO_PKG_NAME"),
-                        "/",
-                        env!("CARGO_PKG_VERSION")
-                    ))
-                    .build()
-                    .expect("Failed to create HTTP client"),
-            ),
-        }
+    pub fn new() -> Result<Self, SourceError> {
+        Ok(Self {
+            client: Arc::new(HttpClient::new()?),
+        })
     }
 
     /// Extract paper ID from URL
@@ -111,7 +103,7 @@ impl SsrnSource {
 
 impl Default for SsrnSource {
     fn default() -> Self {
-        Self::new()
+        Self::new().expect("Failed to create SsrnSource")
     }
 }
 
@@ -136,20 +128,32 @@ impl Source for SsrnSource {
             urlencoding::encode(&query.query)
         );
 
-        let response = self
-            .client
-            .get(&url)
-            .header("Accept", "text/html")
-            .send()
-            .await
-            .map_err(|e| SourceError::Network(format!("Failed to search SSRN: {}", e)))?;
+        // Clone values for retry closure
+        let client = Arc::clone(&self.client);
+        let url_for_retry = url.clone();
 
-        if !response.status().is_success() {
-            return Err(SourceError::Api(format!(
-                "SSRN returned status: {}",
-                response.status()
-            )));
-        }
+        let response = with_retry(api_retry_config(), || {
+            let client = Arc::clone(&client);
+            let url = url_for_retry.clone();
+            async move {
+                let response = client
+                    .get(&url)
+                    .header("Accept", "text/html")
+                    .send()
+                    .await
+                    .map_err(|e| SourceError::Network(format!("Failed to search SSRN: {}", e)))?;
+
+                if !response.status().is_success() {
+                    return Err(SourceError::Api(format!(
+                        "SSRN returned status: {}",
+                        response.status()
+                    )));
+                }
+
+                Ok(response)
+            }
+        })
+        .await?;
 
         let html_content = response
             .text()
@@ -273,10 +277,17 @@ impl Source for SsrnSource {
 
     async fn read(&self, request: &ReadRequest) -> Result<ReadResult, SourceError> {
         let download_request = DownloadRequest::new(&request.paper_id, &request.save_path);
-        self.download(&download_request).await?;
+        let download_result = self.download(&download_request).await?;
 
-        Ok(ReadResult::success(
-            "PDF text extraction not yet fully implemented".to_string(),
-        ))
+        let pdf_path = std::path::Path::new(&download_result.path);
+        match crate::utils::extract_text(pdf_path) {
+            Ok(text) => {
+                let pages = (text.len() / 3000).max(1);
+                Ok(ReadResult::success(text).pages(pages))
+            }
+            Err(e) => {
+                Ok(ReadResult::error(format!("PDF downloaded but text extraction failed: {}", e)))
+            }
+        }
     }
 }

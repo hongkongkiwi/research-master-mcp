@@ -1,133 +1,153 @@
-//! MCP server implementation using stdio transport.
-
-use std::sync::Arc;
+//! MCP server implementation using pmcp (Pragmatic AI's rust-mcp-sdk).
+//!
+//! This module provides the MCP server implementation using the pmcp crate
+//! for proper JSON-RPC handling over stdio and HTTP/SSE.
 
 use crate::mcp::tools::ToolRegistry;
 use crate::sources::SourceRegistry;
+use async_trait::async_trait;
+use pmcp::{
+    Error, RequestHandlerExtra, Server, ServerCapabilities, ToolHandler, ToolInfo,
+    server::streamable_http_server::{StreamableHttpServer, StreamableHttpServerConfig},
+};
+use serde_json::Value;
+use std::net::SocketAddr;
+use std::sync::Arc;
+use tokio::sync::Mutex;
+use tokio::task::JoinHandle;
 
 /// The MCP server for Research Master
 ///
-/// This server communicates over stdio and provides tools for searching
-/// and downloading academic papers from multiple research sources.
+/// This server provides tools for searching and downloading academic papers
+/// from multiple research sources over various transports.
 #[derive(Debug, Clone)]
 pub struct McpServer {
-    tools: ToolRegistry,
+    server: Arc<Mutex<Server>>,
 }
 
 impl McpServer {
     /// Create a new MCP server with the given source registry
-    pub fn new(sources: SourceRegistry) -> Result<Self, anyhow::Error> {
+    pub fn new(sources: Arc<SourceRegistry>) -> Result<Self, pmcp::Error> {
         let tools = ToolRegistry::from_sources(&sources);
-
-        Ok(Self { tools })
+        let server = Self::build_server_impl(tools)?;
+        Ok(Self {
+            server: Arc::new(Mutex::new(server)),
+        })
     }
 
-    /// Get all available tools
-    pub fn tools(&self) -> Vec<&crate::mcp::Tool> {
-        self.tools.all()
+    /// Get the tool registry
+    pub fn tools(&self) -> Arc<Mutex<Server>> {
+        self.server.clone()
     }
 
-    /// Run the server in stdio mode
-    ///
-    /// This reads JSON-RPC messages from stdin and writes responses to stdout
-    pub async fn run_stdio(&self) -> Result<(), anyhow::Error> {
+    /// Build the MCP server with tool handlers (internal implementation)
+    fn build_server_impl(tools: ToolRegistry) -> Result<Server, pmcp::Error> {
+        let mut builder = Server::builder()
+            .name("research-master-mcp")
+            .version(env!("CARGO_PKG_VERSION"))
+            .capabilities(ServerCapabilities::default());
+
+        // Add all tools from the registry
+        for tool in tools.all() {
+            let name = tool.name.clone();
+            let description = tool.description.clone();
+            let input_schema = tool.input_schema.clone();
+            let handler = tool.handler.clone();
+
+            let tool_handler = ToolWrapper {
+                name,
+                description: Some(description),
+                input_schema,
+                handler,
+            };
+            builder = builder.tool(tool_handler.name.clone(), tool_handler);
+        }
+
+        builder.build()
+    }
+
+    /// Run the server in stdio mode (for Claude Desktop and other MCP clients)
+    pub async fn run(&self) -> Result<(), pmcp::Error> {
         tracing::info!("Starting MCP server in stdio mode");
 
-        // Create stdin/stdout streams
-        let stdin = tokio::io::stdin();
-        let stdout = tokio::io::stdout();
+        // run_stdio() takes ownership, so we need to extract the Server from Arc<Mutex>
+        // Since we own the Arc and there should be no other references at this point,
+        // we can try_unwrap to get the Server out
+        let server = Arc::try_unwrap(self.server.clone())
+            .map_err(|_| Error::internal("Cannot unwrap Arc - multiple references exist"))?
+            .into_inner();
 
-        // For now, we'll implement a simple JSON-RPC server
-        // In a full implementation, this would use the mcp-sdk properly
-        self.run_simple_stdio(stdin, stdout).await
+        tracing::info!("MCP server initialized");
+
+        server.run_stdio().await
     }
 
-    /// Simple stdio implementation (placeholder for proper MCP SDK integration)
-    async fn run_simple_stdio<R, W>(
-        &self,
-        _reader: R,
-        _writer: W,
-    ) -> Result<(), anyhow::Error>
-    where
-        R: tokio::io::AsyncRead + Unpin,
-        W: tokio::io::AsyncWrite + Unpin,
-    {
-        // This is a simplified implementation
-        // A full implementation would use the mcp-sdk to handle:
-        // - initialize
-        // - tools/list
-        // - tools/call
-        // - resources/list
-        // - prompts/list
-        // etc.
-
-        tracing::info!("MCP server running");
-        tracing::info!("Available tools: {}", self.tools().len());
-
-        for tool in self.tools() {
-            tracing::debug!("  - {}", tool.name);
-        }
-
-        // Keep the server running
-        // In the full implementation, this would be a loop reading JSON-RPC messages
-        #[cfg(unix)]
-        {
-            use tokio::signal::unix::{signal, SignalKind};
-            let mut sigterm = signal(SignalKind::terminate())?;
-            sigterm.recv().await;
-            tracing::info!("Received SIGTERM, shutting down");
-        }
-
-        #[cfg(not(unix))]
-        {
-            // For non-Unix systems, just sleep indefinitely
-            // In production, you'd have proper shutdown handling
-            std::future::pending::<()>().await;
-        }
-
-        Ok(())
-    }
-
-    /// Run the server in SSE (Server-Sent Events) mode
+    /// Run the server in HTTP/SSE mode
     ///
-    /// This starts an HTTP server that streams events over SSE
-    pub async fn run_sse(&self, _port: u16) -> Result<(), anyhow::Error> {
-        tracing::info!("Starting MCP server in SSE mode");
+    /// This starts an HTTP server that uses Server-Sent Events (SSE) for real-time
+    /// communication with MCP clients.
+    pub async fn run_http(&self, addr: &str) -> Result<(SocketAddr, JoinHandle<()>), pmcp::Error> {
+        tracing::info!("Starting MCP server in HTTP/SSE mode on {}", addr);
 
-        // SSE mode is typically used for web-based connections
-        // For now, we'll just log and wait
-        tracing::info!("SSE mode not yet fully implemented");
-        tracing::info!("Available tools: {}", self.tools().len());
+        let socket_addr: SocketAddr = addr.parse()
+            .map_err(|e| Error::invalid_params(&format!("Invalid address: {}", e)))?;
 
-        #[cfg(unix)]
-        {
-            use tokio::signal::unix::{signal, SignalKind};
-            let mut sigterm = signal(SignalKind::terminate())?;
-            sigterm.recv().await;
-            tracing::info!("Received SIGTERM, shutting down");
-        }
+        // Create the HTTP server with default config
+        let http_server = StreamableHttpServer::new(socket_addr, self.server.clone());
 
-        #[cfg(not(unix))]
-        {
-            std::future::pending::<()>().await;
-        }
+        // Start the server
+        http_server.start().await
+    }
 
-        Ok(())
+    /// Run the server in HTTP/SSE mode with custom configuration
+    pub async fn run_http_with_config(
+        &self,
+        addr: &str,
+        config: StreamableHttpServerConfig,
+    ) -> Result<(SocketAddr, JoinHandle<()>), pmcp::Error> {
+        tracing::info!("Starting MCP server in HTTP/SSE mode on {} (with custom config)", addr);
+
+        let socket_addr: SocketAddr = addr.parse()
+            .map_err(|e| Error::invalid_params(&format!("Invalid address: {}", e)))?;
+
+        // Create the HTTP server with custom config
+        let http_server = StreamableHttpServer::with_config(socket_addr, self.server.clone(), config);
+
+        // Start the server
+        http_server.start().await
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+/// Wrapper for adapting our Tool to pmcp's ToolHandler
+#[derive(Clone)]
+struct ToolWrapper {
+    name: String,
+    description: Option<String>,
+    input_schema: Value,
+    handler: Arc<dyn crate::mcp::tools::ToolHandler>,
+}
 
-    #[test]
-    fn test_server_creation() {
-        let sources = SourceRegistry::new();
-        let server = McpServer::new(sources);
-        assert!(server.is_ok());
-
-        let server = server.unwrap();
-        // Should have at least the arxiv search tool
-        assert!(!server.tools().is_empty());
+#[async_trait]
+impl ToolHandler for ToolWrapper {
+    async fn handle(
+        &self,
+        args: Value,
+        _extra: RequestHandlerExtra,
+    ) -> Result<Value, Error> {
+        self.handler.execute(args).await
+            .map_err(|e| Error::internal(&e))
     }
+
+    fn metadata(&self) -> Option<ToolInfo> {
+        Some(ToolInfo::new(
+            self.name.clone(),
+            self.description.clone(),
+            self.input_schema.clone(),
+        ))
+    }
+}
+
+/// Create a new MCP server instance
+pub fn create_mcp_server(sources: Arc<SourceRegistry>) -> Result<McpServer, pmcp::Error> {
+    McpServer::new(sources)
 }
