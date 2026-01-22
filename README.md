@@ -251,14 +251,25 @@ All settings can be overridden using environment variables with the `RESEARCH_MA
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `RESEARCH_MASTER_ENABLED_SOURCES` | Comma-separated list of sources to enable | (all enabled) |
+| `RESEARCH_MASTER_DISABLED_SOURCES` | Comma-separated list of sources to disable | (none disabled) |
+
+**Logic:**
+- If only `ENABLED` is set: only those sources are enabled
+- If only `DISABLED` is set: all sources except those are enabled
+- If both are set: enabled sources **minus** disabled sources (authoritative list)
+- If neither is set: all sources enabled
 
 **Example:**
 ```bash
 # Only enable arXiv, PubMed, and Semantic Scholar
 export RESEARCH_MASTER_ENABLED_SOURCES="arxiv,pubmed,semantic"
 
-# All sources enabled (default)
-# unset RESEARCH_MASTER_ENABLED_SOURCES
+# Enable all sources except DBLP and JSTOR
+export RESEARCH_MASTER_DISABLED_SOURCES="dblp,jstor"
+
+# Enable only arxiv and semantic, but disable semantic (result: only arxiv)
+export RESEARCH_MASTER_ENABLED_SOURCES="arxiv,semantic"
+export RESEARCH_MASTER_DISABLED_SOURCES="semantic"
 ```
 
 **Available source IDs:**

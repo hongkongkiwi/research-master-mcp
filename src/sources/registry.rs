@@ -63,8 +63,75 @@ use super::google_scholar::GoogleScholarSource;
 
 /// Environment variable for filtering enabled sources
 /// Comma-separated list of source IDs to enable (e.g., "arxiv,pubmed,semantic")
-/// If not set, all sources are enabled
+/// If not set, all sources are enabled (unless DISABLED_SOURCES is set)
 const ENABLED_SOURCES_ENV_VAR: &str = "RESEARCH_MASTER_ENABLED_SOURCES";
+
+/// Environment variable for filtering disabled sources
+/// Comma-separated list of source IDs to disable (e.g., "dblp,jstor")
+/// If not set, no sources are disabled by default
+const DISABLED_SOURCES_ENV_VAR: &str = "RESEARCH_MASTER_DISABLED_SOURCES";
+
+/// Result of source filtering from environment variables
+#[derive(Debug, Clone, Default)]
+struct SourceFilter {
+    /// Set of explicitly enabled sources (None means all are enabled)
+    enabled: Option<std::collections::HashSet<String>>,
+    /// Set of explicitly disabled sources (None means none are disabled)
+    disabled: Option<std::collections::HashSet<String>>,
+}
+
+impl SourceFilter {
+    /// Create a new filter from environment variables
+    fn from_env() -> Self {
+        let enabled = std::env::var(ENABLED_SOURCES_ENV_VAR)
+            .ok()
+            .map(|value| {
+                value
+                    .split(',')
+                    .map(|s| s.trim().to_lowercase())
+                    .filter(|s| !s.is_empty())
+                    .collect::<std::collections::HashSet<_>>()
+            })
+            .filter(|set| !set.is_empty());
+
+        let disabled = std::env::var(DISABLED_SOURCES_ENV_VAR)
+            .ok()
+            .map(|value| {
+                value
+                    .split(',')
+                    .map(|s| s.trim().to_lowercase())
+                    .filter(|s| !s.is_empty())
+                    .collect::<std::collections::HashSet<_>>()
+            })
+            .filter(|set| !set.is_empty());
+
+        Self { enabled, disabled }
+    }
+
+    /// Check if a source should be enabled based on the filter
+    ///
+    /// Logic:
+    /// - If ENABLE is set and DISABLE is not: only enabled sources
+    /// - If DISABLE is set and ENABLE is not: all except disabled sources
+    /// - If both are set: enabled sources minus disabled sources
+    /// - If neither is set: all sources enabled
+    fn is_enabled(&self, source_id: &str) -> bool {
+        let id_lower = source_id.to_lowercase();
+
+        match (&self.enabled, &self.disabled) {
+            // Both specified: enabled minus disabled
+            (Some(enabled), Some(disabled)) => {
+                enabled.contains(&id_lower) && !disabled.contains(&id_lower)
+            }
+            // Only enabled specified: must be in enabled set
+            (Some(enabled), None) => enabled.contains(&id_lower),
+            // Only disabled specified: must not be in disabled set
+            (None, Some(disabled)) => !disabled.contains(&id_lower),
+            // Neither specified: all enabled
+            (None, None) => true,
+        }
+    }
+}
 
 bitflags::bitflags! {
     /// Capabilities that a source can support
@@ -97,11 +164,12 @@ impl SourceRegistry {
     /// Try to create a new registry with all available sources
     ///
     /// This will:
-    /// 1. Filter sources based on RESEARCH_MASTER_ENABLED_SOURCES environment variable
+    /// 1. Filter sources based on RESEARCH_MASTER_ENABLED_SOURCES and
+    ///    RESEARCH_MASTER_DISABLED_SOURCES environment variables
     /// 2. Skip sources that fail to initialize (e.g., missing API keys)
     /// 3. Return an error only if no sources could be initialized
     pub fn try_new() -> Result<Self, SourceError> {
-        let enabled_sources = Self::get_enabled_sources();
+        let filter = SourceFilter::from_env();
         let mut registry = Self {
             sources: HashMap::new(),
         };
@@ -111,11 +179,11 @@ impl SourceRegistry {
             ($source:expr) => {
                 if let Ok(source) = $source {
                     let source_id = source.id().to_string();
-                    if Self::is_source_enabled(&source_id, &enabled_sources) {
+                    if filter.is_enabled(&source_id) {
                         registry.register(Arc::new(source));
                         tracing::info!("Registered source: {}", source_id);
                     } else {
-                        tracing::debug!("Source '{}' filtered out by ENABLED_SOURCES", source_id);
+                        tracing::debug!("Source '{}' filtered out by source filter", source_id);
                     }
                 } else {
                     tracing::warn!("Skipping source: initialization failed");
@@ -217,37 +285,6 @@ impl SourceRegistry {
         Ok(registry)
     }
 
-    /// Get the list of enabled sources from environment variable
-    ///
-    /// Returns None if all sources should be enabled (default behavior)
-    /// Returns Some(HashSet) with specific source IDs if filtering is enabled
-    fn get_enabled_sources() -> Option<std::collections::HashSet<String>> {
-        std::env::var(ENABLED_SOURCES_ENV_VAR)
-            .ok()
-            .map(|value| {
-                value
-                    .split(',')
-                    .map(|s| s.trim().to_lowercase())
-                    .filter(|s| !s.is_empty())
-                    .collect::<std::collections::HashSet<_>>()
-            })
-            .filter(|set: &std::collections::HashSet<String>| !set.is_empty())
-    }
-
-    /// Check if a source should be enabled based on environment filtering
-    ///
-    /// If enabled_sources is None, all sources are enabled (default behavior)
-    /// If enabled_sources is Some, only sources in the set are enabled
-    fn is_source_enabled(source_id: &str, enabled_sources: &Option<std::collections::HashSet<String>>) -> bool {
-        match enabled_sources {
-            None => true, // No filtering, all sources enabled
-            Some(enabled) => {
-                let id_lower = source_id.to_lowercase();
-                enabled.contains(&id_lower)
-            }
-        }
-    }
-
     /// Register a new source
     pub fn register(&mut self, source: Arc<dyn Source>) {
         self.sources.insert(source.id().to_string(), source);
@@ -346,50 +383,78 @@ mod tests {
     }
 
     #[test]
-    fn test_enabled_sources_filtering() {
-        // Test that filtering works when env var is set
+    fn test_source_filter_only_enabled() {
+        // Test: ENABLE only - only enabled sources
         std::env::set_var(ENABLED_SOURCES_ENV_VAR, "arxiv,pubmed");
+        std::env::remove_var(DISABLED_SOURCES_ENV_VAR);
 
-        let enabled = SourceRegistry::get_enabled_sources();
-        assert!(enabled.is_some());
-
-        let enabled_set = enabled.unwrap();
-        assert!(enabled_set.contains("arxiv"));
-        assert!(enabled_set.contains("pubmed"));
-        assert!(!enabled_set.contains("semantic"));
-
-        // Test is_source_enabled with the enabled set (wrapped in Some)
-        let enabled_some = Some(enabled_set);
-        assert!(SourceRegistry::is_source_enabled("arxiv", &enabled_some));
-        assert!(SourceRegistry::is_source_enabled("ARXIV", &enabled_some)); // Case insensitive
-        assert!(!SourceRegistry::is_source_enabled("semantic", &enabled_some));
+        let filter = SourceFilter::from_env();
+        assert!(filter.is_enabled("arxiv"));
+        assert!(filter.is_enabled("pubmed"));
+        assert!(!filter.is_enabled("semantic"));
+        assert!(filter.is_enabled("ARXIV")); // Case insensitive - ARXIV should be enabled
 
         std::env::remove_var(ENABLED_SOURCES_ENV_VAR);
     }
 
     #[test]
-    fn test_no_enabled_sources_filtering() {
-        // When env var is not set, all sources should be enabled
+    fn test_source_filter_only_disabled() {
+        // Test: DISABLE only - all except disabled
         std::env::remove_var(ENABLED_SOURCES_ENV_VAR);
+        std::env::set_var(DISABLED_SOURCES_ENV_VAR, "dblp,jstor");
 
-        let enabled = SourceRegistry::get_enabled_sources();
-        assert!(enabled.is_none());
+        let filter = SourceFilter::from_env();
+        assert!(filter.is_enabled("arxiv"));
+        assert!(filter.is_enabled("pubmed"));
+        assert!(!filter.is_enabled("dblp"));
+        assert!(!filter.is_enabled("jstor"));
+        assert!(!filter.is_enabled("DBLP")); // Case insensitive
 
-        // Test is_source_enabled with None (all enabled)
-        assert!(SourceRegistry::is_source_enabled("arxiv", &None));
-        assert!(SourceRegistry::is_source_enabled("semantic", &None));
+        std::env::remove_var(DISABLED_SOURCES_ENV_VAR);
     }
 
     #[test]
-    fn test_empty_enabled_sources() {
-        // Empty env var should be treated as not set
+    fn test_source_filter_both_enabled_and_disabled() {
+        // Test: Both ENABLE and DISABLE - enabled minus disabled
+        std::env::set_var(ENABLED_SOURCES_ENV_VAR, "arxiv,pubmed,semantic,dblp");
+        std::env::set_var(DISABLED_SOURCES_ENV_VAR, "dblp");
+
+        let filter = SourceFilter::from_env();
+        assert!(filter.is_enabled("arxiv"));
+        assert!(filter.is_enabled("pubmed"));
+        assert!(filter.is_enabled("semantic"));
+        assert!(!filter.is_enabled("dblp")); // In enabled but also in disabled
+
+        std::env::remove_var(ENABLED_SOURCES_ENV_VAR);
+        std::env::remove_var(DISABLED_SOURCES_ENV_VAR);
+    }
+
+    #[test]
+    fn test_source_filter_neither() {
+        // Test: Neither set - all enabled
+        std::env::remove_var(ENABLED_SOURCES_ENV_VAR);
+        std::env::remove_var(DISABLED_SOURCES_ENV_VAR);
+
+        let filter = SourceFilter::from_env();
+        assert!(filter.is_enabled("arxiv"));
+        assert!(filter.is_enabled("pubmed"));
+        assert!(filter.is_enabled("semantic"));
+        assert!(filter.is_enabled("dblp"));
+    }
+
+    #[test]
+    fn test_source_filter_empty_values() {
+        // Test: Empty values should be treated as not set
         std::env::set_var(ENABLED_SOURCES_ENV_VAR, "");
+        std::env::set_var(DISABLED_SOURCES_ENV_VAR, "");
 
-        let enabled = SourceRegistry::get_enabled_sources();
-        // Empty string results in None after filtering
-        assert!(enabled.is_none());
+        let filter = SourceFilter::from_env();
+        // Empty strings should result in all sources enabled
+        assert!(filter.is_enabled("arxiv"));
+        assert!(filter.is_enabled("pubmed"));
 
         std::env::remove_var(ENABLED_SOURCES_ENV_VAR);
+        std::env::remove_var(DISABLED_SOURCES_ENV_VAR);
     }
 
     #[test]
