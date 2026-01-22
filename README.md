@@ -158,9 +158,53 @@ Download and install from [poppler-windows](https://github.com/oschwartz10612/po
 
 ## Configuration
 
-All configuration can be set via environment variables using the `RESEARCH_MASTER_` prefix.
+Research Master MCP supports configuration via environment variables and/or a configuration file. Environment variables take precedence over file-based settings.
+
+### Configuration File
+
+The application searches for a configuration file in the following locations (in order):
+
+| Priority | Location | Platform |
+|----------|----------|----------|
+| 1 | `./research-master.toml` | All |
+| 2 | `./.research-master.toml` | All |
+| 3 | `$XDG_CONFIG_HOME/research-master/config.toml` | Linux/BSD (if XDG_CONFIG_HOME set) |
+| 4 | `~/Library/Application Support/research-master/config.toml` | macOS |
+| 5 | `~/.config/research-master/config.toml` | Linux/BSD |
+| 6 | `%APPDATA%\research-master\config.toml` | Windows |
+
+You can also specify a custom config file path using the `--config` CLI option:
+
+```bash
+research-master-mcp --config /path/to/config.toml search "machine learning"
+```
+
+#### Configuration File Format (TOML)
+
+```toml
+# Download settings
+[downloads]
+default_path = "./downloads"
+organize_by_source = true
+max_file_size_mb = 100
+
+# Rate limiting settings
+[rate_limits]
+default_requests_per_second = 5
+max_concurrent_requests = 10
+
+# API Keys
+[api_keys]
+semantic_scholar = "your-semantic-scholar-api-key"
+core = "your-core-api-key"
+
+# OpenAlex email for "polite pool" access
+openalex_email = "your@email.com"
+```
 
 ### Environment Variables
+
+All settings can be overridden using environment variables with the `RESEARCH_MASTER_` prefix.
 
 #### Source Filtering
 
@@ -184,6 +228,7 @@ export RESEARCH_MASTER_ENABLED_SOURCES="arxiv,pubmed,semantic"
 | Variable | Description |
 |----------|-------------|
 | `SEMANTIC_SCHOLAR_API_KEY` | API key for Semantic Scholar (higher rate limits) |
+| `CORE_API_KEY` | API key for CORE service |
 | `OPENALEX_EMAIL` | Email for OpenAlex "polite pool" access |
 
 **Note:** Sources work without API keys but may have lower rate limits. If a source requires an API key that isn't provided, it will be automatically disabled during initialization.
@@ -201,6 +246,7 @@ export RESEARCH_MASTER_ENABLED_SOURCES="arxiv,pubmed,semantic"
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `RESEARCH_MASTER_RATE_LIMITS_DEFAULT_REQUESTS_PER_SECOND` | Global requests per second for all HTTP requests | `5` |
+| `RESEARCH_MASTER_RATE_LIMITS_MAX_CONCURRENT_REQUESTS` | Maximum concurrent requests | `10` |
 
 **Disable rate limiting entirely:**
 ```bash
@@ -221,25 +267,13 @@ export RESEARCH_MASTER_RATE_LIMITS_DEFAULT_REQUESTS_PER_SECOND=0
 |----------|-------------|
 | `RUST_LOG` | Logging level (e.g., `debug`, `info`, `warn`, `error`) |
 
-### Configuration File (Alternative)
+### Configuration Precedence
 
-You can also create a `research-master.toml` file:
+Configuration values are loaded in this order (later values override earlier ones):
 
-```toml
-[downloads]
-default_path = "./downloads"
-organize_by_source = true
-max_file_size_mb = 100
-
-[rate_limits]
-default_requests_per_second = 5
-
-[sources.semantic_scholar]
-api_key = "your-key-here"
-
-[sources.openalex]
-email = "your@email.com"
-```
+1. Configuration file in default search locations
+2. Configuration file specified via `--config` option
+3. Environment variables (always take final precedence)
 
 ## Usage
 
@@ -407,88 +441,153 @@ To set custom rate limits:
 
 ## Available MCP Tools
 
-Once connected via MCP, the following tools are available:
+Once connected via MCP, the following **unified tools** are available. These tools automatically select the best source based on your input, or you can specify a source explicitly.
 
-### Search Tools
+### Core Research Tools
 
-- `search_arxiv` - Search arXiv preprints
-- `search_semantic` - Search Semantic Scholar
-- `search_openalex` - Search OpenAlex
-- `search_pubmed` - Search PubMed
-- `search_pmc` - Search PubMed Central
-- `search_biorxiv` - Search bioRxiv
-- `search_hal` - Search HAL archive
-- `search_dblp` - Search DBLP
-- `search_iacr` - Search IACR ePrint
-- `search_ssrn` - Search SSRN
+#### `search_papers`
+Search for papers across all available research sources or a specific source.
 
-### Download Tools
+**Parameters:**
+- `query` (required): Search query string
+- `source` (optional): Specific source to search (e.g., "arxiv", "semantic", "pubmed")
+- `max_results` (optional): Maximum number of results (default: 10)
+- `year` (optional): Year filter (e.g., "2020", "2018-2022", "2010-", "-2015")
+- `category` (optional): Category/subject filter
 
-- `download_arxiv` - Download from arXiv
-- `download_semantic` - Download from Semantic Scholar
-- `download_openalex` - Download from OpenAlex
-- `download_pubmed` - Download from PubMed
-- `download_pmc` - Download from PMC
-- `download_biorxiv` - Download from bioRxiv
-- `download_hal` - Download from HAL
-- `download_iacr` - Download from IACR
+**Example:**
+```json
+{
+  "query": "transformer architecture",
+  "year": "2020-",
+  "max_results": 20
+}
+```
 
-### Read Tools (PDF Text Extraction)
+#### `search_by_author`
+Search for papers by a specific author across sources that support author search.
 
-- `read_arxiv_paper` - Extract text from arXiv PDF
-- `read_semantic_paper` - Extract text from Semantic Scholar PDF
-- `read_openalex_paper` - Extract text from OpenAlex PDF
-- `read_pubmed_paper` - Extract text from PubMed PDF
-- `read_pmc_paper` - Extract text from PMC PDF
-- `read_biorxiv_paper` - Extract text from bioRxiv PDF
-- `read_hal_paper` - Extract text from HAL PDF
-- `read_iacr_paper` - Extract text from IACR PDF
+**Parameters:**
+- `author` (required): Author name
+- `source` (optional): Specific source to search
+- `max_results` (optional): Maximum results per source (default: 10)
 
-**Note:** PDF text extraction requires poppler to be installed. If extraction fails, the tool will return an error message indicating the issue.
+**Supported sources:** arxiv, semantic, openalex, pubmed, biorxiv, pmc, hal, iacr, ssrn
 
-### Citation Tools
+#### `get_paper`
+Get detailed metadata for a specific paper. The source is auto-detected from the paper ID format.
 
-- `get_semantic_citations` - Get papers that cite a paper
-- `get_semantic_references` - Get references from a paper
-- `get_semantic_related` - Get related papers
-- `get_arxiv_citations` - Get citations from arXiv
-- `get_openalex_citations` - Get citations from OpenAlex
-- `get_hal_citations` - Get citations from HAL
+**Parameters:**
+- `paper_id` (required): Paper identifier (e.g., "2301.12345", "arXiv:2301.12345", "PMC12345678")
+- `source` (optional): Override auto-detection and use specific source
+
+**Auto-detection patterns:**
+- `arXiv:xxxx` or `xxxx.xxxx` (numeric) → arXiv
+- `PMCxxxxxxx` → PMC
+- `10.xxxx/xxxxxx` (DOI) → Source with DOI lookup capability
+- `CORX:xxxxx` → CORE
+- etc.
+
+#### `download_paper`
+Download a paper PDF to your local filesystem.
+
+**Parameters:**
+- `paper_id` (required): Paper identifier
+- `source` (optional): Override auto-detection
+- `output_path` (optional): Save path (default: ./downloads)
+- `auto_filename` (optional): Auto-generate filename from title (default: true)
+
+#### `read_paper`
+Extract and return the full text content from a paper PDF.
+
+**Parameters:**
+- `paper_id` (required): Paper identifier
+- `source` (optional): Override auto-detection
+
+**Note:** Requires poppler to be installed. Returns an error if PDF extraction fails.
+
+### Citation & Reference Tools
+
+#### `get_citations`
+Get papers that cite a specific paper. Prefers Semantic Scholar for best results.
+
+**Parameters:**
+- `paper_id` (required): Paper identifier
+- `source` (optional): Specific source (default: "semantic")
+- `max_results` (optional): Maximum results (default: 20)
+
+#### `get_references`
+Get papers referenced by a specific paper. Prefers Semantic Scholar.
+
+**Parameters:**
+- `paper_id` (required): Paper identifier
+- `source` (optional): Specific source (default: "semantic")
+- `max_results` (optional): Maximum results (default: 20)
 
 ### Lookup Tools
 
-- `get_semantic_by_doi` - Lookup paper by DOI (Semantic Scholar)
-- `get_openalex_by_doi` - Lookup paper by DOI (OpenAlex)
-- `get_crossref_by_doi` - Lookup paper by DOI (CrossRef)
-- `get_hal_by_doi` - Lookup paper by DOI (HAL)
+#### `lookup_by_doi`
+Look up a paper by its DOI across all sources that support DOI lookup.
 
-### Author Search Tools
+**Parameters:**
+- `doi` (required): Digital Object Identifier (e.g., "10.48550/arXiv.2301.12345")
+- `source` (optional): Specific source to query (default: all)
 
-- `search_semantic_by_author` - Search papers by author
-- `search_arxiv_by_author` - Search arXiv by author
-- `search_openalex_by_author` - Search OpenAlex by author
+**Supported sources:** semantic, openalex, crossref, hal
 
 ### Utility Tools
 
-- `deduplicate_papers` - Remove duplicate papers from a list
+#### `deduplicate_papers`
+Remove duplicate papers from a list using DOI matching and title similarity.
+
+**Parameters:**
+- `papers` (required): Array of paper objects
+- `strategy` (optional): Deduplication strategy - "first" (keep first), "last" (keep last), or "mark" (add `is_duplicate` flag)
+
+**Deduplication criteria:**
+- Exact DOI match
+- Title similarity > 0.95 (Jaro-Winkler algorithm)
+- Author verification
+
+### Smart Source Selection
+
+The unified tools use intelligent source auto-detection:
+
+| Paper ID Format | Detected Source |
+|-----------------|-----------------|
+| `arXiv:1234.5678` | arXiv |
+| `1234.5678` (numeric) | arXiv |
+| `PMC12345678` | PMC |
+| `10.xxxx/xxxxxx` | Source with DOI lookup |
+| `CORX:xxxxx` | CORE |
+| `hal-xxxxxxx` | HAL |
+| `xxxx/xxxx` (IACR format) | IACR |
+
+You can always override auto-detection by specifying the `source` parameter explicitly.
 
 ## Example Usage with Claude
 
-Once configured with Claude Desktop, you can interact with the research sources naturally:
+Once configured with Claude Desktop, you can interact with the research sources naturally using the unified tools:
 
 ```
 User: Search for papers about "transformer architecture" from 2020 onwards
-Claude: [Uses search_semantic tool]
+Claude: [Uses search_papers tool with query="transformer architecture", year="2020-"]
 
 User: Find papers by Geoffrey Hinton on deep learning
-Claude: [Uses search_semantic_by_author tool]
+Claude: [Uses search_by_author tool with author="Geoffrey Hinton"]
 
 User: Download the paper "Attention Is All You Need" and find what papers cite it
-Claude: [Uses download_arxiv and get_semantic_citations tools]
+Claude: [Uses download_paper with paper_id="1706.03762" (arXiv),
+         then get_citations to find citing papers]
 
 User: Read the abstract and introduction from this paper
-Claude: [Uses read_arxiv_paper tool to extract PDF text]
+Claude: [Uses read_paper tool with paper_id="1706.03762" to extract PDF text]
+
+User: Look up this paper by its DOI
+Claude: [Uses lookup_by_doi with doi="10.48550/arXiv.1706.03762"]
 ```
+
+The unified tools automatically detect the appropriate source, so you don't need to remember which source has which paper. You can simply provide the paper ID, DOI, or search query, and the tool handles the rest.
 
 ## Development
 
@@ -500,7 +599,8 @@ src/
 ├── lib.rs            # Library exports
 ├── mcp/              # MCP protocol implementation
 │   ├── server.rs     # MCP server (stdio/SSE)
-│   ├── tools.rs      # Tool registry and handlers
+│   ├── tools.rs      # Tool registry
+│   ├── unified_tools.rs  # Unified tool handlers with smart source selection
 │   └── mod.rs
 ├── sources/          # Research source implementations
 │   ├── mod.rs        # Source trait definition
@@ -558,9 +658,33 @@ impl Source for MySource {
 }
 ```
 
-2. Register the source in `src/sources/registry.rs`
+2. Add a feature flag in `Cargo.toml`:
 
-3. Rebuild and the MCP tools will be auto-generated
+```toml
+[features]
+default = ["source-mysource"]
+source-mysource = []
+```
+
+3. Conditionally compile the module in `src/sources/mod.rs`:
+
+```rust
+#[cfg(feature = "source-mysource")]
+mod mysource;
+```
+
+4. Register the source in `src/sources/registry.rs`:
+
+```rust
+#[cfg(feature = "source-mysource")]
+use super::mysource::MySource;
+
+// In try_new():
+#[cfg(feature = "source-mysource")]
+try_register!(MySource::new());
+```
+
+5. Rebuild - the unified MCP tools will automatically include your new source
 
 ### Running Tests
 

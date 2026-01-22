@@ -132,6 +132,68 @@ pub fn get_config() -> Config {
     Config::default()
 }
 
+/// Search for configuration file in default locations
+///
+/// Searches in the following order:
+/// 1. Current directory: `./research-master.toml`
+/// 2. Current directory: `./.research-master.toml`
+/// 3. XDG config dir: `$XDG_CONFIG_HOME/research-master/config.toml` (or `~/.config/research-master/config.toml`)
+/// 4. macOS: `~/Library/Application Support/research-master/config.toml`
+/// 5. Unix: `~/.config/research-master/config.toml`
+/// 6. Windows: `%APPDATA%\research-master\config.toml`
+pub fn find_config_file() -> Option<PathBuf> {
+    // 1. Current directory - research-master.toml
+    let path = PathBuf::from("research-master.toml");
+    if path.exists() {
+        return Some(path);
+    }
+
+    // 2. Current directory - .research-master.toml
+    let path = PathBuf::from(".research-master.toml");
+    if path.exists() {
+        return Some(path);
+    }
+
+    // 3. XDG Config Home
+    if let Ok(xdg_home) = std::env::var("XDG_CONFIG_HOME") {
+        let path = PathBuf::from(xdg_home).join("research-master").join("config.toml");
+        if path.exists() {
+            return Some(path);
+        }
+    }
+
+    // 4. macOS Application Support
+    if let Ok(home) = std::env::var("HOME") {
+        let home_path = PathBuf::from(&home);
+        let path = home_path
+            .join("Library")
+            .join("Application Support")
+            .join("research-master")
+            .join("config.toml");
+        if path.exists() {
+            return Some(path);
+        }
+
+        // 5. Unix fallback (~/.config/research-master/config.toml)
+        let path = home_path.join(".config").join("research-master").join("config.toml");
+        if path.exists() {
+            return Some(path);
+        }
+    }
+
+    // 6. Windows APPDATA
+    if let Ok(appdata) = std::env::var("APPDATA") {
+        let path = PathBuf::from(appdata)
+            .join("research-master")
+            .join("config.toml");
+        if path.exists() {
+            return Some(path);
+        }
+    }
+
+    None
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
