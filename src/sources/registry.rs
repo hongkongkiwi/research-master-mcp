@@ -40,6 +40,14 @@ use super::zenodo::ZenodoSource;
 use super::unpaywall::UnpaywallSource;
 #[cfg(feature = "source-mdpi")]
 use super::mdpi::MdpiSource;
+#[cfg(feature = "source-jstor")]
+use super::jstor::JstorSource;
+#[cfg(feature = "source-scispace")]
+use super::scispace::ScispaceSource;
+#[cfg(feature = "source-acm")]
+use super::acm::AcmSource;
+#[cfg(feature = "source-connected_papers")]
+use super::connected_papers::ConnectedPapersSource;
 
 /// Environment variable for filtering enabled sources
 /// Comma-separated list of source IDs to enable (e.g., "arxiv,pubmed,semantic")
@@ -155,6 +163,18 @@ impl SourceRegistry {
 
         #[cfg(feature = "source-ssrn")]
         try_register!(SsrnSource::new());
+
+        #[cfg(feature = "source-jstor")]
+        try_register!(JstorSource::new());
+
+        #[cfg(feature = "source-scispace")]
+        try_register!(ScispaceSource::new());
+
+        #[cfg(feature = "source-acm")]
+        try_register!(AcmSource::new());
+
+        #[cfg(feature = "source-connected_papers")]
+        try_register!(ConnectedPapersSource::new());
 
         if registry.is_empty() {
             return Err(SourceError::Other(

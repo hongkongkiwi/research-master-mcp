@@ -25,6 +25,10 @@
 //! - `zenodo` - Enable Zenodo source (default: enabled)
 //! - `unpaywall` - Enable Unpaywall source (default: enabled)
 //! - `mdpi` - Enable MDPI source (default: enabled)
+//! - `jstor` - Enable JSTOR source (default: enabled)
+//! - `scispace` - Enable SciSpace source (default: enabled)
+//! - `acm` - Enable ACM Digital Library source (default: enabled)
+//! - `connected_papers` - Enable Connected Papers source (default: enabled)
 //!
 //! # Feature Groups
 //!
@@ -80,6 +84,14 @@ mod registry;
 mod semantic;
 #[cfg(feature = "source-ssrn")]
 mod ssrn;
+#[cfg(feature = "source-jstor")]
+mod jstor;
+#[cfg(feature = "source-scispace")]
+mod scispace;
+#[cfg(feature = "source-acm")]
+mod acm;
+#[cfg(feature = "source-connected_papers")]
+mod connected_papers;
 
 pub use registry::{SourceCapabilities, SourceRegistry};
 

@@ -89,6 +89,10 @@ core_repo = ["source-core-repo"]
 zenodo = ["source-zenodo"]
 unpaywall = ["source-unpaywall"]
 mdpi = ["source-mdpi"]
+jstor = ["source-jstor"]
+scispace = ["source-scispace"]
+acm = ["source-acm"]
+connected_papers = ["source-connected_papers"]
 
 # Internal feature names (to avoid conflicts with source IDs)
 source-arxiv = []
@@ -108,6 +112,10 @@ source-core-repo = []
 source-zenodo = []
 source-unpaywall = []
 source-mdpi = []
+source-jstor = []
+source-scispace = []
+source-acm = []
+source-connected_papers = []
 
 # Default feature: all sources enabled
 default = [
@@ -128,6 +136,10 @@ default = [
     "source-zenodo",
     "source-unpaywall",
     "source-mdpi",
+    "source-jstor",
+    "source-scispace",
+    "source-acm",
+    "source-connected_papers",
 ]
 
 # Convenience feature groups

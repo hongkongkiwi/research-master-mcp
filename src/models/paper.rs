@@ -28,6 +28,10 @@ pub enum SourceType {
     Zenodo,
     Unpaywall,
     MDPI,
+    Jstor,
+    Scispace,
+    Acm,
+    ConnectedPapers,
     #[serde(untagged)]
     Other(String),
 }
@@ -57,6 +61,10 @@ impl SourceType {
             SourceType::Zenodo => "Zenodo",
             SourceType::Unpaywall => "Unpaywall",
             SourceType::MDPI => "MDPI",
+            SourceType::Jstor => "JSTOR",
+            SourceType::Scispace => "SciSpace",
+            SourceType::Acm => "ACM Digital Library",
+            SourceType::ConnectedPapers => "Connected Papers",
             SourceType::Other(s) => s,
         }
     }
@@ -85,6 +93,10 @@ impl SourceType {
             SourceType::Zenodo => "zenodo",
             SourceType::Unpaywall => "unpaywall",
             SourceType::MDPI => "mdpi",
+            SourceType::Jstor => "jstor",
+            SourceType::Scispace => "scispace",
+            SourceType::Acm => "acm",
+            SourceType::ConnectedPapers => "connected_papers",
             SourceType::Other(s) => s,
         }
     }
