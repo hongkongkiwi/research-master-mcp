@@ -17,6 +17,10 @@ pub struct Config {
     /// Rate limiting settings
     #[serde(default)]
     pub rate_limits: RateLimitConfig,
+
+    /// Source filtering settings
+    #[serde(default)]
+    pub sources: SourceConfig,
 }
 
 impl Default for Config {
@@ -25,6 +29,30 @@ impl Default for Config {
             api_keys: ApiKeys::default(),
             downloads: DownloadConfig::default(),
             rate_limits: RateLimitConfig::default(),
+            sources: SourceConfig::default(),
+        }
+    }
+}
+
+/// Source configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SourceConfig {
+    /// Comma-separated list of source IDs to enable (e.g., "arxiv,pubmed,semantic")
+    /// Maps to RESEARCH_MASTER_ENABLED_SOURCES environment variable
+    #[serde(default)]
+    pub enabled_sources: Option<String>,
+
+    /// Comma-separated list of source IDs to disable (e.g., "dblp,jstor")
+    /// Maps to RESEARCH_MASTER_DISABLED_SOURCES environment variable
+    #[serde(default)]
+    pub disabled_sources: Option<String>,
+}
+
+impl Default for SourceConfig {
+    fn default() -> Self {
+        Self {
+            enabled_sources: std::env::var("RESEARCH_MASTER_ENABLED_SOURCES").ok(),
+            disabled_sources: std::env::var("RESEARCH_MASTER_DISABLED_SOURCES").ok(),
         }
     }
 }

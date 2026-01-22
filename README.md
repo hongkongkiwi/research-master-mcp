@@ -237,9 +237,10 @@ semantic_scholar = "your-semantic-scholar-api-key"
 core = "your-core-api-key"
 openalex_email = "your@email.com"
 
-# Source-specific settings
+# Source filtering (same as environment variables)
 [sources]
-google_scholar_enabled = true
+enabled_sources = "arxiv,pubmed,semantic"
+disabled_sources = "dblp,jstor"
 ```
 
 ### Environment Variables
@@ -474,6 +475,19 @@ Add to your Claude Desktop MCP configuration:
 ```
 
 ### Advanced Configuration
+
+You can configure sources using a config file or environment variables. Environment variables always take precedence over config file settings.
+
+**Using a config file:**
+
+Create `~/.config/research-master/config.toml`:
+```toml
+[sources]
+enabled_sources = "arxiv,pubmed,semantic"
+disabled_sources = "dblp,jstor"
+```
+
+**Using environment variables:**
 
 To enable only specific sources:
 

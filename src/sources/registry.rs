@@ -1,9 +1,10 @@
 //! Registry for managing research source plugins.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 use super::{Source, SourceError};
+use crate::config::SourceConfig;
 
 // Conditionally import source types based on feature flags
 #[cfg(feature = "source-arxiv")]
@@ -61,47 +62,37 @@ use super::springer::SpringerSource;
 #[cfg(feature = "source-google_scholar")]
 use super::google_scholar::GoogleScholarSource;
 
-/// Environment variable for filtering enabled sources
-/// Comma-separated list of source IDs to enable (e.g., "arxiv,pubmed,semantic")
-/// If not set, all sources are enabled (unless DISABLED_SOURCES is set)
-const ENABLED_SOURCES_ENV_VAR: &str = "RESEARCH_MASTER_ENABLED_SOURCES";
-
-/// Environment variable for filtering disabled sources
-/// Comma-separated list of source IDs to disable (e.g., "dblp,jstor")
-/// If not set, no sources are disabled by default
-const DISABLED_SOURCES_ENV_VAR: &str = "RESEARCH_MASTER_DISABLED_SOURCES";
-
-/// Result of source filtering from environment variables
+/// Result of source filtering from config/environment
 #[derive(Debug, Clone, Default)]
 struct SourceFilter {
     /// Set of explicitly enabled sources (None means all are enabled)
-    enabled: Option<std::collections::HashSet<String>>,
+    enabled: Option<HashSet<String>>,
     /// Set of explicitly disabled sources (None means none are disabled)
-    disabled: Option<std::collections::HashSet<String>>,
+    disabled: Option<HashSet<String>>,
 }
 
 impl SourceFilter {
-    /// Create a new filter from environment variables
-    fn from_env() -> Self {
-        let enabled = std::env::var(ENABLED_SOURCES_ENV_VAR)
-            .ok()
+    /// Create a new filter from config (which may include env vars)
+    fn from_config(config: &SourceConfig) -> Self {
+        let enabled = config.enabled_sources.as_ref()
+            .filter(|s| !s.is_empty())
             .map(|value| {
                 value
                     .split(',')
                     .map(|s| s.trim().to_lowercase())
                     .filter(|s| !s.is_empty())
-                    .collect::<std::collections::HashSet<_>>()
+                    .collect::<HashSet<_>>()
             })
             .filter(|set| !set.is_empty());
 
-        let disabled = std::env::var(DISABLED_SOURCES_ENV_VAR)
-            .ok()
+        let disabled = config.disabled_sources.as_ref()
+            .filter(|s| !s.is_empty())
             .map(|value| {
                 value
                     .split(',')
                     .map(|s| s.trim().to_lowercase())
                     .filter(|s| !s.is_empty())
-                    .collect::<std::collections::HashSet<_>>()
+                    .collect::<HashSet<_>>()
             })
             .filter(|set| !set.is_empty());
 
@@ -164,12 +155,12 @@ impl SourceRegistry {
     /// Try to create a new registry with all available sources
     ///
     /// This will:
-    /// 1. Filter sources based on RESEARCH_MASTER_ENABLED_SOURCES and
-    ///    RESEARCH_MASTER_DISABLED_SOURCES environment variables
+    /// 1. Filter sources based on config file or environment variables
     /// 2. Skip sources that fail to initialize (e.g., missing API keys)
     /// 3. Return an error only if no sources could be initialized
     pub fn try_new() -> Result<Self, SourceError> {
-        let filter = SourceFilter::from_env();
+        let source_config = crate::config::get_config().sources;
+        let filter = SourceFilter::from_config(&source_config);
         let mut registry = Self {
             sources: HashMap::new(),
         };
@@ -385,57 +376,61 @@ mod tests {
     #[test]
     fn test_source_filter_only_enabled() {
         // Test: ENABLE only - only enabled sources
-        std::env::set_var(ENABLED_SOURCES_ENV_VAR, "arxiv,pubmed");
-        std::env::remove_var(DISABLED_SOURCES_ENV_VAR);
+        std::env::set_var("RESEARCH_MASTER_ENABLED_SOURCES", "arxiv,pubmed");
+        std::env::remove_var("RESEARCH_MASTER_DISABLED_SOURCES");
 
-        let filter = SourceFilter::from_env();
+        let config = crate::config::get_config().sources;
+        let filter = SourceFilter::from_config(&config);
         assert!(filter.is_enabled("arxiv"));
         assert!(filter.is_enabled("pubmed"));
         assert!(!filter.is_enabled("semantic"));
         assert!(filter.is_enabled("ARXIV")); // Case insensitive - ARXIV should be enabled
 
-        std::env::remove_var(ENABLED_SOURCES_ENV_VAR);
+        std::env::remove_var("RESEARCH_MASTER_ENABLED_SOURCES");
     }
 
     #[test]
     fn test_source_filter_only_disabled() {
         // Test: DISABLE only - all except disabled
-        std::env::remove_var(ENABLED_SOURCES_ENV_VAR);
-        std::env::set_var(DISABLED_SOURCES_ENV_VAR, "dblp,jstor");
+        std::env::remove_var("RESEARCH_MASTER_ENABLED_SOURCES");
+        std::env::set_var("RESEARCH_MASTER_DISABLED_SOURCES", "dblp,jstor");
 
-        let filter = SourceFilter::from_env();
+        let config = crate::config::get_config().sources;
+        let filter = SourceFilter::from_config(&config);
         assert!(filter.is_enabled("arxiv"));
         assert!(filter.is_enabled("pubmed"));
         assert!(!filter.is_enabled("dblp"));
         assert!(!filter.is_enabled("jstor"));
         assert!(!filter.is_enabled("DBLP")); // Case insensitive
 
-        std::env::remove_var(DISABLED_SOURCES_ENV_VAR);
+        std::env::remove_var("RESEARCH_MASTER_DISABLED_SOURCES");
     }
 
     #[test]
     fn test_source_filter_both_enabled_and_disabled() {
         // Test: Both ENABLE and DISABLE - enabled minus disabled
-        std::env::set_var(ENABLED_SOURCES_ENV_VAR, "arxiv,pubmed,semantic,dblp");
-        std::env::set_var(DISABLED_SOURCES_ENV_VAR, "dblp");
+        std::env::set_var("RESEARCH_MASTER_ENABLED_SOURCES", "arxiv,pubmed,semantic,dblp");
+        std::env::set_var("RESEARCH_MASTER_DISABLED_SOURCES", "dblp");
 
-        let filter = SourceFilter::from_env();
+        let config = crate::config::get_config().sources;
+        let filter = SourceFilter::from_config(&config);
         assert!(filter.is_enabled("arxiv"));
         assert!(filter.is_enabled("pubmed"));
         assert!(filter.is_enabled("semantic"));
         assert!(!filter.is_enabled("dblp")); // In enabled but also in disabled
 
-        std::env::remove_var(ENABLED_SOURCES_ENV_VAR);
-        std::env::remove_var(DISABLED_SOURCES_ENV_VAR);
+        std::env::remove_var("RESEARCH_MASTER_ENABLED_SOURCES");
+        std::env::remove_var("RESEARCH_MASTER_DISABLED_SOURCES");
     }
 
     #[test]
     fn test_source_filter_neither() {
         // Test: Neither set - all enabled
-        std::env::remove_var(ENABLED_SOURCES_ENV_VAR);
-        std::env::remove_var(DISABLED_SOURCES_ENV_VAR);
+        std::env::remove_var("RESEARCH_MASTER_ENABLED_SOURCES");
+        std::env::remove_var("RESEARCH_MASTER_DISABLED_SOURCES");
 
-        let filter = SourceFilter::from_env();
+        let config = crate::config::get_config().sources;
+        let filter = SourceFilter::from_config(&config);
         assert!(filter.is_enabled("arxiv"));
         assert!(filter.is_enabled("pubmed"));
         assert!(filter.is_enabled("semantic"));
@@ -445,16 +440,17 @@ mod tests {
     #[test]
     fn test_source_filter_empty_values() {
         // Test: Empty values should be treated as not set
-        std::env::set_var(ENABLED_SOURCES_ENV_VAR, "");
-        std::env::set_var(DISABLED_SOURCES_ENV_VAR, "");
+        std::env::set_var("RESEARCH_MASTER_ENABLED_SOURCES", "");
+        std::env::set_var("RESEARCH_MASTER_DISABLED_SOURCES", "");
 
-        let filter = SourceFilter::from_env();
+        let config = crate::config::get_config().sources;
+        let filter = SourceFilter::from_config(&config);
         // Empty strings should result in all sources enabled
         assert!(filter.is_enabled("arxiv"));
         assert!(filter.is_enabled("pubmed"));
 
-        std::env::remove_var(ENABLED_SOURCES_ENV_VAR);
-        std::env::remove_var(DISABLED_SOURCES_ENV_VAR);
+        std::env::remove_var("RESEARCH_MASTER_ENABLED_SOURCES");
+        std::env::remove_var("RESEARCH_MASTER_DISABLED_SOURCES");
     }
 
     #[test]
