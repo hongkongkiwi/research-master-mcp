@@ -29,6 +29,12 @@
 //! - `scispace` - Enable SciSpace source (default: enabled)
 //! - `acm` - Enable ACM Digital Library source (default: enabled)
 //! - `connected_papers` - Enable Connected Papers source (default: enabled)
+//! - `doaj` - Enable DOAJ source (default: enabled)
+//! - `worldwidescience` - Enable WorldWideScience source (default: enabled)
+//! - `osf` - Enable OSF Preprints source (default: enabled)
+//! - `base` - Enable BASE source (default: enabled)
+//! - `springer` - Enable Springer source (default: enabled)
+//! - `google_scholar` - Enable Google Scholar source (default: disabled, requires GOOGLE_SCHOLAR_ENABLED=true)
 //!
 //! # Feature Groups
 //!
@@ -92,6 +98,18 @@ mod scispace;
 mod acm;
 #[cfg(feature = "source-connected_papers")]
 mod connected_papers;
+#[cfg(feature = "source-doaj")]
+mod doaj;
+#[cfg(feature = "source-worldwidescience")]
+mod worldwidescience;
+#[cfg(feature = "source-osf")]
+mod osf;
+#[cfg(feature = "source-base")]
+mod base;
+#[cfg(feature = "source-springer")]
+mod springer;
+#[cfg(feature = "source-google_scholar")]
+mod google_scholar;
 
 pub use registry::{SourceCapabilities, SourceRegistry};
 

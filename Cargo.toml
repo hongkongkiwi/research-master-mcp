@@ -93,6 +93,12 @@ jstor = ["source-jstor"]
 scispace = ["source-scispace"]
 acm = ["source-acm"]
 connected_papers = ["source-connected_papers"]
+doaj = ["source-doaj"]
+worldwidescience = ["source-worldwidescience"]
+osf = ["source-osf"]
+base = ["source-base"]
+springer = ["source-springer"]
+google_scholar = ["source-google_scholar"]
 
 # Internal feature names (to avoid conflicts with source IDs)
 source-arxiv = []
@@ -116,8 +122,14 @@ source-jstor = []
 source-scispace = []
 source-acm = []
 source-connected_papers = []
+source-doaj = []
+source-worldwidescience = []
+source-osf = []
+source-base = []
+source-springer = []
+source-google_scholar = []
 
-# Default feature: all sources enabled
+# Default feature: all sources enabled (except google_scholar which requires env var)
 default = [
     "source-arxiv",
     "source-pubmed",
@@ -140,6 +152,12 @@ default = [
     "source-scispace",
     "source-acm",
     "source-connected_papers",
+    "source-doaj",
+    "source-worldwidescience",
+    "source-osf",
+    "source-base",
+    "source-springer",
+    # google_scholar is NOT included by default - requires GOOGLE_SCHOLAR_ENABLED=true
 ]
 
 # Convenience feature groups

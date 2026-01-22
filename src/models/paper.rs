@@ -32,6 +32,11 @@ pub enum SourceType {
     Scispace,
     Acm,
     ConnectedPapers,
+    Doaj,
+    WorldWideScience,
+    Osf,
+    Base,
+    Springer,
     #[serde(untagged)]
     Other(String),
 }
@@ -65,6 +70,11 @@ impl SourceType {
             SourceType::Scispace => "SciSpace",
             SourceType::Acm => "ACM Digital Library",
             SourceType::ConnectedPapers => "Connected Papers",
+            SourceType::Doaj => "DOAJ",
+            SourceType::WorldWideScience => "WorldWideScience",
+            SourceType::Osf => "OSF Preprints",
+            SourceType::Base => "BASE",
+            SourceType::Springer => "Springer",
             SourceType::Other(s) => s,
         }
     }
@@ -97,6 +107,11 @@ impl SourceType {
             SourceType::Scispace => "scispace",
             SourceType::Acm => "acm",
             SourceType::ConnectedPapers => "connected_papers",
+            SourceType::Doaj => "doaj",
+            SourceType::WorldWideScience => "worldwidescience",
+            SourceType::Osf => "osf",
+            SourceType::Base => "base",
+            SourceType::Springer => "springer",
             SourceType::Other(s) => s,
         }
     }

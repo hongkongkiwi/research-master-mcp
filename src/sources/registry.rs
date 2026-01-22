@@ -48,6 +48,18 @@ use super::scispace::ScispaceSource;
 use super::acm::AcmSource;
 #[cfg(feature = "source-connected_papers")]
 use super::connected_papers::ConnectedPapersSource;
+#[cfg(feature = "source-doaj")]
+use super::doaj::DoajSource;
+#[cfg(feature = "source-worldwidescience")]
+use super::worldwidescience::WorldWideScienceSource;
+#[cfg(feature = "source-osf")]
+use super::osf::OsfSource;
+#[cfg(feature = "source-base")]
+use super::base::BaseSource;
+#[cfg(feature = "source-springer")]
+use super::springer::SpringerSource;
+#[cfg(feature = "source-google_scholar")]
+use super::google_scholar::GoogleScholarSource;
 
 /// Environment variable for filtering enabled sources
 /// Comma-separated list of source IDs to enable (e.g., "arxiv,pubmed,semantic")
@@ -175,6 +187,24 @@ impl SourceRegistry {
 
         #[cfg(feature = "source-connected_papers")]
         try_register!(ConnectedPapersSource::new());
+
+        #[cfg(feature = "source-doaj")]
+        try_register!(DoajSource::new());
+
+        #[cfg(feature = "source-worldwidescience")]
+        try_register!(WorldWideScienceSource::new());
+
+        #[cfg(feature = "source-osf")]
+        try_register!(OsfSource::new());
+
+        #[cfg(feature = "source-base")]
+        try_register!(BaseSource::new());
+
+        #[cfg(feature = "source-springer")]
+        try_register!(SpringerSource::new());
+
+        #[cfg(feature = "source-google_scholar")]
+        try_register!(GoogleScholarSource::new());
 
         if registry.is_empty() {
             return Err(SourceError::Other(
