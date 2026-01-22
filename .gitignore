@@ -1,0 +1,73 @@
+# Rust
+/target/
+**/*.rs.bk
+*.pdb
+
+# IDEs and Editors
+.idea/
+.vscode/
+*.swp
+*.swo
+*.swn
+*~
+.env.local
+.env.*.local
+
+# Emacs
+\#*\#
+.\#*
+
+# Sublime Text
+*.sublime-project
+*.sublime-workspace
+
+# JetBrains
+*.iml
+*.ipr
+*.iws
+.out/
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Windows
+Thumbs.db
+
+# Build artifacts
+/dist/
+/build/
+*.o
+*.a
+*.so
+*.dylib
+*.dll
+*.exe
+
+# Testing
+/ttests/
+
+# Logs
+*.log
+logs/
+
+# Environment
+.env
+.envrc
+.flenv
+.direnv/
+
+# Coverage
+tarpaulin-report.html
+cobertura.xml
+lcov.info
+*.profraw
+*.profdata
+
+# Rust Analyzer
+/rust-project.json
+
+# Debug
+*.debug

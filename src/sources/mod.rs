@@ -1,0 +1,222 @@
+//! Research source plugins with extensible trait-based architecture.
+//!
+//! This module defines the [`Source`] trait that all research sources implement.
+//! New sources can be added by implementing this trait and registering them with
+//! the [`SourceRegistry`].
+
+mod arxiv;
+mod biorxiv;
+mod crossref;
+mod dblp;
+mod hal;
+mod iacr;
+mod openalex;
+mod pmc;
+mod pubmed;
+mod registry;
+mod semantic;
+mod ssrn;
+
+pub use registry::{SourceCapabilities, SourceRegistry};
+
+use crate::models::{
+    CitationRequest, DownloadRequest, DownloadResult, Paper, ReadRequest, ReadResult,
+    SearchQuery, SearchResponse,
+};
+use async_trait::async_trait;
+
+/// The Source trait defines the interface for all research source plugins.
+///
+/// # Implementing a New Source
+///
+/// To add a new research source:
+///
+/// 1. Create a new struct that implements `Source`
+/// 2. Implement the required methods (at minimum `id`, `name`, and `search`)
+/// 3. Implement optional methods if the source supports them
+/// 4. Add the source to `SourceRegistry::new()` or register it dynamically
+#[async_trait]
+pub trait Source: Send + Sync + std::fmt::Debug {
+    /// Unique identifier for this source (used in tool names, e.g., "arxiv", "pubmed")
+    fn id(&self) -> &str;
+
+    /// Human-readable name of this source
+    fn name(&self) -> &str;
+
+    /// Describe the capabilities of this source
+    fn capabilities(&self) -> SourceCapabilities {
+        SourceCapabilities::SEARCH
+    }
+
+    /// Whether this source supports search
+    fn supports_search(&self) -> bool {
+        self.capabilities().contains(SourceCapabilities::SEARCH)
+    }
+
+    /// Whether this source supports downloading PDFs
+    fn supports_download(&self) -> bool {
+        self.capabilities().contains(SourceCapabilities::DOWNLOAD)
+    }
+
+    /// Whether this source supports reading/parsing PDFs
+    fn supports_read(&self) -> bool {
+        self.capabilities().contains(SourceCapabilities::READ)
+    }
+
+    /// Whether this source supports citation/reference lookup
+    fn supports_citations(&self) -> bool {
+        self.capabilities().contains(SourceCapabilities::CITATIONS)
+    }
+
+    /// Whether this source supports lookup by DOI
+    fn supports_doi_lookup(&self) -> bool {
+        self.capabilities().contains(SourceCapabilities::DOI_LOOKUP)
+    }
+
+    /// Whether this source supports author search
+    fn supports_author_search(&self) -> bool {
+        self.capabilities().contains(SourceCapabilities::AUTHOR_SEARCH)
+    }
+
+    // ========== SEARCH METHODS ==========
+
+    /// Search for papers matching the query
+    async fn search(&self, _query: &SearchQuery) -> Result<SearchResponse, SourceError> {
+        Err(SourceError::NotImplemented)
+    }
+
+    /// Search for papers by a specific author
+    async fn search_by_author(
+        &self,
+        _author: &str,
+        _max_results: usize,
+    ) -> Result<SearchResponse, SourceError> {
+        Err(SourceError::NotImplemented)
+    }
+
+    // ========== DOWNLOAD METHODS ==========
+
+    /// Download a paper's PDF to the specified path
+    async fn download(&self, _request: &DownloadRequest) -> Result<DownloadResult, SourceError> {
+        Err(SourceError::NotImplemented)
+    }
+
+    // ========== READ METHODS ==========
+
+    /// Read and extract text from a paper's PDF
+    async fn read(&self, _request: &ReadRequest) -> Result<ReadResult, SourceError> {
+        Err(SourceError::NotImplemented)
+    }
+
+    // ========== CITATION METHODS ==========
+
+    /// Get papers that cite this paper
+    async fn get_citations(
+        &self,
+        _request: &CitationRequest,
+    ) -> Result<SearchResponse, SourceError> {
+        Err(SourceError::NotImplemented)
+    }
+
+    /// Get papers referenced by this paper
+    async fn get_references(
+        &self,
+        _request: &CitationRequest,
+    ) -> Result<SearchResponse, SourceError> {
+        Err(SourceError::NotImplemented)
+    }
+
+    /// Get related papers
+    async fn get_related(&self, _request: &CitationRequest) -> Result<SearchResponse, SourceError> {
+        Err(SourceError::NotImplemented)
+    }
+
+    // ========== LOOKUP METHODS ==========
+
+    /// Get a paper by its DOI
+    async fn get_by_doi(&self, _doi: &str) -> Result<Paper, SourceError> {
+        Err(SourceError::NotImplemented)
+    }
+
+    /// Get a paper by its ID (source-specific)
+    async fn get_by_id(&self, _id: &str) -> Result<Paper, SourceError> {
+        Err(SourceError::NotImplemented)
+    }
+
+    /// Validate that a paper ID is correctly formatted for this source
+    fn validate_id(&self, _id: &str) -> Result<(), SourceError> {
+        Ok(())
+    }
+}
+
+/// Errors that can occur when interacting with a source
+#[derive(Debug, thiserror::Error)]
+pub enum SourceError {
+    /// The requested operation is not implemented for this source
+    #[error("Operation not implemented for this source")]
+    NotImplemented,
+
+    /// Network or HTTP error
+    #[error("Network error: {0}")]
+    Network(String),
+
+    /// Parsing error (XML, JSON, HTML, etc.)
+    #[error("Parse error: {0}")]
+    Parse(String),
+
+    /// Invalid request parameters
+    #[error("Invalid request: {0}")]
+    InvalidRequest(String),
+
+    /// Rate limit exceeded
+    #[error("Rate limit exceeded")]
+    RateLimit,
+
+    /// Paper not found
+    #[error("Paper not found: {0}")]
+    NotFound(String),
+
+    /// API error from the source
+    #[error("API error: {0}")]
+    Api(String),
+
+    /// IO error (file system)
+    #[error("IO error: {0}")]
+    Io(#[from] std::io::Error),
+
+    /// Other error
+    #[error("Error: {0}")]
+    Other(String),
+}
+
+impl From<reqwest::Error> for SourceError {
+    fn from(err: reqwest::Error) -> Self {
+        SourceError::Network(err.to_string())
+    }
+}
+
+impl From<serde_json::Error> for SourceError {
+    fn from(err: serde_json::Error) -> Self {
+        SourceError::Parse(format!("JSON: {}", err))
+    }
+}
+
+impl From<quick_xml::DeError> for SourceError {
+    fn from(err: quick_xml::DeError) -> Self {
+        SourceError::Parse(format!("XML: {}", err))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_source_capabilities() {
+        let caps = SourceCapabilities::SEARCH | SourceCapabilities::DOWNLOAD;
+
+        assert!(caps.contains(SourceCapabilities::SEARCH));
+        assert!(caps.contains(SourceCapabilities::DOWNLOAD));
+        assert!(!caps.contains(SourceCapabilities::CITATIONS));
+    }
+}

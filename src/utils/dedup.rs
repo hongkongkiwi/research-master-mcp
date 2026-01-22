@@ -1,0 +1,418 @@
+//! Deduplication utilities for papers across sources.
+
+use std::collections::{HashMap, HashSet};
+use strsim::jaro_winkler;
+
+use crate::models::Paper;
+
+/// Strategy for handling duplicates
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DuplicateStrategy {
+    /// Keep the first occurrence of each duplicate group
+    First,
+    /// Keep the last occurrence of each duplicate group
+    Last,
+    /// Keep all papers but mark duplicates
+    Mark,
+}
+
+/// Find duplicate papers based on DOI, title similarity, and author+year
+///
+/// Returns groups of paper indices that are duplicates of each other
+pub fn find_duplicates(papers: &[Paper]) -> Vec<Vec<usize>> {
+    let mut groups: Vec<Vec<usize>> = Vec::new();
+    let mut processed: HashSet<usize> = HashSet::new();
+
+    for i in 0..papers.len() {
+        if processed.contains(&i) {
+            continue;
+        }
+
+        let mut group = vec![i];
+        let paper_i = &papers[i];
+
+        for j in (i + 1)..papers.len() {
+            if processed.contains(&j) {
+                continue;
+            }
+
+            let paper_j = &papers[j];
+
+            // Check if papers are duplicates
+            if are_duplicates(paper_i, paper_j) {
+                group.push(j);
+                processed.insert(j);
+            }
+        }
+
+        if group.len() > 1 {
+            groups.push(group);
+        }
+
+        processed.insert(i);
+    }
+
+    groups
+}
+
+/// Check if two papers are likely duplicates
+fn are_duplicates(a: &Paper, b: &Paper) -> bool {
+    // Same source means they're not duplicates
+    if a.source == b.source {
+        return false;
+    }
+
+    // Check DOI match (strongest signal)
+    if let (Some(doi_a), Some(doi_b)) = (&a.doi, &b.doi) {
+        if doi_a.to_lowercase() == doi_b.to_lowercase() {
+            return true;
+        }
+    }
+
+    // Check title similarity
+    let title_a = a.title.to_lowercase().trim().to_string();
+    let title_b = b.title.to_lowercase().trim().to_string();
+
+    let title_similarity = jaro_winkler(&title_a, &title_b);
+
+    // High title similarity (0.95+ threshold)
+    if title_similarity >= 0.95 {
+        // Also check authors match approximately
+        if authors_match(a, b) {
+            return true;
+        }
+    }
+
+    // Check exact title match after cleaning
+    if normalize_title(&title_a) == normalize_title(&title_b) {
+        if authors_match(a, b) {
+            return true;
+        }
+    }
+
+    false
+}
+
+/// Check if authors approximately match
+fn authors_match(a: &Paper, b: &Paper) -> bool {
+    let authors_a: HashSet<String> = a
+        .author_list()
+        .iter()
+        .map(|s| s.to_lowercase().trim().to_string())
+        .collect();
+    let authors_b: HashSet<String> = b
+        .author_list()
+        .iter()
+        .map(|s| s.to_lowercase().trim().to_string())
+        .collect();
+
+    // If one has no authors, can't compare
+    if authors_a.is_empty() || authors_b.is_empty() {
+        return true; // Assume match if author info is missing
+    }
+
+    // Check if at least one author matches
+    authors_a.intersection(&authors_b).count() > 0
+}
+
+/// Normalize a title for comparison
+fn normalize_title(title: &str) -> String {
+    title.chars()
+        .filter(|c| c.is_alphanumeric() || c.is_whitespace())
+        .collect::<String>()
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+/// Remove duplicate papers from a list
+///
+/// # Arguments
+/// * `papers` - The papers to deduplicate
+/// * `strategy` - How to handle duplicates (keep first, last, or mark)
+///
+/// # Returns
+/// A deduplicated list of papers
+pub fn deduplicate_papers(papers: Vec<Paper>, strategy: DuplicateStrategy) -> Vec<Paper> {
+    let groups = find_duplicates(&papers);
+
+    if groups.is_empty() {
+        return papers;
+    }
+
+    let mut to_remove: HashSet<usize> = HashSet::new();
+
+    for group in groups {
+        match strategy {
+            DuplicateStrategy::First => {
+                // Keep first, remove rest
+                for idx in group.iter().skip(1) {
+                    to_remove.insert(*idx);
+                }
+            }
+            DuplicateStrategy::Last => {
+                // Keep last, remove rest
+                for idx in group.iter().take(group.len() - 1) {
+                    to_remove.insert(*idx);
+                }
+            }
+            DuplicateStrategy::Mark => {
+                // Don't remove any, just return as-is
+                // In a real implementation, you might add a "duplicate" field
+            }
+        }
+    }
+
+    if to_remove.is_empty() {
+        return papers;
+    }
+
+    papers
+        .into_iter()
+        .enumerate()
+        .filter(|(i, _)| !to_remove.contains(i))
+        .map(|(_, p)| p)
+        .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::models::{PaperBuilder, SourceType};
+
+    #[test]
+    fn test_normalize_title() {
+        assert_eq!(normalize_title("Hello, World!"), "Hello World");
+        assert_eq!(normalize_title("Test   Title"), "Test Title");
+        assert_eq!(normalize_title("Test: A-B/C"), "Test ABC");
+        assert_eq!(normalize_title(""), "");
+        assert_eq!(normalize_title("   "), "");
+    }
+
+    #[test]
+    fn test_deduplicate_by_doi() {
+        let papers = vec![
+            PaperBuilder::new("1", "Test Paper", "https://arxiv.org/1", SourceType::Arxiv)
+                .doi("10.1234/test")
+                .build(),
+            PaperBuilder::new(
+                "2",
+                "Test Paper",
+                "https://semantic.org/2",
+                SourceType::SemanticScholar,
+            )
+            .doi("10.1234/test")
+            .build(),
+        ];
+
+        let deduped = deduplicate_papers(papers, DuplicateStrategy::First);
+        assert_eq!(deduped.len(), 1);
+        assert_eq!(deduped[0].paper_id, "1");
+    }
+
+    #[test]
+    fn test_deduplicate_by_doi_case_insensitive() {
+        let papers = vec![
+            PaperBuilder::new("1", "Test Paper", "https://arxiv.org/1", SourceType::Arxiv)
+                .doi("10.1234/TEST")
+                .build(),
+            PaperBuilder::new(
+                "2",
+                "Test Paper",
+                "https://semantic.org/2",
+                SourceType::SemanticScholar,
+            )
+            .doi("10.1234/test")
+            .build(),
+        ];
+
+        let deduped = deduplicate_papers(papers, DuplicateStrategy::First);
+        assert_eq!(deduped.len(), 1);
+    }
+
+    #[test]
+    fn test_deduplicate_by_title() {
+        let papers = vec![
+            PaperBuilder::new(
+                "1",
+                "Machine Learning for Cats",
+                "https://arxiv.org/1",
+                SourceType::Arxiv,
+            )
+            .authors("John Doe")
+            .build(),
+            PaperBuilder::new(
+                "2",
+                "Machine Learning for Cats",
+                "https://semantic.org/2",
+                SourceType::SemanticScholar,
+            )
+            .authors("John Doe; Jane Smith")
+            .build(),
+        ];
+
+        let deduped = deduplicate_papers(papers, DuplicateStrategy::First);
+        assert_eq!(deduped.len(), 1);
+    }
+
+    #[test]
+    fn test_deduplicate_keep_last() {
+        let papers = vec![
+            PaperBuilder::new("1", "Test Paper", "https://arxiv.org/1", SourceType::Arxiv)
+                .doi("10.1234/test")
+                .build(),
+            PaperBuilder::new(
+                "2",
+                "Test Paper",
+                "https://semantic.org/2",
+                SourceType::SemanticScholar,
+            )
+            .doi("10.1234/test")
+            .build(),
+        ];
+
+        let deduped = deduplicate_papers(papers, DuplicateStrategy::Last);
+        assert_eq!(deduped.len(), 1);
+        assert_eq!(deduped[0].paper_id, "2");
+    }
+
+    #[test]
+    fn test_deduplicate_mark_strategy() {
+        let papers = vec![
+            PaperBuilder::new("1", "Test Paper", "https://arxiv.org/1", SourceType::Arxiv)
+                .doi("10.1234/test")
+                .build(),
+            PaperBuilder::new(
+                "2",
+                "Test Paper",
+                "https://semantic.org/2",
+                SourceType::SemanticScholar,
+            )
+            .doi("10.1234/test")
+            .build(),
+        ];
+
+        let deduped = deduplicate_papers(papers, DuplicateStrategy::Mark);
+        // Mark strategy should keep all papers
+        assert_eq!(deduped.len(), 2);
+    }
+
+    #[test]
+    fn test_no_duplicates_same_source() {
+        let papers = vec![
+            PaperBuilder::new("1", "Test Paper", "https://arxiv.org/1", SourceType::Arxiv).build(),
+            PaperBuilder::new("2", "Test Paper", "https://arxiv.org/2", SourceType::Arxiv).build(),
+        ];
+
+        let deduped = deduplicate_papers(papers, DuplicateStrategy::First);
+        assert_eq!(deduped.len(), 2);
+    }
+
+    #[test]
+    fn test_no_duplicates_different_titles() {
+        let papers = vec![
+            PaperBuilder::new("1", "Paper A", "https://arxiv.org/1", SourceType::Arxiv)
+                .authors("John Doe")
+                .build(),
+            PaperBuilder::new(
+                "2",
+                "Paper B",
+                "https://semantic.org/2",
+                SourceType::SemanticScholar,
+            )
+            .authors("John Doe")
+            .build(),
+        ];
+
+        let deduped = deduplicate_papers(papers, DuplicateStrategy::First);
+        assert_eq!(deduped.len(), 2);
+    }
+
+    #[test]
+    fn test_no_duplicates_no_common_authors() {
+        let papers = vec![
+            PaperBuilder::new("1", "Test Paper", "https://arxiv.org/1", SourceType::Arxiv)
+                .authors("John Doe")
+                .build(),
+            PaperBuilder::new(
+                "2",
+                "Test Paper",
+                "https://semantic.org/2",
+                SourceType::SemanticScholar,
+            )
+            .authors("Jane Smith")
+            .build(),
+        ];
+
+        let deduped = deduplicate_papers(papers, DuplicateStrategy::First);
+        assert_eq!(deduped.len(), 2);
+    }
+
+    #[test]
+    fn test_deduplicate_empty_list() {
+        let papers = vec![];
+        let deduped = deduplicate_papers(papers, DuplicateStrategy::First);
+        assert_eq!(deduped.len(), 0);
+    }
+
+    #[test]
+    fn test_deduplicate_single_paper() {
+        let papers = vec![PaperBuilder::new(
+            "1",
+            "Test Paper",
+            "https://arxiv.org/1",
+            SourceType::Arxiv,
+        )
+        .build()];
+
+        let deduped = deduplicate_papers(papers, DuplicateStrategy::First);
+        assert_eq!(deduped.len(), 1);
+    }
+
+    #[test]
+    fn test_find_duplicates() {
+        let papers = vec![
+            PaperBuilder::new("1", "Test Paper", "https://arxiv.org/1", SourceType::Arxiv)
+                .doi("10.1234/test")
+                .build(),
+            PaperBuilder::new(
+                "2",
+                "Test Paper",
+                "https://semantic.org/2",
+                SourceType::SemanticScholar,
+            )
+            .doi("10.1234/test")
+            .build(),
+            PaperBuilder::new("3", "Other Paper", "https://arxiv.org/3", SourceType::Arxiv).build(),
+        ];
+
+        let groups = find_duplicates(&papers);
+        assert_eq!(groups.len(), 1);
+        assert_eq!(groups[0], vec![0, 1]);
+    }
+
+    #[test]
+    fn test_find_duplicates_empty() {
+        let papers = vec![];
+        let groups = find_duplicates(&papers);
+        assert_eq!(groups.len(), 0);
+    }
+
+    #[test]
+    fn test_authors_match_no_authors() {
+        let papers = vec![
+            PaperBuilder::new("1", "Test Paper", "https://arxiv.org/1", SourceType::Arxiv).build(),
+            PaperBuilder::new(
+                "2",
+                "Test Paper",
+                "https://semantic.org/2",
+                SourceType::SemanticScholar,
+            )
+            .build(),
+        ];
+
+        let deduped = deduplicate_papers(papers.clone(), DuplicateStrategy::First);
+        // Without authors, should still match on title
+        assert_eq!(deduped.len(), 1);
+    }
+}
