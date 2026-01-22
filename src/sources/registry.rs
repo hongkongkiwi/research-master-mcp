@@ -3,12 +3,31 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use super::{
-    arxiv::ArxivSource, biorxiv::BiorxivSource, crossref::CrossRefSource, dblp::DblpSource,
-    hal::HalSource, iacr::IacrSource, openalex::OpenAlexSource,
-    pmc::PmcSource, pubmed::PubMedSource, semantic::SemanticScholarSource, ssrn::SsrnSource,
-    Source, SourceError,
-};
+use super::{Source, SourceError};
+
+// Conditionally import source types based on feature flags
+#[cfg(feature = "source-arxiv")]
+use super::arxiv::ArxivSource;
+#[cfg(feature = "source-biorxiv")]
+use super::biorxiv::BiorxivSource;
+#[cfg(feature = "source-crossref")]
+use super::crossref::CrossRefSource;
+#[cfg(feature = "source-dblp")]
+use super::dblp::DblpSource;
+#[cfg(feature = "source-hal")]
+use super::hal::HalSource;
+#[cfg(feature = "source-iacr")]
+use super::iacr::IacrSource;
+#[cfg(feature = "source-openalex")]
+use super::openalex::OpenAlexSource;
+#[cfg(feature = "source-pmc")]
+use super::pmc::PmcSource;
+#[cfg(feature = "source-pubmed")]
+use super::pubmed::PubMedSource;
+#[cfg(feature = "source-semantic")]
+use super::semantic::SemanticScholarSource;
+#[cfg(feature = "source-ssrn")]
+use super::ssrn::SsrnSource;
 
 /// Environment variable for filtering enabled sources
 /// Comma-separated list of source IDs to enable (e.g., "arxiv,pubmed,semantic")
@@ -73,16 +92,38 @@ impl SourceRegistry {
         }
 
         // Register all available sources (will skip any that fail to initialize)
+        // Each source is conditionally compiled based on feature flags
+        #[cfg(feature = "source-arxiv")]
         try_register!(ArxivSource::new());
+
+        #[cfg(feature = "source-pubmed")]
         try_register!(PubMedSource::new());
+
+        #[cfg(feature = "source-biorxiv")]
         try_register!(BiorxivSource::new());
+
+        #[cfg(feature = "source-semantic")]
         try_register!(SemanticScholarSource::new());
+
+        #[cfg(feature = "source-openalex")]
         try_register!(OpenAlexSource::new());
+
+        #[cfg(feature = "source-crossref")]
         try_register!(CrossRefSource::new());
+
+        #[cfg(feature = "source-iacr")]
         try_register!(IacrSource::new());
+
+        #[cfg(feature = "source-pmc")]
         try_register!(PmcSource::new());
+
+        #[cfg(feature = "source-hal")]
         try_register!(HalSource::new());
+
+        #[cfg(feature = "source-dblp")]
         try_register!(DblpSource::new());
+
+        #[cfg(feature = "source-ssrn")]
         try_register!(SsrnSource::new());
 
         if registry.is_empty() {

@@ -70,6 +70,53 @@ pdf-extract = "0.7"
 governor = "0.6"
 nonzero_ext = "0.3"
 
+[features]
+# Individual source features (all enabled by default)
+arxiv = ["source-arxiv"]
+pubmed = ["source-pubmed"]
+biorxiv = ["source-biorxiv"]
+semantic = ["source-semantic"]
+openalex = ["source-openalex"]
+crossref = ["source-crossref"]
+iacr = ["source-iacr"]
+pmc = ["source-pmc"]
+hal = ["source-hal"]
+dblp = ["source-dblp"]
+ssrn = ["source-ssrn"]
+
+# Internal feature names (to avoid conflicts with source IDs)
+source-arxiv = []
+source-pubmed = []
+source-biorxiv = []
+source-semantic = []
+source-openalex = []
+source-crossref = []
+source-iacr = []
+source-pmc = []
+source-hal = []
+source-dblp = []
+source-ssrn = []
+
+# Default feature: all sources enabled
+default = [
+    "source-arxiv",
+    "source-pubmed",
+    "source-biorxiv",
+    "source-semantic",
+    "source-openalex",
+    "source-crossref",
+    "source-iacr",
+    "source-pmc",
+    "source-hal",
+    "source-dblp",
+    "source-ssrn",
+]
+
+# Convenience feature groups
+core = ["source-arxiv", "source-pubmed", "source-semantic"]
+preprints = ["source-arxiv", "source-biorxiv"]
+full = ["default"]
+
 [dev-dependencies]
 tokio-test = "0.4"
 mockito = "1.5"

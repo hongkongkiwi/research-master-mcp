@@ -3,18 +3,64 @@
 //! This module defines the [`Source`] trait that all research sources implement.
 //! New sources can be added by implementing this trait and registering them with
 //! the [`SourceRegistry`].
+//!
+//! # Feature Flags
+//!
+//! Individual sources can be disabled at compile time using Cargo features:
+//!
+//! - `arxiv` - Enable arXiv source (default: enabled)
+//! - `pubmed` - Enable PubMed source (default: enabled)
+//! - `biorxiv` - Enable bioRxiv source (default: enabled)
+//! - `semantic` - Enable Semantic Scholar source (default: enabled)
+//! - `openalex` - Enable OpenAlex source (default: enabled)
+//! - `crossref` - Enable CrossRef source (default: enabled)
+//! - `iacr` - Enable IACR ePrint source (default: enabled)
+//! - `pmc` - Enable PMC source (default: enabled)
+//! - `hal` - Enable HAL source (default: enabled)
+//! - `dblp` - Enable DBLP source (default: enabled)
+//! - `ssrn` - Enable SSRN source (default: enabled)
+//!
+//! # Feature Groups
+//!
+//! - `core` - arxiv, pubmed, semantic
+//! - `preprints` - arxiv, biorxiv
+//! - `full` - All sources (default)
+//!
+//! # Examples
+//!
+//! ```bash
+//! # Build with only core sources
+//! cargo build --no-default-features --features core
+//!
+//! # Build with specific sources
+//! cargo build --no-default-features --features arxiv,semantic
+//!
+//! # Build with all sources except dblp
+//! cargo build --features -dblp
+//! ```
 
+#[cfg(feature = "source-arxiv")]
 mod arxiv;
+#[cfg(feature = "source-biorxiv")]
 mod biorxiv;
+#[cfg(feature = "source-crossref")]
 mod crossref;
+#[cfg(feature = "source-dblp")]
 mod dblp;
+#[cfg(feature = "source-hal")]
 mod hal;
+#[cfg(feature = "source-iacr")]
 mod iacr;
+#[cfg(feature = "source-openalex")]
 mod openalex;
+#[cfg(feature = "source-pmc")]
 mod pmc;
+#[cfg(feature = "source-pubmed")]
 mod pubmed;
 mod registry;
+#[cfg(feature = "source-semantic")]
 mod semantic;
+#[cfg(feature = "source-ssrn")]
 mod ssrn;
 
 pub use registry::{SourceCapabilities, SourceRegistry};
