@@ -104,28 +104,27 @@ check: fmt-check clippy doc test
     @echo "All checks passed!"
 
 # ============================================
-# PRE-COMMIT HOOKS
+# GIT HOOKS (cargo-husky)
 # ============================================
 
-# Install pre-commit hooks
-precommit-install:
-    @if command -v pre-commit &> /dev/null; then \
-        pre-commit install; \
-        echo "Pre-commit hooks installed"; \
+# Install git hooks via cargo-husky
+hooks-install:
+    @if grep -q 'cargo-husky' Cargo.toml 2>/dev/null; then \
+        cargo husky install; \
+        echo "Git hooks installed"; \
     else \
-        echo "Installing pre-commit..."; \
-        pip install pre-commit; \
-        pre-commit install; \
-        echo "Pre-commit hooks installed"; \
+        echo "cargo-husky not configured. Add to Cargo.toml or install manually:"; \
+        echo "  cargo install cargo-husky"; \
+        echo "  cargo husky install"; \
     fi
 
-# Run pre-commit on all files
-precommit-run:
-    pre-commit run --all-files
-
-# Run pre-commit on staged files only
-precommit-check:
-    pre-commit run
+# Run cargo-husky hooks manually
+hooks-run:
+    @if command -v cargo &> /dev/null; then \
+        cargo husky run; \
+    else \
+        echo "Cargo not found"; \
+    fi
 
 # ============================================
 # SECURITY
