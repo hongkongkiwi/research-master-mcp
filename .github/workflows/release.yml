@@ -382,8 +382,8 @@ jobs:
 
       - name: Create Alpine package structure
         run: |
-          mkdir -p apk-build/usr/bin
-          cp target/${{ matrix.target }}/release/research-master-mcp apk-build/usr/bin/
+          mkdir -p apk-build/src/usr/bin
+          cp target/${{ matrix.target }}/release/research-master-mcp apk-build/src/usr/bin/
 
       - name: Upload Linux musl binary
         uses: actions/upload-artifact@v4
@@ -419,11 +419,23 @@ jobs:
           EOF
           sed -i "s/VERSION_PLACEHOLDER/${{ github.ref_name }}/" apk-build/APKBUILD
 
+      - name: Build .apk package
+        run: |
+          mkdir -p apk-packages
+          docker run --rm \
+            -v "$PWD:/work" \
+            -w /work/apk-build \
+            alpine:3.19 \
+            sh -c 'apk add --no-cache alpine-sdk && \
+              adduser -D builder && \
+              chown -R builder:builder /work/apk-build /work/apk-packages && \
+              su builder -c "export REPODEST=/work/apk-packages PACKAGER=research-master-mcp && abuild-keygen -a -n && abuild -r"'
+
       - name: Upload Alpine package
         uses: actions/upload-artifact@v4
         with:
           name: research-master-mcp.apk-${{ matrix.arch }}
-          path: apk-build/
+          path: apk-packages/**/*.apk
 
   # Create release with all platform packages
   finalize-release:

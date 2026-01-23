@@ -322,6 +322,36 @@ research-master-mcp lookup 10.48550/arXiv.2301.12345
 
 ## Installation
 
+### Packages & Images (Quick Summary)
+
+| Package/Image | Where | Architectures |
+|---|---|---|
+| Release binaries (`.gz`, `.zip`) | GitHub Releases | Linux (x86_64, arm64), macOS (x86_64, arm64), Windows (x86_64) |
+| Homebrew | Homebrew tap | macOS (x86_64, arm64) |
+| `.deb` | GitHub Releases | Linux (amd64, arm64) |
+| `.rpm` | GitHub Releases | Linux (x86_64, aarch64) |
+| `.apk` | GitHub Releases | Alpine (x86_64, aarch64) |
+| `cargo install` | crates.io | Any supported Rust target |
+| Docker image | GHCR | linux/amd64, linux/arm64 |
+| Docker image (OCR) | GHCR (`-ocr`) | linux/amd64, linux/arm64 |
+
+### GitHub Releases (Binaries)
+
+Download prebuilt binaries from the GitHub Releases page. Assets include:
+
+- **Linux (glibc)**: `research-master-mcp-x86_64-unknown-linux-gnu.gz`, `research-master-mcp-aarch64-unknown-linux-gnu.gz`
+- **macOS**: `research-master-mcp-x86_64-apple-darwin.gz`, `research-master-mcp-aarch64-apple-darwin.gz`
+- **Windows**: `research-master-mcp-windows.zip`
+
+After downloading:
+
+```bash
+# Linux/macOS example
+gunzip research-master-mcp-<target>.gz
+chmod +x research-master-mcp-<target>
+./research-master-mcp-<target> --version
+```
+
 ### Homebrew (macOS)
 
 ```bash
@@ -337,6 +367,8 @@ brew install research-master-mcp
 ```bash
 # Download .deb package from GitHub Releases
 wget https://github.com/hongkongkiwi/research-master-mcp/releases/download/vx.x.x/research-master-mcp_x.x.x_amd64.deb
+# Or arm64:
+# wget https://github.com/hongkongkiwi/research-master-mcp/releases/download/vx.x.x/research-master-mcp_x.x.x_arm64.deb
 
 # Install the package
 sudo dpkg -i research-master-mcp_x.x.x_amd64.deb
@@ -348,11 +380,12 @@ sudo apt-get install -f
 ### Linux (Alpine) - APK Package
 
 ```bash
-# Download .apk package from GitHub Releases
-wget https://github.com/hongkongkiwi/research-master-mcp/releases/download/vx.x.x/research-master-mcp-x.x.x-x86_64.apk
+# Download .apk package from GitHub Releases (see asset names/paths)
+# Example (x86_64):
+# wget https://github.com/hongkongkiwi/research-master-mcp/releases/download/vx.x.x/x86_64/research-master-mcp-x.x.x-r0.apk
 
 # Install the package
-sudo apk add --allow-untrusted research-master-mcp-x.x.x-x86_64.apk
+sudo apk add --allow-untrusted research-master-mcp-x.x.x-r0.apk
 ```
 
 ### Linux (RedHat/Fedora) - RPM Package
@@ -360,6 +393,8 @@ sudo apk add --allow-untrusted research-master-mcp-x.x.x-x86_64.apk
 ```bash
 # Download .rpm package from GitHub Releases
 wget https://github.com/hongkongkiwi/research-master-mcp/releases/download/vx.x.x/research-master-mcp-x.x.x-1.x86_64.rpm
+# Or arm64:
+# wget https://github.com/hongkongkiwi/research-master-mcp/releases/download/vx.x.x/research-master-mcp-x.x.x-1.aarch64.rpm
 
 # Install the package
 sudo dnf install research-master-mcp-x.x.x-1.x86_64.rpm
