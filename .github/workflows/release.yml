@@ -410,3 +410,96 @@ jobs:
           draft: false
           prerelease: false
           files: release-packages/*
+
+  update-homebrew:
+    name: Update Homebrew Formula
+    needs: finalize-release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout homebrew-research-master-mcp
+        uses: actions/checkout@v4
+        with:
+          repository: hongkongkiwi/homebrew-research-master-mcp
+          token: ${{ secrets.HOMEBREW_UPDATE_TOKEN }}
+          path: homebrew-tap
+
+      - name: Get release info
+        id: release
+        uses: actions/github-script@v7
+        with:
+          result-encoding: string
+          script: |
+            const { data: release } = await github.rest.repos.getReleaseByTag({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              tag: '${{ github.ref_name }}'
+            });
+            return release.tag_name;
+
+      - name: Download release binary (x86_64-linux)
+        uses: actions/download-artifact@v4
+        with:
+          name: binary-x86_64-unknown-linux-gnu
+          path: homebrew-tmp
+
+      - name: Calculate SHA256
+        run: |
+          sha256sum homebrew-tmp/research-master-mcp | awk '{print $1}' > homebrew-tmp/sha256.txt
+          cat homebrew-tmp/sha256.txt
+
+      - name: Update Homebrew formula
+        run: |
+          VERSION=$(echo '${{ github.ref_name }}' | sed 's/v//')
+          SHA256=$(cat homebrew-tmp/sha256.txt)
+
+          cat > homebrew-tap/research-master-mcp.rb << EOF
+          class ResearchMasterMcp < Formula
+            desc "MCP server for searching and downloading academic papers"
+            homepage "https://github.com/hongkongkiwi/research-master-mcp"
+            version "${VERSION}"
+            license "MIT"
+
+            on_macos do
+              on_intel do
+                url "https://github.com/hongkongkiwi/research-master-mcp/releases/download/v${VERSION}/research-master-mcp-x86_64-apple-darwin.gz"
+                sha256 "${SHA256}"
+              end
+
+              on_arm do
+                url "https://github.com/hongkongkiwi/research-master-mcp/releases/download/v${VERSION}/research-master-mcp-aarch64-apple-darwin.gz"
+                sha256 "${SHA256}"
+              end
+            end
+
+            on_linux do
+              on_x86_64 do
+                url "https://github.com/hongkongkiwi/research-master-mcp/releases/download/v${VERSION}/research-master-mcp-x86_64-unknown-linux-gnu.gz"
+                sha256 "${SHA256}"
+              end
+
+              on_arm64 do
+                url "https://github.com/hongkongkiwi/research-master-mcp/releases/download/v${VERSION}/research-master-mcp-aarch64-unknown-linux-gnu.gz"
+                sha256 "${SHA256}"
+              end
+            end
+
+            def install
+              bin.install "research-master-mcp"
+            end
+
+            test do
+              assert_match "research-master-mcp", shell_output("#{bin}/research-master-mcp --help")
+            end
+          end
+          EOF
+
+          cat homebrew-tap/research-master-mcp.rb
+
+      - name: Commit and push changes
+        working-directory: ./homebrew-tap
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add research-master-mcp.rb
+          git commit -m "Update research-master-mcp to v${{ github.ref_name }}"
+          git push
