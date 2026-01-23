@@ -113,6 +113,13 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Upload release binaries for finalize job
+        uses: actions/upload-artifact@v4
+        with:
+          name: release
+          path: release/
+          retention-days: 5
+
   # Publish to crates.io
   publish-crates:
     name: Publish to crates.io
@@ -296,6 +303,12 @@ jobs:
       # - publish-docker  # Docker publish is optional, doesn't block release
     runs-on: ubuntu-latest
     steps:
+      - name: Download release binaries
+        uses: actions/download-artifact@v4
+        with:
+          name: release
+          path: release-binaries
+
       - name: Download all packages
         uses: actions/download-artifact@v4
         with:
@@ -304,11 +317,19 @@ jobs:
       - name: Prepare release assets
         run: |
           mkdir -p release-packages
+
+          # Copy release binaries
+          if [ -d "release-binaries" ]; then
+            cp -r release-binaries/* release-packages/ 2>/dev/null || true
+          fi
+
+          # Copy platform packages
           for dir in packages/*; do
             if [ -d "$dir" ]; then
               cp -r "$dir"/* release-packages/ 2>/dev/null || true
             fi
           done
+
           ls -la release-packages/
 
       - name: Generate SHA256 checksums
@@ -336,6 +357,21 @@ jobs:
           cd release-packages
           gpg --batch --yes --armor --detach-sign SHA256SUMS.txt
           cat SHA256SUMS.txt.asc
+
+      - name: Upload SHA256 checksums
+        uses: actions/upload-artifact@v4
+        with:
+          name: sha256sums
+          path: release-packages/SHA256SUMS.txt
+          retention-days: 5
+
+      - name: Upload GPG signature
+        if: env.GPG_PRIVATE_KEY != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: sha256sums-asc
+          path: release-packages/SHA256SUMS.txt.asc
+          retention-days: 5
 
       - name: Update GitHub Release
         uses: softprops/action-gh-release@v2

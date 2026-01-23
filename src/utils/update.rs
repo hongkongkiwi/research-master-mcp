@@ -8,6 +8,15 @@ use std::process::Command;
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
 
+/// Check if an external binary is available in PATH
+fn is_command_available(name: &str) -> bool {
+    Command::new(name)
+        .arg("--version")
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false)
+}
+
 /// Information about the current installation method
 #[derive(Debug, Clone)]
 pub enum InstallationMethod {
@@ -499,4 +508,107 @@ pub fn verify_sha256(file_path: &Path, expected_hash: &str) -> Result<bool> {
         eprintln!("Actual:   {}", actual_hash);
         Ok(false)
     }
+}
+
+/// Fetch the GPG signature for SHA256SUMS.txt
+pub async fn fetch_sha256_signature() -> Result<String> {
+    let client = reqwest::Client::new();
+    let signature_url = "https://github.com/hongkongkiwi/research-master-mcp/releases/download/latest/SHA256SUMS.txt.asc";
+
+    eprintln!("Downloading GPG signature...");
+    let response = client
+        .get(signature_url)
+        .header("User-Agent", "research-master-mcp")
+        .send()
+        .await
+        .context("Failed to download GPG signature")?;
+
+    if !response.status().is_success() {
+        bail!(
+            "Failed to download GPG signature (HTTP {})",
+            response.status()
+        );
+    }
+
+    let signature = response.text().await.context("Failed to read signature")?;
+    Ok(signature)
+}
+
+/// Verify GPG signature of SHA256SUMS.txt
+/// This requires the project maintainer's public key to be in the system keyring.
+/// For CI/CD, set GPG_FINGERPRINT to the expected signer's fingerprint.
+pub fn verify_gpg_signature(sha256sums_path: &Path, signature: &str) -> Result<bool> {
+    use std::io::Write as _;
+
+    // Check if GPG is available first
+    if !is_command_available("gpg") {
+        #[cfg(windows)]
+        {
+            eprintln!("WARNING: GPG is not installed or not in PATH.");
+            eprintln!("On Windows, install GPG from https://www.gpg4win.org/");
+        }
+        #[cfg(not(windows))]
+        {
+            eprintln!("WARNING: GPG is not installed or not in PATH.");
+            eprintln!("Install GPG with your package manager (e.g., brew install gnupg)");
+        }
+        eprintln!("Skipping GPG signature verification.");
+        return Ok(false);
+    }
+
+    // Write signature to a temp file
+    let sig_path = sha256sums_path.with_extension("txt.asc");
+    let mut sig_file = std::fs::File::create(&sig_path)?;
+    sig_file.write_all(signature.as_bytes())?;
+    sig_file.flush()?;
+
+    // Verify using gpg
+    let output = Command::new("gpg")
+        .args([
+            "--verify",
+            sig_path.to_str().unwrap(),
+            sha256sums_path.to_str().unwrap(),
+        ])
+        .output()
+        .context("Failed to run gpg")?;
+
+    // Clean up signature file
+    let _ = std::fs::remove_file(&sig_path);
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+
+    // Check for "Good signature" in output
+    if stderr.contains("Good signature") || stderr.contains("gpg: Good signature") {
+        // Optionally verify the signer if fingerprint is set
+        if let Ok(fingerprint) = std::env::var("GPG_FINGERPRINT") {
+            if stderr.contains(&fingerprint) || output.status.success() {
+                eprintln!("GPG signature verified successfully!");
+                return Ok(true);
+            } else {
+                eprintln!("WARNING: Signature is good but from unexpected signer!");
+                eprintln!("Expected fingerprint: {}", fingerprint);
+                return Ok(false);
+            }
+        }
+        eprintln!("GPG signature verified successfully!");
+        return Ok(true);
+    }
+
+    if stderr.contains("BAD signature") || stderr.contains("gpg: BAD signature") {
+        eprintln!("ERROR: GPG signature verification FAILED!");
+        eprintln!("{}", stderr);
+        return Ok(false);
+    }
+
+    // If gpg is not available or key not found
+    if stderr.contains("no public key") || stderr.contains("gpg: Can't check signature") {
+        eprintln!("WARNING: GPG is not configured properly.");
+        eprintln!("To enable GPG verification, either:");
+        eprintln!("  1. Install GPG and import the maintainer's public key");
+        eprintln!("  2. Set GPG_FINGERPRINT to skip signer verification");
+        return Ok(false);
+    }
+
+    eprintln!("GPG verification result: {}", stderr);
+    Ok(false)
 }

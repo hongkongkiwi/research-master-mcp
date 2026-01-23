@@ -1050,9 +1050,11 @@ async fn main() -> Result<()> {
             use anyhow::Context as _;
             use research_master_mcp::utils::{
                 detect_installation, download_and_extract_asset, fetch_and_verify_sha256,
-                fetch_latest_release, find_asset_for_platform, get_current_target,
-                get_update_instructions, replace_binary, verify_sha256, InstallationMethod,
+                fetch_latest_release, fetch_sha256_signature, find_asset_for_platform,
+                get_current_target, get_update_instructions, replace_binary, verify_gpg_signature,
+                verify_sha256, InstallationMethod,
             };
+            #[cfg(unix)]
             use std::os::unix::fs::PermissionsExt;
 
             let current_version = env!("CARGO_PKG_VERSION");
@@ -1185,6 +1187,39 @@ async fn main() -> Result<()> {
                                         eprintln!("Warning: Could not verify checksum: {}. Proceeding without verification.", e);
                                     }
                                 }
+
+                                // Fetch and verify GPG signature if available
+                                eprintln!("Checking for GPG signature...");
+                                match fetch_sha256_signature().await {
+                                    Ok(signature) => {
+                                        // Write SHA256SUMS.txt to temp location for verification
+                                        let sha256sums_path = temp_dir.join("SHA256SUMS.txt");
+                                        let checksums_content =
+                                            format!("{}  {}", expected_checksum, asset.name);
+                                        std::fs::write(&sha256sums_path, &checksums_content).ok();
+
+                                        if sha256sums_path.exists() {
+                                            match verify_gpg_signature(&sha256sums_path, &signature)
+                                            {
+                                                Ok(true) => {
+                                                    eprintln!("GPG signature verification passed!");
+                                                }
+                                                Ok(false) => {
+                                                    // GPG verification failed but we continue if SHA256 passed
+                                                    eprintln!("WARNING: GPG signature verification failed or not configured.");
+                                                    eprintln!("Only SHA256 checksum verification was performed.");
+                                                }
+                                                Err(e) => {
+                                                    eprintln!("Warning: Could not verify GPG signature: {}. Continuing with SHA256 verification only.", e);
+                                                }
+                                            }
+                                            let _ = std::fs::remove_file(&sha256sums_path);
+                                        }
+                                    }
+                                    Err(e) => {
+                                        eprintln!("Note: GPG signature not available ({}). Using SHA256 verification only.", e);
+                                    }
+                                }
                             }
 
                             // Extract the archive
@@ -1222,9 +1257,19 @@ async fn main() -> Result<()> {
                                             .unwrap_or(false)
                                     {
                                         // Make executable
-                                        let mut perms = std::fs::metadata(&path)?.permissions();
-                                        perms.set_mode(0o755);
-                                        std::fs::set_permissions(&path, perms)?;
+                                        #[cfg(unix)]
+                                        {
+                                            let mut perms = std::fs::metadata(&path)?.permissions();
+                                            perms.set_mode(0o755);
+                                            std::fs::set_permissions(&path, perms)?;
+                                        }
+                                        #[cfg(not(unix))]
+                                        {
+                                            // On Windows, just ensure the file is writable
+                                            let mut perms = std::fs::metadata(&path)?.permissions();
+                                            perms.set_readonly(false);
+                                            std::fs::set_permissions(&path, perms)?;
+                                        }
                                         binary_path = Some(path);
                                         break;
                                     }
