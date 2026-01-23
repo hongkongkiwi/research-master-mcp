@@ -78,12 +78,13 @@ jobs:
         run: |
           mkdir -p release
           for dir in binaries/binary-*; do
-            cp "$dir"/* "release/" 2>/dev/null || true
+            target=$(basename "$dir" | sed 's/binary-//')
+            cp "$dir"/* "release/research-master-mcp-${target}" 2>/dev/null || true
           done
 
           # Create tarballs for Linux/macOS
           cd release
-          for f in research-master-mcp*; do
+          for f in research-master-mcp-*; do
             case "$f" in
               *.gz|*.zip) continue ;;
               *linux*|*darwin*)
@@ -95,9 +96,9 @@ jobs:
           done
 
           # Create zip for Windows
-          if [ -f "research-master-mcp.exe" ]; then
-            zip -r research-master-mcp-windows.zip research-master-mcp.exe
-            rm research-master-mcp.exe
+          if [ -f "research-master-mcp-x86_64-pc-windows-msvc" ]; then
+            zip -r research-master-mcp-windows.zip research-master-mcp-x86_64-pc-windows-msvc
+            rm research-master-mcp-x86_64-pc-windows-msvc
           fi
 
           ls -la
