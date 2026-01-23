@@ -7,6 +7,97 @@ use research_master_mcp::models::{SearchQuery, SourceType};
 use research_master_mcp::sources::{SourceCapabilities, SourceRegistry};
 use std::sync::Arc;
 
+fn expected_source_count() -> usize {
+    let mut count = 0;
+
+    if cfg!(feature = "source-arxiv") {
+        count += 1;
+    }
+    if cfg!(feature = "source-pubmed") {
+        count += 1;
+    }
+    if cfg!(feature = "source-biorxiv") {
+        count += 1;
+    }
+    if cfg!(feature = "source-semantic") {
+        count += 1;
+    }
+    if cfg!(feature = "source-openalex") {
+        count += 1;
+    }
+    if cfg!(feature = "source-crossref") {
+        count += 1;
+    }
+    if cfg!(feature = "source-iacr") {
+        count += 1;
+    }
+    if cfg!(feature = "source-pmc") {
+        count += 1;
+    }
+    if cfg!(feature = "source-hal") {
+        count += 1;
+    }
+    if cfg!(feature = "source-dblp") {
+        count += 1;
+    }
+    if cfg!(feature = "source-ssrn") {
+        count += 1;
+    }
+    if cfg!(feature = "source-dimensions") {
+        count += 1;
+    }
+    if cfg!(feature = "source-ieee_xplore") {
+        count += 1;
+    }
+    if cfg!(feature = "source-europe_pmc") {
+        count += 1;
+    }
+    if cfg!(feature = "source-core-repo") {
+        count += 1;
+    }
+    if cfg!(feature = "source-zenodo") {
+        count += 1;
+    }
+    if cfg!(feature = "source-unpaywall") {
+        count += 1;
+    }
+    if cfg!(feature = "source-mdpi") {
+        count += 1;
+    }
+    if cfg!(feature = "source-jstor") {
+        count += 1;
+    }
+    if cfg!(feature = "source-scispace") {
+        count += 1;
+    }
+    if cfg!(feature = "source-acm") {
+        count += 1;
+    }
+    if cfg!(feature = "source-connected_papers") {
+        count += 1;
+    }
+    if cfg!(feature = "source-doaj") {
+        count += 1;
+    }
+    if cfg!(feature = "source-worldwidescience") {
+        count += 1;
+    }
+    if cfg!(feature = "source-osf") {
+        count += 1;
+    }
+    if cfg!(feature = "source-base") {
+        count += 1;
+    }
+    if cfg!(feature = "source-springer") {
+        count += 1;
+    }
+    if cfg!(feature = "source-google_scholar") {
+        count += 1;
+    }
+
+    count
+}
+
 /// Test that the server can be created successfully
 #[tokio::test]
 async fn test_server_initialization() {
@@ -21,8 +112,8 @@ async fn test_all_sources_registered() {
     let registry = SourceRegistry::new();
     let sources: Vec<_> = registry.all().collect();
 
-    // Should have 28 sources with all features
-    assert_eq!(sources.len(), 28);
+    let expected = expected_source_count();
+    assert_eq!(sources.len(), expected);
 
     // Check each source exists
     let source_ids: Vec<&str> = sources.iter().map(|s| s.id()).collect();
@@ -53,7 +144,11 @@ async fn test_all_sources_registered() {
     assert!(source_ids.contains(&"osf"));
     assert!(source_ids.contains(&"base"));
     assert!(source_ids.contains(&"springer"));
-    assert!(source_ids.contains(&"google_scholar"));
+    if cfg!(feature = "source-google_scholar") {
+        assert!(source_ids.contains(&"google_scholar"));
+    } else {
+        assert!(!source_ids.contains(&"google_scholar"));
+    }
 }
 
 /// Test source capabilities are properly reported
@@ -152,8 +247,8 @@ async fn test_registry_helper_methods() {
     assert!(registry.has("arxiv"));
     assert!(!registry.has("nonexistent"));
 
-    // Test len() method - should be 28 with all features
-    assert_eq!(registry.len(), 28);
+    // Test len() method - should match enabled feature set
+    assert_eq!(registry.len(), expected_source_count());
 
     // Test is_empty() method
     assert!(!registry.is_empty());
@@ -247,7 +342,7 @@ async fn test_registry_ids() {
     let registry = SourceRegistry::new();
     let ids: Vec<&str> = registry.ids().collect();
 
-    assert_eq!(ids.len(), 28);
+    assert_eq!(ids.len(), expected_source_count());
     assert!(ids.contains(&"arxiv"));
     assert!(ids.contains(&"pubmed"));
     assert!(ids.contains(&"semantic"));
