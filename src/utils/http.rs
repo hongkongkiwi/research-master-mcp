@@ -426,50 +426,68 @@ impl Default for HttpClient {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::{Mutex, OnceLock};
+
+    fn env_lock() -> &'static Mutex<()> {
+        static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+        LOCK.get_or_init(|| Mutex::new(()))
+    }
+
+    fn with_rate_limit_env<T>(value: Option<&str>, f: impl FnOnce() -> T) -> T {
+        let _guard = env_lock().lock().expect("env lock poisoned");
+        let previous = std::env::var(RATE_LIMIT_ENV_VAR).ok();
+
+        match value {
+            Some(v) => std::env::set_var(RATE_LIMIT_ENV_VAR, v),
+            None => std::env::remove_var(RATE_LIMIT_ENV_VAR),
+        }
+
+        let result = f();
+
+        match previous {
+            Some(v) => std::env::set_var(RATE_LIMIT_ENV_VAR, v),
+            None => std::env::remove_var(RATE_LIMIT_ENV_VAR),
+        }
+
+        result
+    }
 
     #[test]
     fn test_create_rate_limiter_with_default() {
-        // Clear the environment variable to test default
-        std::env::remove_var(RATE_LIMIT_ENV_VAR);
-
-        let limiter = HttpClient::create_rate_limiter();
-        assert!(limiter.is_some(), "Default rate limiter should be created");
+        with_rate_limit_env(None, || {
+            let limiter = HttpClient::create_rate_limiter();
+            assert!(limiter.is_some(), "Default rate limiter should be created");
+        });
     }
 
     #[test]
     fn test_create_rate_limiter_disabled() {
-        std::env::set_var(RATE_LIMIT_ENV_VAR, "0");
-
-        let limiter = HttpClient::create_rate_limiter();
-        assert!(
-            limiter.is_none(),
-            "Rate limiter should be disabled when set to 0"
-        );
-
-        std::env::remove_var(RATE_LIMIT_ENV_VAR);
+        with_rate_limit_env(Some("0"), || {
+            let limiter = HttpClient::create_rate_limiter();
+            assert!(
+                limiter.is_none(),
+                "Rate limiter should be disabled when set to 0"
+            );
+        });
     }
 
     #[test]
     fn test_create_rate_limiter_custom() {
-        std::env::set_var(RATE_LIMIT_ENV_VAR, "10");
-
-        let limiter = HttpClient::create_rate_limiter();
-        assert!(limiter.is_some(), "Custom rate limiter should be created");
-
-        std::env::remove_var(RATE_LIMIT_ENV_VAR);
+        with_rate_limit_env(Some("10"), || {
+            let limiter = HttpClient::create_rate_limiter();
+            assert!(limiter.is_some(), "Custom rate limiter should be created");
+        });
     }
 
     #[test]
     fn test_create_rate_limiter_invalid() {
-        std::env::set_var(RATE_LIMIT_ENV_VAR, "invalid");
-
-        let limiter = HttpClient::create_rate_limiter();
-        // Should fall back to default when invalid value is provided
-        assert!(
-            limiter.is_some(),
-            "Should fall back to default rate limiter"
-        );
-
-        std::env::remove_var(RATE_LIMIT_ENV_VAR);
+        with_rate_limit_env(Some("invalid"), || {
+            let limiter = HttpClient::create_rate_limiter();
+            // Should fall back to default when invalid value is provided
+            assert!(
+                limiter.is_some(),
+                "Should fall back to default rate limiter"
+            );
+        });
     }
 }
