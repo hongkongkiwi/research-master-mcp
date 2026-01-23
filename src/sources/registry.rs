@@ -381,92 +381,102 @@ mod tests {
         assert!(missing.is_none());
     }
 
+    /// Helper to set up env vars for tests with proper isolation
+    fn with_source_env_vars<F>(enabled: Option<&str>, disabled: Option<&str>, test: F)
+    where
+        F: FnOnce(),
+    {
+        // Save original values
+        let orig_enabled = std::env::var("RESEARCH_MASTER_ENABLED_SOURCES").ok();
+        let orig_disabled = std::env::var("RESEARCH_MASTER_DISABLED_SOURCES").ok();
+
+        // Set new values
+        match enabled {
+            Some(v) => std::env::set_var("RESEARCH_MASTER_ENABLED_SOURCES", v),
+            None => std::env::remove_var("RESEARCH_MASTER_ENABLED_SOURCES"),
+        }
+        match disabled {
+            Some(v) => std::env::set_var("RESEARCH_MASTER_DISABLED_SOURCES", v),
+            None => std::env::remove_var("RESEARCH_MASTER_DISABLED_SOURCES"),
+        }
+
+        // Run test
+        test();
+
+        // Restore original values
+        match orig_enabled {
+            Some(v) => std::env::set_var("RESEARCH_MASTER_ENABLED_SOURCES", v),
+            None => std::env::remove_var("RESEARCH_MASTER_ENABLED_SOURCES"),
+        }
+        match orig_disabled {
+            Some(v) => std::env::set_var("RESEARCH_MASTER_DISABLED_SOURCES", v),
+            None => std::env::remove_var("RESEARCH_MASTER_DISABLED_SOURCES"),
+        }
+    }
+
     #[test]
     fn test_source_filter_only_enabled() {
         // Test: ENABLE only - only enabled sources
-        std::env::set_var("RESEARCH_MASTER_ENABLED_SOURCES", "arxiv,pubmed");
-        std::env::remove_var("RESEARCH_MASTER_DISABLED_SOURCES");
-
-        let config = crate::config::get_config().sources;
-        let filter = SourceFilter::from_config(&config);
-        assert!(filter.is_enabled("arxiv"));
-        assert!(filter.is_enabled("pubmed"));
-        assert!(!filter.is_enabled("semantic"));
-        assert!(filter.is_enabled("ARXIV")); // Case insensitive - ARXIV should be enabled
-
-        std::env::remove_var("RESEARCH_MASTER_ENABLED_SOURCES");
-        std::env::remove_var("RESEARCH_MASTER_DISABLED_SOURCES");
+        with_source_env_vars(Some("arxiv,pubmed"), None, || {
+            let config = crate::config::get_config().sources;
+            let filter = SourceFilter::from_config(&config);
+            assert!(filter.is_enabled("arxiv"));
+            assert!(filter.is_enabled("pubmed"));
+            assert!(!filter.is_enabled("semantic"));
+            assert!(filter.is_enabled("ARXIV")); // Case insensitive - ARXIV should be enabled
+        });
     }
 
     #[test]
     fn test_source_filter_only_disabled() {
         // Test: DISABLE only - all except disabled
-        std::env::remove_var("RESEARCH_MASTER_ENABLED_SOURCES");
-        std::env::set_var("RESEARCH_MASTER_DISABLED_SOURCES", "dblp,jstor");
-
-        let config = crate::config::get_config().sources;
-        let filter = SourceFilter::from_config(&config);
-        assert!(filter.is_enabled("arxiv"));
-        assert!(filter.is_enabled("pubmed"));
-        assert!(!filter.is_enabled("dblp"));
-        assert!(!filter.is_enabled("jstor"));
-        assert!(!filter.is_enabled("DBLP")); // Case insensitive
-
-        std::env::remove_var("RESEARCH_MASTER_ENABLED_SOURCES");
-        std::env::remove_var("RESEARCH_MASTER_DISABLED_SOURCES");
+        with_source_env_vars(None, Some("dblp,jstor"), || {
+            let config = crate::config::get_config().sources;
+            let filter = SourceFilter::from_config(&config);
+            assert!(filter.is_enabled("arxiv"));
+            assert!(filter.is_enabled("pubmed"));
+            assert!(!filter.is_enabled("dblp"));
+            assert!(!filter.is_enabled("jstor"));
+            assert!(!filter.is_enabled("DBLP")); // Case insensitive
+        });
     }
 
     #[test]
     fn test_source_filter_both_enabled_and_disabled() {
         // Test: Both ENABLE and DISABLE - enabled minus disabled
-        std::env::set_var(
-            "RESEARCH_MASTER_ENABLED_SOURCES",
-            "arxiv,pubmed,semantic,dblp",
-        );
-        std::env::set_var("RESEARCH_MASTER_DISABLED_SOURCES", "dblp");
-
-        let config = crate::config::get_config().sources;
-        let filter = SourceFilter::from_config(&config);
-        assert!(filter.is_enabled("arxiv"));
-        assert!(filter.is_enabled("pubmed"));
-        assert!(filter.is_enabled("semantic"));
-        assert!(!filter.is_enabled("dblp")); // In enabled but also in disabled
-
-        std::env::remove_var("RESEARCH_MASTER_ENABLED_SOURCES");
-        std::env::remove_var("RESEARCH_MASTER_DISABLED_SOURCES");
+        with_source_env_vars(Some("arxiv,pubmed,semantic,dblp"), Some("dblp"), || {
+            let config = crate::config::get_config().sources;
+            let filter = SourceFilter::from_config(&config);
+            assert!(filter.is_enabled("arxiv"));
+            assert!(filter.is_enabled("pubmed"));
+            assert!(filter.is_enabled("semantic"));
+            assert!(!filter.is_enabled("dblp")); // In enabled but also in disabled
+        });
     }
 
     #[test]
     fn test_source_filter_neither() {
         // Test: Neither set - all enabled
-        std::env::remove_var("RESEARCH_MASTER_ENABLED_SOURCES");
-        std::env::remove_var("RESEARCH_MASTER_DISABLED_SOURCES");
-
-        let config = crate::config::get_config().sources;
-        let filter = SourceFilter::from_config(&config);
-        assert!(filter.is_enabled("arxiv"));
-        assert!(filter.is_enabled("pubmed"));
-        assert!(filter.is_enabled("semantic"));
-        assert!(filter.is_enabled("dblp"));
-
-        std::env::remove_var("RESEARCH_MASTER_ENABLED_SOURCES");
-        std::env::remove_var("RESEARCH_MASTER_DISABLED_SOURCES");
+        with_source_env_vars(None, None, || {
+            let config = crate::config::get_config().sources;
+            let filter = SourceFilter::from_config(&config);
+            assert!(filter.is_enabled("arxiv"));
+            assert!(filter.is_enabled("pubmed"));
+            assert!(filter.is_enabled("semantic"));
+            assert!(filter.is_enabled("dblp"));
+        });
     }
 
     #[test]
     fn test_source_filter_empty_values() {
         // Test: Empty values should be treated as not set
-        std::env::set_var("RESEARCH_MASTER_ENABLED_SOURCES", "");
-        std::env::set_var("RESEARCH_MASTER_DISABLED_SOURCES", "");
-
-        let config = crate::config::get_config().sources;
-        let filter = SourceFilter::from_config(&config);
-        // Empty strings should result in all sources enabled
-        assert!(filter.is_enabled("arxiv"));
-        assert!(filter.is_enabled("pubmed"));
-
-        std::env::remove_var("RESEARCH_MASTER_ENABLED_SOURCES");
-        std::env::remove_var("RESEARCH_MASTER_DISABLED_SOURCES");
+        with_source_env_vars(Some(""), Some(""), || {
+            let config = crate::config::get_config().sources;
+            let filter = SourceFilter::from_config(&config);
+            // Empty strings should result in all sources enabled
+            assert!(filter.is_enabled("arxiv"));
+            assert!(filter.is_enabled("pubmed"));
+        });
     }
 
     #[test]
