@@ -1,10 +1,17 @@
-# Runtime-only image: copy prebuilt musl binaries
+# Runtime-only image: copy prebuilt musl binaries (with OCR)
 FROM --platform=$TARGETPLATFORM alpine:3.19 AS runtime
 
 ARG TARGETARCH
 
-# Install runtime dependencies (PDF extraction)
-RUN apk add --no-cache openssl ca-certificates poppler-utils
+ARG OCR_LANGS=""
+
+# Install runtime dependencies (PDF extraction + OCR)
+RUN apk add --no-cache openssl ca-certificates poppler-utils tesseract-ocr && \
+    if [ -n "$OCR_LANGS" ]; then \
+      for lang in $OCR_LANGS; do \
+        apk add --no-cache "tesseract-ocr-data-$lang"; \
+      done; \
+    fi
 
 # Create non-root user
 RUN addgroup -g 1000 appgroup && \

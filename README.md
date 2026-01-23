@@ -774,8 +774,14 @@ docker build -t research-master-mcp .
 # Run with stdio mode
 docker run --rm -i research-master-mcp serve --stdio
 
-# Or use pre-built image
+# Or use pre-built image (includes Poppler for PDF text extraction)
 docker run --rm -i ghcr.io/hongkongkiwi/research-master-mcp serve --stdio
+
+# OCR variant (adds Tesseract for scanned PDFs)
+docker run --rm -i ghcr.io/hongkongkiwi/research-master-mcp-ocr serve --stdio
+
+# Build OCR image with extra languages (e.g., English + German)
+docker build -f Dockerfile.ocr -t research-master-mcp-ocr --build-arg OCR_LANGS="eng deu" .
 ```
 
 For persistent configuration, mount volumes:
