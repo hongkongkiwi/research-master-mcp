@@ -46,6 +46,7 @@ mod dedup;
 mod http;
 mod pdf;
 mod retry;
+mod update;
 
 pub use cache::{CacheResult, CacheService, CacheStats};
 pub use dedup::{deduplicate_papers, find_duplicates, DuplicateStrategy};
@@ -57,4 +58,10 @@ pub use pdf::{
 pub use retry::{
     api_retry_config, strict_rate_limit_retry_config, with_retry, with_retry_detailed, RetryConfig,
     RetryResult, TransientError,
+};
+pub use update::{
+    cleanup_temp_files, compute_sha256, detect_installation, download_and_extract_asset,
+    fetch_and_verify_sha256, fetch_latest_release, find_asset_for_platform, get_current_target,
+    get_update_instructions, InstallationMethod, ReleaseAsset, ReleaseInfo, replace_binary,
+    verify_sha256,
 };

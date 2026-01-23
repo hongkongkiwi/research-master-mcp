@@ -394,6 +394,17 @@ enum Commands {
         #[arg(long, short)]
         verbose: bool,
     },
+
+    /// Update to the latest version
+    Update {
+        /// Force update even if already at latest version
+        #[arg(long, short, default_value_t = false)]
+        force: bool,
+
+        /// Preview what would be updated without making changes
+        #[arg(long, short = 'n', default_value_t = false)]
+        dry_run: bool,
+    },
 }
 
 #[derive(Subcommand, Debug)]
@@ -1033,6 +1044,203 @@ async fn main() -> Result<()> {
 
             println!("\n================================");
             println!("Doctor check complete.");
+        }
+
+        Some(Commands::Update { force, dry_run }) => {
+            use anyhow::Context as _;
+            use std::os::unix::fs::PermissionsExt;
+            use research_master_mcp::utils::{
+                detect_installation, download_and_extract_asset, fetch_and_verify_sha256,
+                find_asset_for_platform, get_current_target, get_update_instructions,
+                fetch_latest_release, replace_binary, verify_sha256, InstallationMethod,
+            };
+
+            let current_version = env!("CARGO_PKG_VERSION");
+            println!("Research Master MCP Updater");
+            println!("============================");
+            println!("Current version: v{}", current_version);
+
+            // Detect installation method
+            let install_method = detect_installation();
+            let instructions = get_update_instructions(&install_method);
+
+            // Fetch latest release
+            eprintln!("Checking for updates...");
+            let latest = match fetch_latest_release().await {
+                Ok(release) => release,
+                Err(e) => {
+                    eprintln!("Failed to check for updates: {}", e);
+                    eprintln!("\n{}", instructions);
+                    return Ok(());
+                }
+            };
+
+            println!("Latest version: {}", latest.version);
+
+            // Check if update is needed
+            let needs_update = if force {
+                true
+            } else {
+                let current = semver::Version::parse(current_version).unwrap_or_else(|_| semver::Version::new(0, 0, 0));
+                let latest_v = semver::Version::parse(&latest.version).unwrap_or_else(|_| semver::Version::new(0, 0, 0));
+                latest_v > current
+            };
+
+            if !needs_update && !force {
+                println!("You are already on the latest version!");
+                return Ok(());
+            }
+
+            // If dry run, just show what would happen
+            if dry_run {
+                println!("\n[Dry run] Would update to v{}", latest.version);
+                println!("Installation method detected: {:?}", install_method);
+                return Ok(());
+            }
+
+            // Show release notes if available
+            if !latest.body.is_empty() {
+                println!("\nRelease notes:");
+                println!("--------------");
+                // Show first 500 characters of release notes
+                let notes = if latest.body.len() > 500 {
+                    &latest.body[..500]
+                } else {
+                    &latest.body
+                };
+                println!("{}", notes);
+                if latest.body.len() > 500 {
+                    println!("...\n(Full notes available at https://github.com/hongkongkiwi/research-master-mcp/releases/tag/v{})", latest.version);
+                }
+            }
+
+            // Handle based on installation method
+            match &install_method {
+                InstallationMethod::Homebrew { .. } | InstallationMethod::Cargo { .. } => {
+                    println!("\n{}", instructions);
+                    println!("\nAfter updating, run 'research-master-mcp --version' to verify.");
+                }
+                InstallationMethod::Direct { .. } | InstallationMethod::Unknown => {
+                    // Attempt self-update
+                    let target = get_current_target();
+                    if target.is_empty() {
+                        eprintln!("Unsupported platform for automatic update.");
+                        eprintln!("\n{}", instructions);
+                        return Ok(());
+                    }
+
+                    println!("\nTarget platform: {}", target);
+
+                    // Find appropriate asset
+                    let asset = match find_asset_for_platform(&latest) {
+                        Some(a) => a,
+                        None => {
+                            eprintln!("No release asset found for platform: {}", target);
+                            eprintln!("Please download manually from: https://github.com/hongkongkiwi/research-master-mcp/releases/tag/v{}", latest.version);
+                            return Ok(());
+                        }
+                    };
+
+                    println!("\nAsset: {}", asset.name);
+
+                    // Create temp directory
+                    let temp_dir = std::env::temp_dir().join("research-master-mcp-update");
+                    let _ = std::fs::create_dir_all(&temp_dir);
+
+                    // Download and extract
+                    match download_and_extract_asset(&asset, &temp_dir).await {
+                        Ok(archive_path) => {
+                            // Fetch expected SHA256 checksum
+                            let expected_checksum = match fetch_and_verify_sha256(&asset.name, &temp_dir).await {
+                                Ok(hash) => hash,
+                                Err(e) => {
+                                    eprintln!("Warning: Could not fetch SHA256 checksums: {}. Proceeding without verification.", e);
+                                    "".to_string()
+                                }
+                            };
+
+                            // Verify checksum if available
+                            if !expected_checksum.is_empty() {
+                                eprintln!("Verifying SHA256 checksum...");
+                                match verify_sha256(&archive_path, &expected_checksum) {
+                                    Ok(true) => {
+                                        eprintln!("SHA256 verification passed!");
+                                    }
+                                    Ok(false) => {
+                                        eprintln!("ERROR: SHA256 verification failed! The download may be corrupted or tampered with.");
+                                        eprintln!("Aborting update for safety.");
+                                        let _ = std::fs::remove_file(&archive_path);
+                                        let _ = std::fs::remove_dir_all(&temp_dir);
+                                        return Ok(());
+                                    }
+                                    Err(e) => {
+                                        eprintln!("Warning: Could not verify checksum: {}. Proceeding without verification.", e);
+                                    }
+                                }
+                            }
+
+                            // Extract the archive
+                            let binary_path = if asset.name.ends_with(".tar.gz") {
+                                use std::process::Command;
+                                let output = Command::new("tar")
+                                    .args(["xzf", archive_path.to_str().unwrap(), "-C", temp_dir.to_str().unwrap()])
+                                    .output()
+                                    .context("Failed to extract archive")?;
+
+                                if !output.status.success() {
+                                    anyhow::bail!("Extraction failed: {}", String::from_utf8_lossy(&output.stderr));
+                                }
+
+                                // Find the binary
+                                let mut binary_path = None;
+                                for entry in std::fs::read_dir(&temp_dir)? {
+                                    let entry = entry?;
+                                    let path = entry.path();
+                                    if path.is_file() && path.file_name().map(|n| n.to_string_lossy().starts_with("research-master-mcp")).unwrap_or(false) {
+                                        // Make executable
+                                        let mut perms = std::fs::metadata(&path)?.permissions();
+                                        perms.set_mode(0o755);
+                                        std::fs::set_permissions(&path, perms)?;
+                                        binary_path = Some(path);
+                                        break;
+                                    }
+                                }
+                                binary_path.context("Could not find binary in archive")?
+                            } else {
+                                anyhow::bail!("Unsupported archive format");
+                            };
+
+                            println!("\nDownloaded and extracted to: {}", binary_path.display());
+
+                            // Get current binary path
+                            let current_exe = std::env::current_exe()
+                                .map_err(|e| anyhow::anyhow!("Failed to get current executable path: {}", e))?;
+
+                            // Replace binary
+                            match replace_binary(&current_exe, &binary_path) {
+                                Ok(_) => {
+                                    println!("\nUpdate successful!");
+                                    println!("New binary will be used on next run.");
+                                }
+                                Err(e) => {
+                                    eprintln!("\nFailed to replace binary: {}", e);
+                                    eprintln!("You may need to manually replace the binary at: {}", current_exe.display());
+                                }
+                            }
+
+                            // Cleanup
+                            let _ = std::fs::remove_file(&archive_path);
+                            let _ = std::fs::remove_file(&binary_path);
+                        }
+                        Err(e) => {
+                            eprintln!("\nFailed to download/update: {}", e);
+                        }
+                    }
+
+                    // Cleanup temp dir
+                    let _ = std::fs::remove_dir_all(&temp_dir);
+                }
+            }
         }
 
         None => {

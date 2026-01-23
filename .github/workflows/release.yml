@@ -169,7 +169,7 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
             CARGO_BUILD_TARGET=x86_64-unknown-linux-musl
-          platforms: linux/amd64,linux/arm64
+          platforms: linux/amd64
 
   # Build platform-specific packages
   build-deb:
@@ -186,7 +186,10 @@ jobs:
           targets: x86_64-unknown-linux-gnu
 
       - name: Install cargo-deb
-        run: cargo install cargo-deb
+        run: |
+          if [ ! -f ~/.cargo/bin/cargo-deb ]; then
+            cargo install cargo-deb
+          fi
 
       - name: Build .deb package
         run: cargo deb --target x86_64-unknown-linux-gnu
@@ -211,7 +214,10 @@ jobs:
           targets: x86_64-unknown-linux-gnu
 
       - name: Install cargo-rpm
-        run: cargo install cargo-rpm
+        run: |
+          if [ ! -f ~/.cargo/bin/cargo-rpm ]; then
+            cargo install cargo-rpm
+          fi
 
       - name: Build .rpm package
         run: cargo rpm build --target x86_64-unknown-linux-gnu
@@ -236,7 +242,10 @@ jobs:
           targets: x86_64-unknown-linux-musl
 
       - name: Install cargo-apk
-        run: cargo install cargo-apk
+        run: |
+          if [ ! -f ~/.cargo/bin/cargo-apk ]; then
+            cargo install cargo-apk
+          fi
 
       - name: Build static binary
         run: cargo build --release --target x86_64-unknown-linux-musl
@@ -303,6 +312,32 @@ jobs:
             fi
           done
           ls -la release-packages/
+
+      - name: Generate SHA256 checksums
+        run: |
+          cd release-packages
+          sha256sum * > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+
+      - name: Setup GPG for signing
+        if: env.GPG_PRIVATE_KEY != ''
+        uses: actions/cache@v4
+        with:
+          path: ~/.gnupg
+          key: gpg-key-${{ env.GPG_PRIVATE_KEY }}
+
+      - name: Import GPG key
+        if: env.GPG_PRIVATE_KEY != ''
+        run: |
+          echo '${{ env.GPG_PRIVATE_KEY }}' | gpg --batch --import --
+          gpg --list-secret-keys --keyid-format LONG
+
+      - name: Sign checksums
+        if: env.GPG_PRIVATE_KEY != ''
+        run: |
+          cd release-packages
+          gpg --batch --yes --armor --detach-sign SHA256SUMS.txt
+          cat SHA256SUMS.txt.asc
 
       - name: Update GitHub Release
         uses: softprops/action-gh-release@v2

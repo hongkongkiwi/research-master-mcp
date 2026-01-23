@@ -91,6 +91,12 @@ nonzero_ext = "0.3"
 md5 = "0.7"
 tempfile = "3.12"
 
+# Version handling for self-updates
+semver = "1.0"
+
+# SHA256 for checksum verification
+sha2 = "0.10"
+
 [features]
 # Individual source features (all enabled by default)
 arxiv = ["source-arxiv"]
