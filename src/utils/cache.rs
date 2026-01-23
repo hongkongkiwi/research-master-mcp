@@ -5,7 +5,7 @@
 //!
 //! # Cache Structure
 //!
-//! ```
+//! ```text
 //! ~/.cache/research-master/
 //!   searches/
 //!     <hash>.json

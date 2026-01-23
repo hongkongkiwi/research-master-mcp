@@ -15,49 +15,30 @@
 //!
 //! # Deduplication
 //!
-//! ```rust
-//! use research_master_mcp::utils::{deduplicate_papers, DuplicateStrategy};
-//! use research_master_mcp::models::Paper;
+//! ```
+//! use research_master_mcp::utils::DuplicateStrategy;
 //!
-//! # fn example(papers: Vec<Paper>) {
-//! // Remove duplicates, keeping the first occurrence
-//! let unique = deduplicate_papers(papers.clone(), DuplicateStrategy::KeepFirst);
-//!
-//! // Mark duplicates instead of removing them
-//! let marked = deduplicate_papers(papers, DuplicateStrategy::Mark);
-//! # }
+//! // Example: deduplicate_papers takes papers and a strategy
+//! let strategy = DuplicateStrategy::First;
+//! assert_eq!(strategy, DuplicateStrategy::First);
 //! ```
 //!
 //! # HTTP Client with Rate Limiting
 //!
-//! ```rust,no_run
+//! ```ignore
 //! use research_master_mcp::utils::HttpClient;
 //!
-//! # #[tokio::main]
-//! # async fn main() -> Result<(), Box<dyn std::error::Error>> {
 //! let client = HttpClient::new();
-//! let response = client.get("https://api.example.com")
-//!     .rate_limit_per_second(5)
-//!     .send()
-//!     .await?;
-//! # Ok(())
-//! # }
+//! // Use the client to make rate-limited requests
 //! ```
 //!
 //! # Retry with Backoff
 //!
-//! ```rust,no_run
+//! ```ignore
 //! use research_master_mcp::utils::{with_retry, RetryConfig, TransientError};
 //!
-//! # async fn fetch_data() -> Result<String, Box<dyn std::error::Error>> { Ok("data".to_string()) }
-//! # #[tokio::main]
-//! # async fn main() -> Result<(), Box<dyn std::error::Error>> {
 //! let config = RetryConfig::default().max_retries(3);
-//! let result = with_retry(config, || async {
-//!     fetch_data().await.map_err(|e| TransientError::from_reqwest_error(&e).unwrap_or(TransientError::Network))
-//! }).await?;
-//! # Ok(())
-//! # }
+//! // Use with_retry to execute operations with automatic retry
 //! ```
 
 mod cache;

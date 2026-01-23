@@ -171,6 +171,146 @@ jobs:
             CARGO_BUILD_TARGET=x86_64-unknown-linux-gnu
           platforms: linux/amd64,linux/arm64
 
+  # Build platform-specific packages
+  build-deb:
+    name: Build Debian Package
+    needs: release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-unknown-linux-gnu
+
+      - name: Install cargo-deb
+        run: cargo install cargo-deb
+
+      - name: Build .deb package
+        run: cargo deb --target x86_64-unknown-linux-gnu
+
+      - name: Upload .deb package
+        uses: actions/upload-artifact@v4
+        with:
+          name: research-master-mcp.deb
+          path: target/deb/research-master-mcp_*_amd64.deb
+
+  build-rpm:
+    name: Build RedHat Package
+    needs: release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-unknown-linux-gnu
+
+      - name: Install cargo-rpm
+        run: cargo install cargo-rpm
+
+      - name: Build .rpm package
+        run: cargo rpm build --target x86_64-unknown-linux-gnu
+
+      - name: Upload .rpm package
+        uses: actions/upload-artifact@v4
+        with:
+          name: research-master-mcp.rpm
+          path: target/rpm/RPMS/x86_64/*.rpm
+
+  build-apk:
+    name: Build Alpine Package
+    needs: release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-unknown-linux-musl
+
+      - name: Install cargo-apk
+        run: cargo install cargo-apk
+
+      - name: Build static binary
+        run: cargo build --release --target x86_64-unknown-linux-musl
+
+      - name: Create Alpine package structure
+        run: |
+          mkdir -p apk-build/usr/bin
+          cp target/x86_64-unknown-linux-musl/release/research-master-mcp apk-build/usr/bin/
+
+      - name: Create APKBUILD
+        run: |
+          cat > apk-build/APKBUILD << 'EOF'
+          # Contributor: Research Master MCP
+          # Maintainer: Research Master MCP
+          pkgname=research-master-mcp
+          pkgver=VERSION_PLACEHOLDER
+          pkgrel=0
+          pkgdesc="Model Context Protocol server for academic research sources"
+          url="https://github.com/hongkongkiwi/research-master-mcp"
+          arch="x86_64"
+          license="MIT"
+          depends=""
+          subpackages=""
+          source=""
+
+          build() {
+            return 0
+          }
+
+          package() {
+            mkdir -p "$pkgdir"/usr/bin
+            cp "$srcdir"/usr/bin/research-master-mcp "$pkgdir"/usr/bin/
+          }
+          EOF
+          sed -i "s/VERSION_PLACEHOLDER/${{ github.ref_name }}/" apk-build/APKBUILD
+
+      - name: Upload Alpine package
+        uses: actions/upload-artifact@v4
+        with:
+          name: research-master-mcp.apk
+          path: apk-build/
+
+  # Create release with all platform packages
+  finalize-release:
+    name: Finalize Release
+    needs:
+      - release
+      - build-deb
+      - build-rpm
+      - build-apk
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all packages
+        uses: actions/download-artifact@v4
+        with:
+          path: packages
+
+      - name: Prepare release assets
+        run: |
+          mkdir -p release-packages
+          for dir in packages/*; do
+            if [ -d "$dir" ]; then
+              cp -r "$dir"/* release-packages/ 2>/dev/null || true
+            fi
+          done
+          ls -la release-packages/
+
+      - name: Update GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: false
+          prerelease: false
+          files: release-packages/*
+
   # Publish to GitHub Packages (Cargo registry)
   publish-github-packages:
     name: Publish to GitHub Packages (Rust)
