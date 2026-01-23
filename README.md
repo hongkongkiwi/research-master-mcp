@@ -90,6 +90,16 @@ Intelligent duplicate detection across sources:
 
 ## Installation
 
+### Homebrew (macOS)
+
+```bash
+# Add the custom tap
+brew tap hongkongkiwi/research-master-mcp
+
+# Install research-master-mcp
+brew install research-master-mcp
+```
+
 ### From Crates.io
 
 ```bash
