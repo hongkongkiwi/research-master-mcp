@@ -187,7 +187,7 @@ fn test_paper_model() {
     // Test helper methods
     assert_eq!(paper.primary_id(), "10.1234/test");
     assert_eq!(paper.author_list(), vec!["John Doe", "Jane Smith"]);
-    assert!(paper.has_pdf() == false); // No PDF URL set
+    assert!(!paper.has_pdf()); // No PDF URL set
 }
 
 /// Test Paper with PDF

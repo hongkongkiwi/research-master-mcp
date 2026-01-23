@@ -1,10 +1,94 @@
 //! Configuration management.
 
 use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
+
+/// Cache configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CacheConfig {
+    /// Whether caching is enabled
+    #[serde(default)]
+    pub enabled: bool,
+
+    /// Cache directory (defaults to platform-specific cache dir)
+    #[serde(default)]
+    pub directory: Option<PathBuf>,
+
+    /// TTL for search results in seconds (default: 30 minutes)
+    #[serde(default = "default_search_ttl")]
+    pub search_ttl_seconds: u64,
+
+    /// TTL for citation/reference results in seconds (default: 15 minutes)
+    #[serde(default = "default_citation_ttl")]
+    pub citation_ttl_seconds: u64,
+
+    /// Maximum cache size in MB (default: 500MB)
+    #[serde(default = "default_max_cache_size")]
+    pub max_size_mb: usize,
+}
+
+impl Default for CacheConfig {
+    fn default() -> Self {
+        Self {
+            enabled: std::env::var("RESEARCH_MASTER_CACHE_ENABLED").is_ok(),
+            directory: None,
+            search_ttl_seconds: default_search_ttl(),
+            citation_ttl_seconds: default_citation_ttl(),
+            max_size_mb: default_max_cache_size(),
+        }
+    }
+}
+
+fn default_search_ttl() -> u64 {
+    1800 // 30 minutes
+}
+
+fn default_citation_ttl() -> u64 {
+    900 // 15 minutes
+}
+
+fn default_max_cache_size() -> usize {
+    500
+}
+
+/// Get the default cache directory for the platform
+pub fn default_cache_dir() -> PathBuf {
+    // Try platform-specific cache directories first
+    #[cfg(target_os = "macos")]
+    {
+        if let Ok(home) = std::env::var("HOME") {
+            return PathBuf::from(home)
+                .join("Library")
+                .join("Caches")
+                .join("research-master");
+        }
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        if let Ok(xdg_cache) = std::env::var("XDG_CACHE_HOME") {
+            return PathBuf::from(xdg_cache).join("research-master");
+        }
+        if let Ok(home) = std::env::var("HOME") {
+            return PathBuf::from(home).join(".cache").join("research-master");
+        }
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        if let Ok(appdata) = std::env::var("LOCALAPPDATA") {
+            return PathBuf::from(appdata)
+                .join("research-master")
+                .join("cache");
+        }
+    }
+
+    // Fallback to current directory
+    PathBuf::from(".research-master-cache")
+}
 
 /// Application configuration
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct Config {
     /// API keys for various services
     #[serde(default)]
@@ -21,17 +105,10 @@ pub struct Config {
     /// Source filtering settings
     #[serde(default)]
     pub sources: SourceConfig,
-}
 
-impl Default for Config {
-    fn default() -> Self {
-        Self {
-            api_keys: ApiKeys::default(),
-            downloads: DownloadConfig::default(),
-            rate_limits: RateLimitConfig::default(),
-            sources: SourceConfig::default(),
-        }
-    }
+    /// Cache settings
+    #[serde(default)]
+    pub cache: CacheConfig,
 }
 
 /// Source configuration
@@ -146,9 +223,9 @@ fn default_max_concurrent() -> usize {
 }
 
 /// Load configuration from a file
-pub fn load_config(path: &PathBuf) -> Result<Config, config::ConfigError> {
+pub fn load_config(path: &Path) -> Result<Config, config::ConfigError> {
     let settings = config::Config::builder()
-        .add_source(config::File::from(path.as_path()))
+        .add_source(config::File::from(path))
         .add_source(config::Environment::with_prefix("RESEARCH_MASTER"))
         .build()?;
 

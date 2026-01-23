@@ -91,7 +91,7 @@ impl McpServer {
 
         let socket_addr: SocketAddr = addr
             .parse()
-            .map_err(|e| Error::invalid_params(&format!("Invalid address: {}", e)))?;
+            .map_err(|e| Error::invalid_params(format!("Invalid address: {}", e)))?;
 
         // Create the HTTP server with default config
         let http_server = StreamableHttpServer::new(socket_addr, self.server.clone());
@@ -113,7 +113,7 @@ impl McpServer {
 
         let socket_addr: SocketAddr = addr
             .parse()
-            .map_err(|e| Error::invalid_params(&format!("Invalid address: {}", e)))?;
+            .map_err(|e| Error::invalid_params(format!("Invalid address: {}", e)))?;
 
         // Create the HTTP server with custom config
         let http_server =

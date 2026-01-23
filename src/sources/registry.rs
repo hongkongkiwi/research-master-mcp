@@ -359,7 +359,6 @@ mod tests {
         let registry = SourceRegistry::new();
 
         // Should have some sources (at least one)
-        assert!(registry.len() >= 1);
         assert!(!registry.is_empty());
     }
 
@@ -369,8 +368,8 @@ mod tests {
 
         let arxiv = registry.get("arxiv");
         // arxiv should be available if not filtered
-        if arxiv.is_some() {
-            assert_eq!(arxiv.unwrap().id(), "arxiv");
+        if let Some(arxiv) = arxiv {
+            assert_eq!(arxiv.id(), "arxiv");
         }
 
         let missing = registry.get("nonexistent");

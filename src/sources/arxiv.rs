@@ -178,7 +178,7 @@ impl ArxivSource {
         let categories = entry
             .categories
             .iter()
-            .filter_map(|c| Some(c.term.as_str()))
+            .map(|c| c.term.as_str())
             .map(|s| s.to_string())
             .collect::<Vec<_>>()
             .join(";");

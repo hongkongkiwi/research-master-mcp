@@ -6,7 +6,7 @@ use research_master_mcp::models::{
     CitationRequest, DownloadRequest, ReadRequest, SearchQuery, SortBy, SortOrder,
 };
 use research_master_mcp::sources::{SourceCapabilities, SourceRegistry};
-use research_master_mcp::utils::{deduplicate_papers, find_duplicates, DuplicateStrategy};
+use research_master_mcp::utils::{deduplicate_papers, find_duplicates, CacheService, DuplicateStrategy};
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
@@ -43,6 +43,10 @@ struct Cli {
     /// Show all environment variables
     #[arg(long, global = true)]
     env: bool,
+
+    /// Disable caching for this command (useful for testing fresh results)
+    #[arg(long, global = true, default_value_t = false)]
+    no_cache: bool,
 
     #[command(subcommand)]
     command: Option<Commands>,
@@ -364,6 +368,29 @@ enum Commands {
         #[arg(long, short)]
         show: bool,
     },
+
+    /// Manage local cache
+    #[command(alias = "c")]
+    Cache {
+        /// Subcommand
+        #[command(subcommand)]
+        command: CacheCommands,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+enum CacheCommands {
+    /// Show cache status and statistics
+    Status,
+
+    /// Clear all cached data
+    Clear,
+
+    /// Clear only search cache
+    ClearSearches,
+
+    /// Clear only citation cache
+    ClearCitations,
 }
 
 /// Capability filter for listing sources
@@ -397,6 +424,12 @@ fn print_env_vars() {
     println!("Rate Limiting:");
     println!("  RESEARCH_MASTER_RATE_LIMITS_DEFAULT_REQUESTS_PER_SECOND  Default requests per second (default: 5.0)");
     println!("  RESEARCH_MASTER_RATE_LIMITS_MAX_CONCURRENT_REQUESTS     Max concurrent requests (default: 10)");
+    println!();
+    println!("Cache Settings:");
+    println!("  RESEARCH_MASTER_CACHE_ENABLED                Enable local caching (default: disabled)");
+    println!("  RESEARCH_MASTER_CACHE_DIRECTORY              Custom cache directory");
+    println!("  RESEARCH_MASTER_CACHE_SEARCH_TTL_SECONDS     TTL for search results (default: 1800 = 30 min)");
+    println!("  RESEARCH_MASTER_CACHE_CITATION_TTL_SECONDS   TTL for citation results (default: 900 = 15 min)");
     println!();
     println!("Other Settings:");
     println!("  RUST_LOG                    Rust logging level (e.g., debug, info, warn, error)");
@@ -486,17 +519,56 @@ async fn main() -> Result<()> {
             let sources = get_sources(&registry, source, SourceCapabilities::SEARCH);
             let mut all_papers = Vec::new();
 
+            // Initialize cache if not disabled
+            let cache = if cli.no_cache {
+                None
+            } else {
+                let c = CacheService::new();
+                let _ = c.initialize();
+                Some(c)
+            };
+
             for src in sources {
+                let source_id = src.id();
+
+                // Check cache first
+                if let Some(ref cache_service) = cache {
+                    match cache_service.get_search(&search_query, source_id) {
+                        research_master_mcp::utils::CacheResult::Hit(response) => {
+                            if !cli.quiet {
+                                eprintln!("[CACHE HIT] Found {} papers from {}", response.papers.len(), source_id);
+                            }
+                            all_papers.extend(response.papers);
+                            continue;
+                        }
+                        research_master_mcp::utils::CacheResult::Expired => {
+                            if !cli.quiet {
+                                eprintln!("[CACHE EXPIRED] Fetching fresh results from {}", source_id);
+                            }
+                        }
+                        research_master_mcp::utils::CacheResult::Miss => {
+                            if !cli.quiet {
+                                eprintln!("[CACHE MISS] Fetching from {}", source_id);
+                            }
+                        }
+                    }
+                }
+
+                // Fetch from API
                 match src.search(&search_query).await {
                     Ok(response) => {
                         if !cli.quiet {
-                            eprintln!("Found {} papers from {}", response.papers.len(), src.id());
+                            eprintln!("Found {} papers from {}", response.papers.len(), source_id);
+                        }
+                        // Cache the result
+                        if let Some(ref cache_service) = cache {
+                            cache_service.set_search(source_id, &search_query, &response);
                         }
                         all_papers.extend(response.papers);
                     }
                     Err(e) => {
                         if !cli.quiet {
-                            eprintln!("Error searching {}: {}", src.id(), e);
+                            eprintln!("Error searching {}: {}", source_id, e);
                         }
                     }
                 }
@@ -775,6 +847,56 @@ async fn main() -> Result<()> {
             }
         }
 
+        Some(Commands::Cache { command }) => {
+            let cache = CacheService::new();
+            cache.initialize()?;
+
+            match command {
+                CacheCommands::Status => {
+                    let stats = cache.stats();
+                    if !stats.enabled {
+                        println!("Cache: disabled");
+                        println!("To enable, set RESEARCH_MASTER_CACHE_ENABLED=true");
+                    } else {
+                        println!("Cache: enabled");
+                        println!("Directory: {}", stats.cache_dir.display());
+                        println!("Search cache: {} items ({} KB)", stats.search_count, stats.search_size_kb);
+                        println!("Citation cache: {} items ({} KB)", stats.citation_count, stats.citation_size_kb);
+                        println!("Total size: {} KB", stats.total_size_kb);
+                        println!("Search TTL: {} seconds", stats.ttl_search.as_secs());
+                        println!("Citation TTL: {} seconds", stats.ttl_citations.as_secs());
+                    }
+                }
+                CacheCommands::Clear => {
+                    if !cli.quiet {
+                        eprintln!("Clearing all cached data...");
+                    }
+                    cache.clear_all()?;
+                    if !cli.quiet {
+                        eprintln!("Cache cleared successfully.");
+                    }
+                }
+                CacheCommands::ClearSearches => {
+                    if !cli.quiet {
+                        eprintln!("Clearing search cache...");
+                    }
+                    cache.clear_searches()?;
+                    if !cli.quiet {
+                        eprintln!("Search cache cleared successfully.");
+                    }
+                }
+                CacheCommands::ClearCitations => {
+                    if !cli.quiet {
+                        eprintln!("Clearing citation cache...");
+                    }
+                    cache.clear_citations()?;
+                    if !cli.quiet {
+                        eprintln!("Citation cache cleared successfully.");
+                    }
+                }
+            }
+        }
+
         None => {
             // No command provided - show help
             println!("No command provided. Use --help for usage information.");
@@ -799,7 +921,7 @@ fn get_source(
         s => source_to_id(s),
     };
     registry
-        .get_required(&source_id)
+        .get_required(source_id)
         .map_err(|e| anyhow::anyhow!(e))
 }
 
@@ -812,7 +934,7 @@ fn get_sources(
         Source::All => registry.with_capability(capability),
         s => {
             let id = source_to_id(s);
-            registry.get(&id).into_iter().collect()
+            registry.get(id).into_iter().collect()
         }
     }
 }

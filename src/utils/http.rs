@@ -264,15 +264,15 @@ impl HttpClient {
 
         // Create download directory if it doesn't exist
         std::fs::create_dir_all(&request.save_path).map_err(|e| {
-            SourceError::Io(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                format!("Failed to create directory: {}", e),
-            ))
+            SourceError::Io(std::io::Error::other(format!(
+                "Failed to create directory: {}",
+                e
+            )))
         })?;
 
         let path = Path::new(&request.save_path).join(filename);
 
-        std::fs::write(&path, bytes.as_ref()).map_err(|e| SourceError::Io(e.into()))?;
+        std::fs::write(&path, bytes.as_ref()).map_err(SourceError::Io)?;
 
         Ok(DownloadResult::success(
             path.to_string_lossy().to_string(),

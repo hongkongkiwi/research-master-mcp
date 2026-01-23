@@ -1,0 +1,15 @@
+#!/usr/bin/env sh
+# Run clippy before commit
+
+# Change to repo root
+cd "$(dirname "$0")/.." || exit 1
+
+echo "Running clippy..."
+cargo clippy --all-targets -- -D warnings
+
+if [ $? -ne 0 ]; then
+    echo "clippy failed. Fix the issues before committing."
+    exit 1
+fi
+
+echo "clippy passed!"

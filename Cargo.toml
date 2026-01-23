@@ -80,6 +80,10 @@ pdf-extract = "0.7"
 governor = "0.6"
 nonzero_ext = "0.3"
 
+# Caching
+md5 = "0.7"
+tempfile = "3.12"
+
 [features]
 # Individual source features (all enabled by default)
 arxiv = ["source-arxiv"]

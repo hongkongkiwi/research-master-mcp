@@ -60,11 +60,13 @@
 //! # }
 //! ```
 
+mod cache;
 mod dedup;
 mod http;
 mod pdf;
 mod retry;
 
+pub use cache::{CacheResult, CacheService, CacheStats};
 pub use dedup::{deduplicate_papers, find_duplicates, DuplicateStrategy};
 pub use http::{HttpClient, RateLimitedRequestBuilder};
 pub use pdf::{extract_text, is_available, PdfExtractError};

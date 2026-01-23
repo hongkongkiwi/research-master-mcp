@@ -196,7 +196,7 @@ impl Source for OsfSource {
 
         tokio::fs::write(&save_path, &bytes_vec)
             .await
-            .map_err(|e| SourceError::Io(e))?;
+            .map_err(SourceError::Io)?;
 
         Ok(crate::models::DownloadResult {
             path: save_path,

@@ -28,7 +28,7 @@ pub enum PdfExtractError {
 /// - false (default): not yet checked
 /// - true: checked and available
 /// - false (after check): checked and not available
-/// We use a separate bool to track if we've checked
+///   We use a separate bool to track if we've checked
 static AVAILABILITY_CHECK: AtomicBool = AtomicBool::new(false);
 static HAS_CHECKED: AtomicBool = AtomicBool::new(false);
 
@@ -144,7 +144,7 @@ pub fn extract_multiple<'a, P>(paths: P) -> Vec<Result<String, PdfExtractError>>
 where
     P: IntoIterator<Item = &'a Path>,
 {
-    paths.into_iter().map(|path| extract_text(path)).collect()
+    paths.into_iter().map(extract_text).collect()
 }
 
 #[cfg(test)]

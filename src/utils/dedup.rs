@@ -31,12 +31,10 @@ pub fn find_duplicates(papers: &[Paper]) -> Vec<Vec<usize>> {
         let mut group = vec![i];
         let paper_i = &papers[i];
 
-        for j in (i + 1)..papers.len() {
+        for (j, paper_j) in papers.iter().enumerate().skip(i + 1) {
             if processed.contains(&j) {
                 continue;
             }
-
-            let paper_j = &papers[j];
 
             // Check if papers are duplicates
             if are_duplicates(paper_i, paper_j) {
@@ -84,10 +82,8 @@ fn are_duplicates(a: &Paper, b: &Paper) -> bool {
     }
 
     // Check exact title match after cleaning
-    if normalize_title(&title_a) == normalize_title(&title_b) {
-        if authors_match(a, b) {
-            return true;
-        }
+    if normalize_title(&title_a) == normalize_title(&title_b) && authors_match(a, b) {
+        return true;
     }
 
     false
