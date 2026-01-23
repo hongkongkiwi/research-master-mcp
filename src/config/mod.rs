@@ -286,6 +286,14 @@ fn default_max_concurrent() -> usize {
 
 /// Load configuration from a file
 pub fn load_config(path: &Path) -> Result<Config, config::ConfigError> {
+    let test_mode = std::env::var(TEST_MODE_ENV_VAR)
+        .map(|value| value.eq_ignore_ascii_case("true"))
+        .unwrap_or(false);
+
+    if test_mode {
+        return Ok(Config::without_env());
+    }
+
     let settings = config::Config::builder()
         .add_source(config::File::from(path))
         .add_source(config::Environment::with_prefix("RESEARCH_MASTER"))
