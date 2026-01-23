@@ -196,7 +196,7 @@ impl Source for EuropePmcSource {
             .result_list
             .result
             .iter()
-            .map(|r| Self::parse_result(r))
+            .map(Self::parse_result)
             .collect();
 
         Ok(SearchResponse::new(papers, "EuropePMC", &query.query))
@@ -205,10 +205,13 @@ impl Source for EuropePmcSource {
 
 /// Search result wrapper
 #[derive(Debug, Deserialize)]
-#[allow(non_snake_case)]
+#[allow(non_snake_case, dead_code)]
 struct SearchResult {
+    #[allow(dead_code)]
     version: String,
+    #[allow(dead_code)]
     hitCount: u32,
+    #[allow(dead_code)]
     request: SearchRequest,
     #[serde(rename = "resultList")]
     result_list: ResultList,
@@ -216,11 +219,15 @@ struct SearchResult {
 
 /// Search request info
 #[derive(Debug, Deserialize)]
-#[allow(non_snake_case)]
+#[allow(non_snake_case, dead_code)]
 struct SearchRequest {
+    #[allow(dead_code)]
     query: String,
+    #[allow(dead_code)]
     resultType: String,
+    #[allow(dead_code)]
     format: String,
+    #[allow(dead_code)]
     pageSize: u32,
 }
 
@@ -233,7 +240,7 @@ struct ResultList {
 
 /// Individual search result
 #[derive(Debug, Deserialize)]
-#[allow(non_snake_case)]
+#[allow(non_snake_case, dead_code)]
 struct SearchResultItem {
     #[serde(default)]
     pubmed_id: Option<String>,
@@ -261,10 +268,12 @@ struct SearchResultItem {
 
 /// Journal information
 #[derive(Debug, Deserialize)]
-#[allow(non_snake_case)]
+#[allow(non_snake_case, dead_code)]
 struct JournalInfo {
     journal_volume: Option<String>,
+    #[allow(dead_code)]
     journal_issue: Option<String>,
+    #[allow(dead_code)]
     pub_date: Option<String>,
 }
 
