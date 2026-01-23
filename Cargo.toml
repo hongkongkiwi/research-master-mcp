@@ -6,6 +6,16 @@ description = "MCP server for searching and downloading academic papers from mul
 authors = ["hongkongkiwi"]
 license = "MIT"
 repository = "https://github.com/hongkongkiwi/research-master-mcp"
+categories = ["science", "api-bindings", "command-line-utilities"]
+keywords = ["mcp", "academic", "research", "papers", "scholar", "arxiv", "pubmed"]
+readme = "README.md"
+homepage = "https://github.com/hongkongkiwi/research-master-mcp"
+documentation = "https://github.com/hongkongkiwi/research-master-mcp#readme"
+
+# Binary configuration
+[[bin]]
+name = "research-master-mcp"
+path = "src/main.rs"
 
 [dependencies]
 # MCP Protocol (using pmcp crate)
@@ -168,11 +178,9 @@ full = ["default"]
 [dev-dependencies]
 tokio-test = "0.4"
 mockito = "1.5"
+cargo-dist = "0.22"
 
-[[bin]]
-name = "research-master-mcp"
-path = "src/main.rs"
-
+# The binary is already defined above
 [lib]
 name = "research_master_mcp"
 path = "src/lib.rs"

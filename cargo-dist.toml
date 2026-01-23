@@ -1,0 +1,34 @@
+# cargo-dist configuration for research-master-mcp
+
+[workspace]
+members = ["."]
+
+# The GitHub project to publish releases to
+[workspace.metadata.dist]
+# The root project is the one we're publishing
+github = "hongkongkiwi/research-master-mcp"
+
+# The unique project identifier
+workspace-default-target = "x86_64-unknown-linux-gnu"
+
+# Targets to build for
+targets = [
+    "x86_64-unknown-linux-gnu",      # Linux x86_64 (deb, rpm)
+    "aarch64-unknown-linux-gnu",      # Linux ARM64 (deb, rpm)
+    "x86_64-unknown-linux-musl",      # Linux musl (Alpine)
+    "aarch64-unknown-linux-musl",      # Linux ARM64 musl (Alpine)
+    "x86_64-apple-darwin",            # macOS x86_64
+    "aarch64-apple-darwin",            # macOS ARM64 (Apple Silicon)
+    "x86_64-pc-windows-msvc",          # Windows x86_64
+]
+
+# Whether to install as a system service
+system-service = "none"
+
+# Post-build tasks
+[workspace.metadata.dist.github-custom-runners]
+# Use larger runners for faster builds
+ubuntu-x86_64 = "ubuntu-latest-8-cores"
+ubuntu-aarch64 = "ubuntu-latest-4-cores"
+macos-aarch64 = "macos-latest-xlarge"
+macos-x86_64 = "macos-13-xlarge"
