@@ -7,11 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.1.7] - 2026-01-23
+## [0.1.9] - 2026-01-23
+
+### Added
+- Windows-specific changes for self-updates
+
+### Fixed
+- Windows build compatibility and runtime tool detection
+
+## [0.1.8] - 2026-01-23
 
 ### Added
 - Windows self-update support with SHA256 verification
 - Enhanced pre-commit hook for Rust projects
+
+## [0.1.7] - 2026-01-23
+
+### Added
+- Self-update command with SHA256 verification
 
 ## [0.1.6] - 2026-01-23
 
