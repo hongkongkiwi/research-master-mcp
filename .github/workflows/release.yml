@@ -34,7 +34,7 @@ jobs:
 
       - name: Install cargo-dist
         run: |
-          curl --proto '=https' --tlsv1.2 -sSf https://gtk.rs/lenf/cargo-dist/binstall/cargo-dist-installer.sh | bash
+          cargo install cargo-dist
           echo "$HOME/.cargo/bin" >> $GITHUB_PATH
 
       - name: Plan release
@@ -92,7 +92,7 @@ jobs:
 
       - name: Install cargo-dist
         run: |
-          curl --proto '=https' --tlsv1.2 -sSf https://gtk.rs/lenf/cargo-dist/binstall/cargo-dist-installer.sh | bash
+          cargo install cargo-dist
           echo "$HOME/.cargo/bin" >> $GITHUB_PATH
 
       - name: Build
@@ -374,7 +374,7 @@ jobs:
 
       - name: Install cargo-dist
         run: |
-          curl --proto '=https' --tlsv1.2 -sSf https://gtk.rs/lenf/cargo-dist/binstall/cargo-dist-installer.sh | bash
+          cargo install cargo-dist
           echo "$HOME/.cargo/bin" >> $GITHUB_PATH
 
       - name: Download all artifacts
