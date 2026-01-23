@@ -149,15 +149,15 @@ version:
 # Release using cargo-release (recommended)
 # Usage: just release-cargo [patch|minor|major]
 # This will: update version, update CHANGELOG.md, commit, tag, and push
+# Skips publishing (we use GitHub Actions for releases)
 release-cargo TYPE="patch":
     #!/usr/bin/env bash
     set -e
-    # Skip build verification (we use GitHub Actions for builds) and skip pre-release hooks
-    cargo release {{TYPE}} --no-verify --no-confirm --execute
+    cargo release {{TYPE}} --no-publish --no-verify --no-confirm --execute
 
 # Dry-run release to see what would happen
 release-dry-run:
-    cargo release patch --no-verify --no-confirm
+    cargo release patch --no-publish --no-verify --no-confirm
 
 # Show next version (patch, minor, or major)
 next-patch:
