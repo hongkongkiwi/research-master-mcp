@@ -203,6 +203,7 @@ struct DoajResponse {
 }
 
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 struct DoajArticle {
     id: String,
     doi: Option<String>,
@@ -220,6 +221,7 @@ struct DoajAuthor {
 }
 
 #[derive(Debug, Clone, Deserialize)]
+#[allow(dead_code)]
 struct DoajJournal {
     title: Option<String>,
     publisher: Option<String>,

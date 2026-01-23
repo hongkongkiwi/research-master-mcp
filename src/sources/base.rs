@@ -192,7 +192,7 @@ impl BaseSource {
             doc.link.clone().unwrap_or_default()
         };
 
-        let publisher = doc.publisher.clone().unwrap_or_default();
+        let _publisher = doc.publisher.clone().unwrap_or_default();
 
         Ok(PaperBuilder::new(id, title, url, SourceType::Base)
             .authors(&authors)

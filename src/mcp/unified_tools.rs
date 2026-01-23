@@ -3,7 +3,6 @@
 use std::sync::Arc;
 
 use serde_json::Value;
-use async_trait::async_trait;
 
 use super::tools::ToolHandler;
 

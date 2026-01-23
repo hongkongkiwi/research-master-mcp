@@ -213,6 +213,7 @@ struct SpringerResponse {
 }
 
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 struct SpringerRecord {
     id: String,
     doi: Option<String>,
@@ -231,6 +232,7 @@ struct SpringerAuthor {
 }
 
 #[derive(Debug, Clone, Deserialize)]
+#[allow(dead_code)]
 struct SpringerJournal {
     title: Option<String>,
 }

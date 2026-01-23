@@ -274,6 +274,7 @@ struct DimensionsData {
 
 /// Common paper structure for both search and DOI lookup results
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 struct DimensionsPaper {
     id: String,
     title: Option<String>,
@@ -296,16 +297,19 @@ struct DimensionsAuthor {
 }
 
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 struct DimensionsJournal {
     title: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 struct DimensionsConcept {
     name: String,
 }
 
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 struct DimensionsRelatedWork {
     doi: Option<String>,
     title: Option<String>,

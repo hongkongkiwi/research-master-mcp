@@ -157,7 +157,7 @@ impl Source for OsfSource {
 
     async fn download(&self, request: &crate::models::DownloadRequest) -> Result<crate::models::DownloadResult, SourceError> {
         // Use PDF URL from paper_id or DOI
-        let paper_id = request.paper_id.clone();
+        let _paper_id = request.paper_id.clone();
         let pdf_url = request.doi.clone()
             .map(|doi| format!("https://doi.org/{}", doi))
             .ok_or_else(|| SourceError::InvalidRequest("DOI required for OSF download".to_string()))?;
@@ -240,6 +240,7 @@ struct OsfPreprint {
 }
 
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 struct OsfAttributes {
     title: Option<String>,
     description: Option<String>,
@@ -259,12 +260,14 @@ struct OsfAuthors {
 }
 
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 struct OsfAuthor {
     id: String,
     attributes: OsfAuthorAttributes,
 }
 
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 struct OsfAuthorAttributes {
     name: Option<String>,
     given_name: Option<String>,

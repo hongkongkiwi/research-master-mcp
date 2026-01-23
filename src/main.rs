@@ -1,6 +1,6 @@
 use anyhow::Result;
 use clap::{Parser, Subcommand, ValueEnum};
-use research_master_mcp::config::{find_config_file, get_config, load_config};
+use research_master_mcp::config::{find_config_file, load_config};
 use research_master_mcp::models::{
     CitationRequest, DownloadRequest, ReadRequest, SearchQuery, SortBy, SortOrder,
 };
@@ -441,7 +441,7 @@ async fn main() -> Result<()> {
     tokio::time::sleep(Duration::from_secs(0)).await; // Just to ensure runtime is initialized
 
     // Load configuration from file if specified or found in default locations
-    let config = if let Some(config_path) = &cli.config {
+    let _config = if let Some(config_path) = &cli.config {
         Some(load_config(config_path)?)
     } else if let Some(config_path) = find_config_file() {
         tracing::info!("Using config file: {}", config_path.display());
