@@ -139,12 +139,25 @@ audit-update:
     cargo update && cargo audit
 
 # ============================================
-# RELEASE COMMANDS
+# RELEASE COMMANDS (using cargo-release)
 # ============================================
 
 # Show current version
 version:
     @grep '^version = ' Cargo.toml | head -1 | sed 's/version = "\(.*\)"/\1/'
+
+# Release using cargo-release (recommended)
+# Usage: just release-cargo [patch|minor|major]
+# This will: update version, update CHANGELOG.md, commit, tag, and push
+release-cargo TYPE="patch":
+    #!/usr/bin/env bash
+    set -e
+    # Skip build verification (we use GitHub Actions for builds) and skip pre-release hooks
+    cargo release {{TYPE}} --no-verify --no-confirm --execute
+
+# Dry-run release to see what would happen
+release-dry-run:
+    cargo release patch --no-verify --no-confirm
 
 # Show next version (patch, minor, or major)
 next-patch:
@@ -330,7 +343,9 @@ help:
     @echo "  next-patch      - Show next patch version"
     @echo "  next-minor      - Show next minor version"
     @echo "  next-major      - Show next major version"
-    @echo "  release [type]  - Create release (patch|minor|major)"
+    @echo "  release-cargo   - Release using cargo-release (recommended)"
+    @echo "  release-dry-run - Dry-run cargo-release"
+    @echo "  release [type]  - Legacy manual release"
     @echo "  release-notes   - Generate release notes template"
     @echo "  release-local   - Local dry-run build"
     @echo ""

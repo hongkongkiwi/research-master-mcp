@@ -220,6 +220,11 @@ assets = [
 name = "research_master_mcp"
 path = "src/lib.rs"
 
+# Configure cargo-release (https://github.com/crate-ci/cargo-release)
+# We handle publishing via GitHub Actions, not cargo-release
+[package.metadata.release]
+skip = ["publish"]
+
 # Examples
 [[example]]
 name = "basic_usage"
