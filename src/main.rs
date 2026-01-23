@@ -219,8 +219,8 @@ enum Commands {
         source: Source,
 
         /// Path where to save the PDF
-        #[arg(long, short)]
-        output: Option<PathBuf>,
+        #[arg(long)]
+        output_path: Option<PathBuf>,
 
         /// Auto-generate filename from paper title
         #[arg(long)]
@@ -664,13 +664,13 @@ async fn main() -> Result<()> {
         Some(Commands::Download {
             paper_id,
             source,
-            output,
+            output_path,
             auto_filename: _,
             create_dir,
             doi,
         }) => {
             let src = get_source(&registry, source)?;
-            let save_path = output.unwrap_or_else(|| PathBuf::from("."));
+            let save_path = output_path.unwrap_or_else(|| PathBuf::from("."));
 
             if create_dir {
                 if let Some(parent) = save_path.parent() {
@@ -1270,9 +1270,21 @@ mod tests {
 
     #[test]
     fn test_cli_download_command() {
-        // Source is required for download command
         let cli = Cli::parse_from(["research-master-mcp", "download", "2301.12345", "--source", "arxiv"]);
-        assert!(matches!(cli.command, Some(Commands::Download { .. })));
+        match &cli.command {
+            Some(Commands::Download {
+                paper_id,
+                source,
+                output_path: _,
+                auto_filename: _,
+                create_dir: _,
+                doi: _,
+            }) => {
+                assert_eq!(paper_id, "2301.12345");
+                assert_eq!(*source, Source::Arxiv);
+            }
+            _ => panic!("Expected Download command"),
+        }
     }
 
     #[test]

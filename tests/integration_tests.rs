@@ -21,8 +21,8 @@ async fn test_all_sources_registered() {
     let registry = SourceRegistry::new();
     let sources: Vec<_> = registry.all().collect();
 
-    // Should have 27 sources with all features (26 default + google_scholar)
-    assert_eq!(sources.len(), 27);
+    // Should have 28 sources with all features
+    assert_eq!(sources.len(), 28);
 
     // Check each source exists
     let source_ids: Vec<&str> = sources.iter().map(|s| s.id()).collect();
@@ -35,9 +35,11 @@ async fn test_all_sources_registered() {
     assert!(source_ids.contains(&"iacr"));
     assert!(source_ids.contains(&"pmc"));
     assert!(source_ids.contains(&"hal"));
+    assert!(source_ids.contains(&"dblp"));
     assert!(source_ids.contains(&"ssrn"));
     assert!(source_ids.contains(&"dimensions"));
     assert!(source_ids.contains(&"ieee_xplore"));
+    assert!(source_ids.contains(&"europe_pmc"));
     assert!(source_ids.contains(&"core"));
     assert!(source_ids.contains(&"zenodo"));
     assert!(source_ids.contains(&"unpaywall"));
@@ -150,8 +152,8 @@ async fn test_registry_helper_methods() {
     assert!(registry.has("arxiv"));
     assert!(!registry.has("nonexistent"));
 
-    // Test len() method - should be 27 with all features
-    assert_eq!(registry.len(), 27);
+    // Test len() method - should be 28 with all features
+    assert_eq!(registry.len(), 28);
 
     // Test is_empty() method
     assert!(!registry.is_empty());
@@ -245,7 +247,7 @@ async fn test_registry_ids() {
     let registry = SourceRegistry::new();
     let ids: Vec<&str> = registry.ids().collect();
 
-    assert_eq!(ids.len(), 27);
+    assert_eq!(ids.len(), 28);
     assert!(ids.contains(&"arxiv"));
     assert!(ids.contains(&"pubmed"));
     assert!(ids.contains(&"semantic"));

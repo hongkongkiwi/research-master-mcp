@@ -290,7 +290,7 @@ impl Source for SsrnSource {
 
         let pdf_path = std::path::Path::new(&download_result.path);
         match crate::utils::extract_text(pdf_path) {
-            Ok(text) => {
+            Ok((text, _method)) => {
                 let pages = (text.len() / 3000).max(1);
                 Ok(ReadResult::success(text).pages(pages))
             }

@@ -50,7 +50,10 @@ mod retry;
 pub use cache::{CacheResult, CacheService, CacheStats};
 pub use dedup::{deduplicate_papers, find_duplicates, DuplicateStrategy};
 pub use http::{HttpClient, RateLimitedRequestBuilder};
-pub use pdf::{extract_text, is_available, PdfExtractError};
+pub use pdf::{
+    extract_text, extract_text_simple, get_extraction_info, has_poppler, has_tesseract,
+    ExtractionInfo, ExtractionMethod, PdfExtractError,
+};
 pub use retry::{
     api_retry_config, strict_rate_limit_retry_config, with_retry, with_retry_detailed, RetryConfig,
     RetryResult, TransientError,
