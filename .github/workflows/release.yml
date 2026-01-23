@@ -19,8 +19,6 @@ jobs:
     name: Plan Release
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
-    outputs:
-      val: ${{ steps.plan.outputs }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -35,7 +33,6 @@ jobs:
 
       - name: Plan release
         run: cargo dist plan
-        id: plan
 
   # Build binary releases using cargo-dist
   build-binaries:
