@@ -35,6 +35,9 @@ bitflags = "2.6"
 reqwest = { version = "0.12", features = ["json", "socks"] }
 http = "1.1"
 
+# OpenSSL for static builds (musl/Alpine)
+openssl = { version = "0.10", features = ["vendored"] }
+
 # XML parsing
 quick-xml = { version = "0.37", features = ["serialize"] }
 
@@ -198,6 +201,7 @@ pre-push = ["cargo clippy", "cargo audit"]
 # RPM package configuration
 [package.metadata.rpm]
 package = "research-master-mcp"
+targets = ["x86_64-unknown-linux-gnu"]
 assets = [
     { path = "target/x86_64-unknown-linux-gnu/release/research-master-mcp", dest = "usr/bin/research-master-mcp" }
 ]

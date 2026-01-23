@@ -1,14 +1,14 @@
 # Build stage
 FROM rust:1-alpine AS builder
 
-ARG CARGO_BUILD_TARGET=x86_64-unknown-linux-gnu
+ARG CARGO_BUILD_TARGET=x86_64-unknown-linux-musl
 
 WORKDIR /build
 
 # Install dependencies for building
-RUN apk add --no-cache musl-dev openssl-dev
+RUN apk add --no-cache musl-dev openssl-dev clang libclang
 
-# Add cross-compilation target for glibc builds
+# Add cross-compilation target for musl builds
 RUN rustup target add ${CARGO_BUILD_TARGET}
 
 # Copy source and build
