@@ -6,7 +6,7 @@ ARG CARGO_BUILD_TARGET=x86_64-unknown-linux-musl
 WORKDIR /build
 
 # Install dependencies for building
-RUN apk add --no-cache musl-dev openssl-dev clang libclang
+RUN apk add --no-cache musl-dev openssl-dev clang
 
 # Add cross-compilation target for musl builds
 RUN rustup target add ${CARGO_BUILD_TARGET}
