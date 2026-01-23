@@ -395,6 +395,7 @@ mod tests {
         assert!(filter.is_enabled("ARXIV")); // Case insensitive - ARXIV should be enabled
 
         std::env::remove_var("RESEARCH_MASTER_ENABLED_SOURCES");
+        std::env::remove_var("RESEARCH_MASTER_DISABLED_SOURCES");
     }
 
     #[test]
@@ -411,6 +412,7 @@ mod tests {
         assert!(!filter.is_enabled("jstor"));
         assert!(!filter.is_enabled("DBLP")); // Case insensitive
 
+        std::env::remove_var("RESEARCH_MASTER_ENABLED_SOURCES");
         std::env::remove_var("RESEARCH_MASTER_DISABLED_SOURCES");
     }
 
@@ -446,6 +448,9 @@ mod tests {
         assert!(filter.is_enabled("pubmed"));
         assert!(filter.is_enabled("semantic"));
         assert!(filter.is_enabled("dblp"));
+
+        std::env::remove_var("RESEARCH_MASTER_ENABLED_SOURCES");
+        std::env::remove_var("RESEARCH_MASTER_DISABLED_SOURCES");
     }
 
     #[test]
