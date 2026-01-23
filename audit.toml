@@ -1,0 +1,7 @@
+[advisories]
+# Ignore unmaintained/transitive dependencies that we don't control
+ignore = [
+    "RUSTSEC-2025-0057", # fxhash - transitive via scraper (HTML parsing)
+    "RUSTSEC-2025-0067", # libyml - transitive via cargo-dist (dev-only)
+    "RUSTSEC-2025-0068", # serde_yml - transitive via cargo-dist (dev-only)
+]

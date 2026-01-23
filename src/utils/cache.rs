@@ -105,10 +105,7 @@ impl CacheService {
         if self.config.enabled {
             fs::create_dir_all(&self.search_dir)?;
             fs::create_dir_all(&self.citation_dir)?;
-            tracing::info!(
-                "Cache initialized at: {}",
-                self.base_dir.display()
-            );
+            tracing::info!("Cache initialized at: {}", self.base_dir.display());
         } else {
             tracing::debug!("Cache is disabled");
         }
@@ -166,11 +163,7 @@ impl CacheService {
     }
 
     /// Read a cached search response
-    pub fn get_search(
-        &self,
-        query: &SearchQuery,
-        source: &str,
-    ) -> CacheResult<SearchResponse> {
+    pub fn get_search(&self, query: &SearchQuery, source: &str) -> CacheResult<SearchResponse> {
         if !self.is_enabled() {
             return CacheResult::Miss;
         }
@@ -275,12 +268,7 @@ impl CacheService {
     }
 
     /// Cache a citation lookup response
-    pub fn set_citations(
-        &self,
-        source: &str,
-        paper_id: &str,
-        response: &SearchResponse,
-    ) {
+    pub fn set_citations(&self, source: &str, paper_id: &str, response: &SearchResponse) {
         if !self.is_enabled() {
             return;
         }
@@ -318,17 +306,12 @@ impl CacheService {
         path: &Path,
     ) -> Result<T, std::io::Error> {
         let content = fs::read_to_string(path)?;
-        serde_json::from_str(&content).map_err(|e| {
-            std::io::Error::new(std::io::ErrorKind::InvalidData, e.to_string())
-        })
+        serde_json::from_str(&content)
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e.to_string()))
     }
 
     /// Serialize and write a cached file
-    fn write_cache_file<T: Serialize>(
-        &self,
-        path: &Path,
-        data: &T,
-    ) -> Result<(), std::io::Error> {
+    fn write_cache_file<T: Serialize>(&self, path: &Path, data: &T) -> Result<(), std::io::Error> {
         let content = serde_json::to_string_pretty(data)?;
         fs::write(path, content)
     }
@@ -376,11 +359,7 @@ impl CacheService {
         }
 
         let search_count = self.search_dir.read_dir().map(|e| e.count()).unwrap_or(0);
-        let citation_count = self
-            .citation_dir
-            .read_dir()
-            .map(|e| e.count())
-            .unwrap_or(0);
+        let citation_count = self.citation_dir.read_dir().map(|e| e.count()).unwrap_or(0);
 
         let search_size = self
             .dir_size(&self.search_dir)
@@ -499,11 +478,8 @@ mod tests {
         let cache = CacheService::from_config(config);
         cache.initialize().unwrap();
 
-        let response = SearchResponse::new(
-            vec![],
-            "test_source".to_string(),
-            "test query".to_string(),
-        );
+        let response =
+            SearchResponse::new(vec![], "test_source".to_string(), "test query".to_string());
 
         // Create a query to use for both setting and getting cache
         let query = SearchQuery::new("test query");
@@ -541,11 +517,8 @@ mod tests {
 
         let cache = CacheService::from_config(config);
 
-        let response = SearchResponse::new(
-            vec![],
-            "test_source".to_string(),
-            "test query".to_string(),
-        );
+        let response =
+            SearchResponse::new(vec![], "test_source".to_string(), "test query".to_string());
 
         let query = SearchQuery::new("test query");
 
@@ -572,11 +545,8 @@ mod tests {
         let cache = CacheService::from_config(config);
         cache.initialize().unwrap();
 
-        let response = SearchResponse::new(
-            vec![],
-            "test_source".to_string(),
-            "test query".to_string(),
-        );
+        let response =
+            SearchResponse::new(vec![], "test_source".to_string(), "test query".to_string());
 
         let query = SearchQuery::new("test query");
 

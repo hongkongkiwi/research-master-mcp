@@ -70,7 +70,7 @@ strsim = "0.11"
 clap = { version = "4.5", features = ["derive"] }
 
 # Terminal output formatting
-atty = "0.2"
+is-terminal = "0.4"
 comfy-table = "7.1"
 
 # PDF extraction (optional, for future use)

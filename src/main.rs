@@ -6,7 +6,10 @@ use research_master_mcp::models::{
     CitationRequest, DownloadRequest, ReadRequest, SearchQuery, SortBy, SortOrder,
 };
 use research_master_mcp::sources::{SourceCapabilities, SourceRegistry};
-use research_master_mcp::utils::{deduplicate_papers, find_duplicates, CacheService, DuplicateStrategy};
+use research_master_mcp::utils::{
+    deduplicate_papers, find_duplicates, CacheService, DuplicateStrategy,
+};
+use std::io::IsTerminal;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
@@ -426,7 +429,9 @@ fn print_env_vars() {
     println!("  RESEARCH_MASTER_RATE_LIMITS_MAX_CONCURRENT_REQUESTS     Max concurrent requests (default: 10)");
     println!();
     println!("Cache Settings:");
-    println!("  RESEARCH_MASTER_CACHE_ENABLED                Enable local caching (default: disabled)");
+    println!(
+        "  RESEARCH_MASTER_CACHE_ENABLED                Enable local caching (default: disabled)"
+    );
     println!("  RESEARCH_MASTER_CACHE_DIRECTORY              Custom cache directory");
     println!("  RESEARCH_MASTER_CACHE_SEARCH_TTL_SECONDS     TTL for search results (default: 1800 = 30 min)");
     println!("  RESEARCH_MASTER_CACHE_CITATION_TTL_SECONDS   TTL for citation results (default: 900 = 15 min)");
@@ -536,14 +541,21 @@ async fn main() -> Result<()> {
                     match cache_service.get_search(&search_query, source_id) {
                         research_master_mcp::utils::CacheResult::Hit(response) => {
                             if !cli.quiet {
-                                eprintln!("[CACHE HIT] Found {} papers from {}", response.papers.len(), source_id);
+                                eprintln!(
+                                    "[CACHE HIT] Found {} papers from {}",
+                                    response.papers.len(),
+                                    source_id
+                                );
                             }
                             all_papers.extend(response.papers);
                             continue;
                         }
                         research_master_mcp::utils::CacheResult::Expired => {
                             if !cli.quiet {
-                                eprintln!("[CACHE EXPIRED] Fetching fresh results from {}", source_id);
+                                eprintln!(
+                                    "[CACHE EXPIRED] Fetching fresh results from {}",
+                                    source_id
+                                );
                             }
                         }
                         research_master_mcp::utils::CacheResult::Miss => {
@@ -860,8 +872,14 @@ async fn main() -> Result<()> {
                     } else {
                         println!("Cache: enabled");
                         println!("Directory: {}", stats.cache_dir.display());
-                        println!("Search cache: {} items ({} KB)", stats.search_count, stats.search_size_kb);
-                        println!("Citation cache: {} items ({} KB)", stats.citation_count, stats.citation_size_kb);
+                        println!(
+                            "Search cache: {} items ({} KB)",
+                            stats.search_count, stats.search_size_kb
+                        );
+                        println!(
+                            "Citation cache: {} items ({} KB)",
+                            stats.citation_count, stats.citation_size_kb
+                        );
                         println!("Total size: {} KB", stats.total_size_kb);
                         println!("Search TTL: {} seconds", stats.ttl_search.as_secs());
                         println!("Citation TTL: {} seconds", stats.ttl_citations.as_secs());
@@ -958,7 +976,7 @@ fn source_to_id(source: Source) -> &'static str {
 
 fn output_papers(papers: &[research_master_mcp::models::Paper], format: OutputFormat) {
     let actual_format = if format == OutputFormat::Auto {
-        if atty::is(atty::Stream::Stdout) {
+        if std::io::stdout().is_terminal() {
             OutputFormat::Table
         } else {
             OutputFormat::Json

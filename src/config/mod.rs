@@ -77,9 +77,7 @@ pub fn default_cache_dir() -> PathBuf {
     #[cfg(target_os = "windows")]
     {
         if let Ok(appdata) = std::env::var("LOCALAPPDATA") {
-            return PathBuf::from(appdata)
-                .join("research-master")
-                .join("cache");
+            return PathBuf::from(appdata).join("research-master").join("cache");
         }
     }
 
