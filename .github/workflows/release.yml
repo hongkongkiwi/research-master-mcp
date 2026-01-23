@@ -198,9 +198,21 @@ jobs:
 
   # Build platform-specific packages
   build-deb:
-    name: Build Debian Package
+    name: Build Debian Package (${{ matrix.arch }})
     needs: release
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            deb_arch: amd64
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-gnu
+            deb_arch: arm64
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -208,7 +220,7 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: x86_64-unknown-linux-gnu
+          targets: ${{ matrix.target }}
 
       - name: Cache Rust build artifacts
         uses: Swatinem/rust-cache@v2
@@ -221,18 +233,30 @@ jobs:
           tool: cargo-deb
 
       - name: Build .deb package
-        run: cargo deb --target x86_64-unknown-linux-gnu
+        run: cargo deb --target ${{ matrix.target }}
 
       - name: Upload .deb package
         uses: actions/upload-artifact@v4
         with:
-          name: research-master-mcp.deb
-          path: target/deb/research-master-mcp_*_amd64.deb
+          name: research-master-mcp.deb-${{ matrix.arch }}
+          path: target/deb/research-master-mcp_*_${{ matrix.deb_arch }}.deb
 
   build-rpm:
-    name: Build RedHat Package
+    name: Build RedHat Package (${{ matrix.arch }})
     needs: release
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            rpm_arch: x86_64
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-gnu
+            rpm_arch: aarch64
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -240,7 +264,7 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: x86_64-unknown-linux-gnu
+          targets: ${{ matrix.target }}
 
       - name: Cache Rust build artifacts
         uses: Swatinem/rust-cache@v2
@@ -253,18 +277,30 @@ jobs:
           tool: cargo-rpm
 
       - name: Build .rpm package
-        run: cargo rpm build --target x86_64-unknown-linux-gnu
+        run: cargo rpm build --target ${{ matrix.target }}
 
       - name: Upload .rpm package
         uses: actions/upload-artifact@v4
         with:
-          name: research-master-mcp.rpm
-          path: target/rpm/RPMS/x86_64/*.rpm
+          name: research-master-mcp.rpm-${{ matrix.arch }}
+          path: target/rpm/RPMS/${{ matrix.rpm_arch }}/*.rpm
 
   build-apk:
-    name: Build Alpine Package
+    name: Build Alpine Package (${{ matrix.arch }})
     needs: release
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-latest
+            target: x86_64-unknown-linux-musl
+            apk_arch: x86_64
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-musl
+            apk_arch: aarch64
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -272,23 +308,29 @@ jobs:
       - name: Install Rust and musl-tools
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: x86_64-unknown-linux-musl
+          targets: ${{ matrix.target }}
 
       - name: Cache Rust build artifacts
         uses: Swatinem/rust-cache@v2
         with:
           shared-key: ${{ runner.os }}-${{ hashFiles('**/Cargo.lock') }}-${{ hashFiles('rust-toolchain*') }}
 
-      - name: Install musl cross-compiler
-        run: sudo apt-get update && sudo apt-get install -y musl-tools gcc-multilib
+      - name: Install musl tools
+        run: |
+          sudo apt-get update
+          if [ "${{ matrix.arch }}" = "amd64" ]; then
+            sudo apt-get install -y musl-tools gcc-multilib
+          else
+            sudo apt-get install -y musl-tools
+          fi
 
       - name: Build static binary
-        run: cargo build --release --target x86_64-unknown-linux-musl
+        run: cargo build --release --target ${{ matrix.target }}
 
       - name: Create Alpine package structure
         run: |
           mkdir -p apk-build/usr/bin
-          cp target/x86_64-unknown-linux-musl/release/research-master-mcp apk-build/usr/bin/
+          cp target/${{ matrix.target }}/release/research-master-mcp apk-build/usr/bin/
 
       - name: Create APKBUILD
         run: |
@@ -300,7 +342,7 @@ jobs:
           pkgrel=0
           pkgdesc="Model Context Protocol server for academic research sources"
           url="https://github.com/hongkongkiwi/research-master-mcp"
-          arch="x86_64"
+          arch="${{ matrix.apk_arch }}"
           license="MIT"
           depends=""
           subpackages=""
@@ -320,7 +362,7 @@ jobs:
       - name: Upload Alpine package
         uses: actions/upload-artifact@v4
         with:
-          name: research-master-mcp.apk
+          name: research-master-mcp.apk-${{ matrix.arch }}
           path: apk-build/
 
   # Create release with all platform packages
