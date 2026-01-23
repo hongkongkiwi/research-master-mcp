@@ -50,6 +50,11 @@ jobs:
         with:
           targets: ${{ matrix.target }}
 
+      - name: Cache Rust build artifacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: ${{ runner.os }}-${{ hashFiles('**/Cargo.lock') }}-${{ hashFiles('rust-toolchain*') }}
+
       - name: Build release binary
         run: cargo build --release --target ${{ matrix.target }}
 
@@ -129,6 +134,14 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust build artifacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: ${{ runner.os }}-${{ hashFiles('**/Cargo.lock') }}-${{ hashFiles('rust-toolchain*') }}
+
       - name: Publish to crates.io
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
@@ -150,6 +163,11 @@ jobs:
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
+
+      - name: Set up QEMU for multi-arch builds
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: amd64,arm64
 
       - name: Log in to GitHub Container Registry
         uses: docker/login-action@v3
@@ -175,6 +193,8 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           platforms: linux/amd64,linux/arm64
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
   # Build platform-specific packages
   build-deb:
@@ -190,11 +210,15 @@ jobs:
         with:
           targets: x86_64-unknown-linux-gnu
 
+      - name: Cache Rust build artifacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: ${{ runner.os }}-${{ hashFiles('**/Cargo.lock') }}-${{ hashFiles('rust-toolchain*') }}
+
       - name: Install cargo-deb
-        run: |
-          if [ ! -f ~/.cargo/bin/cargo-deb ]; then
-            cargo install cargo-deb
-          fi
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-deb
 
       - name: Build .deb package
         run: cargo deb --target x86_64-unknown-linux-gnu
@@ -218,11 +242,15 @@ jobs:
         with:
           targets: x86_64-unknown-linux-gnu
 
+      - name: Cache Rust build artifacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: ${{ runner.os }}-${{ hashFiles('**/Cargo.lock') }}-${{ hashFiles('rust-toolchain*') }}
+
       - name: Install cargo-rpm
-        run: |
-          if [ ! -f ~/.cargo/bin/cargo-rpm ]; then
-            cargo install cargo-rpm
-          fi
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-rpm
 
       - name: Build .rpm package
         run: cargo rpm build --target x86_64-unknown-linux-gnu
@@ -245,6 +273,11 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
         with:
           targets: x86_64-unknown-linux-musl
+
+      - name: Cache Rust build artifacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: ${{ runner.os }}-${{ hashFiles('**/Cargo.lock') }}-${{ hashFiles('rust-toolchain*') }}
 
       - name: Install musl cross-compiler
         run: sudo apt-get update && sudo apt-get install -y musl-tools gcc-multilib
