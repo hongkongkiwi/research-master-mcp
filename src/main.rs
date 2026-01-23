@@ -1148,6 +1148,7 @@ async fn main() -> Result<()> {
                     let _ = std::fs::create_dir_all(&temp_dir);
 
                     // Download and extract
+                    #[allow(clippy::needless_borrow)]
                     match download_and_extract_asset(&asset, &temp_dir).await {
                         Ok(archive_path) => {
                             // Fetch expected SHA256 checksum
