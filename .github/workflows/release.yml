@@ -32,6 +32,9 @@ jobs:
           # Linux x86_64 (glibc)
           - os: ubuntu-24.04
             target: x86_64-unknown-linux-gnu
+          # Linux arm64 (glibc)
+          - os: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-gnu
           # macOS Intel
           - os: macos-14
             target: x86_64-apple-darwin
@@ -155,11 +158,32 @@ jobs:
   # Publish to GitHub Packages (Docker images)
   publish-docker:
     name: Publish Docker Image (Multi-Arch)
-    needs: release
+    needs:
+      - release
+      - build-apk
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Download Linux musl binaries (amd64)
+        uses: actions/download-artifact@v4
+        with:
+          name: binary-x86_64-unknown-linux-musl
+          path: docker-bin/amd64
+
+      - name: Download Linux musl binaries (arm64)
+        uses: actions/download-artifact@v4
+        with:
+          name: binary-aarch64-unknown-linux-musl
+          path: docker-bin/arm64
+
+      - name: Prepare Docker binaries
+        run: |
+          mkdir -p docker-bin
+          mv docker-bin/amd64/research-master-mcp docker-bin/research-master-mcp-amd64
+          mv docker-bin/arm64/research-master-mcp docker-bin/research-master-mcp-arm64
+          chmod +x docker-bin/research-master-mcp-amd64 docker-bin/research-master-mcp-arm64
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -217,6 +241,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Download release binary
+        uses: actions/download-artifact@v4
+        with:
+          name: binary-${{ matrix.target }}
+          path: target/${{ matrix.target }}/release
+
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
@@ -233,13 +263,13 @@ jobs:
           tool: cargo-deb
 
       - name: Build .deb package
-        run: cargo deb --target ${{ matrix.target }}
+        run: cargo deb --target ${{ matrix.target }} --no-build
 
       - name: Upload .deb package
         uses: actions/upload-artifact@v4
         with:
           name: research-master-mcp.deb-${{ matrix.arch }}
-          path: target/deb/research-master-mcp_*_${{ matrix.deb_arch }}.deb
+          path: target/${{ matrix.target }}/debian/*_${{ matrix.deb_arch }}.deb
 
   build-rpm:
     name: Build RedHat Package (${{ matrix.arch }})
@@ -261,6 +291,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Download release binary
+        uses: actions/download-artifact@v4
+        with:
+          name: binary-${{ matrix.target }}
+          path: target/${{ matrix.target }}/release
+
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
@@ -276,8 +312,11 @@ jobs:
         with:
           tool: cargo-rpm
 
+      - name: Install rpm build tools
+        run: sudo apt-get update && sudo apt-get install -y rpm
+
       - name: Build .rpm package
-        run: cargo rpm build --target ${{ matrix.target }}
+        run: cargo rpm build --target ${{ matrix.target }} --no-build
 
       - name: Upload .rpm package
         uses: actions/upload-artifact@v4
@@ -331,6 +370,13 @@ jobs:
         run: |
           mkdir -p apk-build/usr/bin
           cp target/${{ matrix.target }}/release/research-master-mcp apk-build/usr/bin/
+
+      - name: Upload Linux musl binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: binary-${{ matrix.target }}
+          path: target/${{ matrix.target }}/release/research-master-mcp
+          retention-days: 5
 
       - name: Create APKBUILD
         run: |
