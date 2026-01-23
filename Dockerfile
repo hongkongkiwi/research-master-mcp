@@ -1,19 +1,17 @@
 # Build stage
 FROM rust:1-alpine AS builder
 
-ARG CARGO_BUILD_TARGET=x86_64-unknown-linux-musl
-
 WORKDIR /build
 
-# Install dependencies for building
-RUN apk add --no-cache musl-dev openssl-dev clang
+# Install dependencies for building (perl needed for OpenSSL)
+RUN apk add --no-cache musl-dev openssl-dev clang perl
 
 # Add cross-compilation target for musl builds
-RUN rustup target add ${CARGO_BUILD_TARGET}
+RUN rustup target add x86_64-unknown-linux-musl
 
 # Copy source and build
 COPY . .
-RUN cargo build --release --target ${CARGO_BUILD_TARGET}
+RUN cargo build --release --target x86_64-unknown-linux-musl
 
 # Runtime stage
 FROM alpine:3.19 AS runtime
@@ -26,7 +24,7 @@ RUN addgroup -g 1000 appgroup && \
     adduser -u 1000 -G appgroup -s /bin/sh -D appuser
 
 # Copy binary from builder
-COPY --from=builder /build/target/${CARGO_BUILD_TARGET}/release/research-master-mcp /usr/local/bin/
+COPY --from=builder /build/target/x86_64-unknown-linux-musl/release/research-master-mcp /usr/local/bin/
 
 # Create downloads directory
 RUN mkdir /downloads && chown appuser:appgroup /downloads
