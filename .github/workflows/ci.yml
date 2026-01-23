@@ -102,13 +102,12 @@ jobs:
   security:
     name: Security Audit
     runs-on: ubuntu-latest
-    permissions:
-      security-events: write
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Install cargo-audit
+        uses: taiki-e/install-action@cargo-audit
+
       - name: Run cargo audit
-        uses: rustsec/audit-check@v1
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+        run: cargo audit
