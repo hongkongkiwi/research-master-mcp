@@ -230,7 +230,7 @@ pub fn load_config(path: &Path) -> Result<Config, config::ConfigError> {
     settings.try_deserialize()
 }
 
-/// Get the default configuration (from env vars or defaults)
+/// Get the configuration (from env vars or defaults)
 pub fn get_config() -> Config {
     Config::default()
 }

@@ -54,7 +54,7 @@
 //! # async fn main() -> Result<(), Box<dyn std::error::Error>> {
 //! let config = RetryConfig::default().max_retries(3);
 //! let result = with_retry(config, || async {
-//!     fetch_data().await.map_err(|e| TransientError::new(e))
+//!     fetch_data().await.map_err(|e| TransientError::from_reqwest_error(&e).unwrap_or(TransientError::Network))
 //! }).await?;
 //! # Ok(())
 //! # }

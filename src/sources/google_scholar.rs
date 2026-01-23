@@ -9,7 +9,6 @@
 //! This source is primarily intended for research/educational purposes.
 
 use async_trait::async_trait;
-use serde::Deserialize;
 use std::sync::Arc;
 
 use crate::models::{Paper, PaperBuilder, SearchQuery, SearchResponse, SourceType};
@@ -130,8 +129,9 @@ impl Source for GoogleScholarSource {
         .await?;
 
         let papers = self.parse_results(&response, &query.query)?;
+        let papers_len = papers.len();
         let mut search_response = SearchResponse::new(papers, "Google Scholar", &query.query);
-        search_response.total_results = Some(papers.len());
+        search_response.total_results = Some(papers_len);
         Ok(search_response)
     }
 
@@ -190,7 +190,7 @@ impl Source for GoogleScholarSource {
 }
 
 impl GoogleScholarSource {
-    fn parse_results(&self, html: &str, _query: &str) -> Result<Vec<Paper>, SourceError> {
+    fn parse_results(&self, _html: &str, _query: &str) -> Result<Vec<Paper>, SourceError> {
         // Simple parsing - in practice, you'd want more robust HTML parsing
         // Google Scholar's HTML structure is complex and changes frequently
 

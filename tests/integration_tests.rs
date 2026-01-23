@@ -21,8 +21,8 @@ async fn test_all_sources_registered() {
     let registry = SourceRegistry::new();
     let sources: Vec<_> = registry.all().collect();
 
-    // Should have 11 sources
-    assert_eq!(sources.len(), 11);
+    // Should have 27 sources with all features (26 default + google_scholar)
+    assert_eq!(sources.len(), 27);
 
     // Check each source exists
     let source_ids: Vec<&str> = sources.iter().map(|s| s.id()).collect();
@@ -36,6 +36,22 @@ async fn test_all_sources_registered() {
     assert!(source_ids.contains(&"pmc"));
     assert!(source_ids.contains(&"hal"));
     assert!(source_ids.contains(&"ssrn"));
+    assert!(source_ids.contains(&"dimensions"));
+    assert!(source_ids.contains(&"ieee_xplore"));
+    assert!(source_ids.contains(&"core"));
+    assert!(source_ids.contains(&"zenodo"));
+    assert!(source_ids.contains(&"unpaywall"));
+    assert!(source_ids.contains(&"mdpi"));
+    assert!(source_ids.contains(&"jstor"));
+    assert!(source_ids.contains(&"scispace"));
+    assert!(source_ids.contains(&"acm"));
+    assert!(source_ids.contains(&"connected_papers"));
+    assert!(source_ids.contains(&"doaj"));
+    assert!(source_ids.contains(&"worldwidescience"));
+    assert!(source_ids.contains(&"osf"));
+    assert!(source_ids.contains(&"base"));
+    assert!(source_ids.contains(&"springer"));
+    assert!(source_ids.contains(&"google_scholar"));
 }
 
 /// Test source capabilities are properly reported
@@ -134,8 +150,8 @@ async fn test_registry_helper_methods() {
     assert!(registry.has("arxiv"));
     assert!(!registry.has("nonexistent"));
 
-    // Test len() method
-    assert_eq!(registry.len(), 11);
+    // Test len() method - should be 27 with all features
+    assert_eq!(registry.len(), 27);
 
     // Test is_empty() method
     assert!(!registry.is_empty());
@@ -229,7 +245,8 @@ async fn test_registry_ids() {
     let registry = SourceRegistry::new();
     let ids: Vec<&str> = registry.ids().collect();
 
-    assert_eq!(ids.len(), 11);
+    assert_eq!(ids.len(), 27);
     assert!(ids.contains(&"arxiv"));
     assert!(ids.contains(&"pubmed"));
+    assert!(ids.contains(&"semantic"));
 }

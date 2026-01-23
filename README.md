@@ -15,6 +15,7 @@ A Model Context Protocol (MCP) server for searching and downloading academic pap
 - [Installation](#installation)
 - [Usage](#usage)
 - [Claude Desktop Integration](#claude-desktop-integration)
+- [MCP Client Integration](#mcp-client-integration)
 - [Development](#development)
 - [Configuration](#configuration)
 - [Contributing](#contributing)
@@ -63,6 +64,177 @@ Search across **26 academic research sources** simultaneously:
 | [Google Scholar](https://scholar.google.com) | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
 
 *PDF text extraction requires poppler/libpoppler to be installed on your system.
+
+## Source Pricing and API Requirements
+
+Understanding which sources are free, which require API keys, and their access limitations is essential for effective research. Below is a comprehensive breakdown of all 26 supported research sources.
+
+### Source Comparison Table
+
+| Source | Pricing | API Key Required | Free Tier | Rate Limits (no key) | Notes |
+|--------|---------|------------------|-----------|----------------------|-------|
+| [arXiv](https://arxiv.org) | Free | No | Unlimited | 1 request/sec | Open access preprints |
+| [Semantic Scholar](https://semanticscholar.org) | Freemium | Optional | Yes | 1 request/sec | 100 papers/day free; API key increases limits |
+| [OpenAlex](https://openalex.org) | Free | Optional | Unlimited | 10 requests/sec | Email recommended for polite pool |
+| [PubMed](https://pubmed.ncbi.nlm.nih.gov) | Free | No | Unlimited | 3 requests/sec | NIH funded, no API key needed |
+| [PMC](https://www.ncbi.nlm.nih.gov/pmc) | Free | No | Unlimited | 3 requests/sec | Full-text biomedical literature |
+| [bioRxiv](https://biorxiv.org) | Free | No | Unlimited | 1 request/sec | Biology preprints |
+| [HAL](https://hal.science) | Free | No | Unlimited | 1 request/sec | French open access repository |
+| [DBLP](https://dblp.org) | Free | No | Unlimited | 1 request/sec | Computer science bibliography only |
+| [CrossRef](https://www.crossref.org) | Free | No | Unlimited | 1 request/sec | DOI lookup only, no full search |
+| [IACR ePrint](https://eprint.iacr.org) | Free | No | Unlimited | 1 request/sec | Cryptology research only |
+| [SSRN](https://www.ssrn.com) | Free | No | Limited | 1 request/sec | Social sciences preprints |
+| [CORE](https://core.ac.uk) | Freemium | Optional | Yes | 1 request/sec | Aggregates open access papers |
+| [Dimensions](https://app.dimensions.ai) | Free | No | Unlimited | 1 request/sec | Research metrics and discovery |
+| [IEEE Xplore](https://ieeexplore.ieee.org) | Paid | Required* | Yes | 3 requests/sec | Free API key from developer.ieee.org |
+| [Zenodo](https://zenodo.org) | Free | No | Unlimited | 1 request/sec | CERN-hosted open science repository |
+| [Unpaywall](https://unpaywall.org) | Free | No | Unlimited | 1 request/sec | Find open access versions of papers |
+| [MDPI](https://mdpi.com) | Free | No | Unlimited | 1 request/sec | Open access publisher |
+| [JSTOR](https://www.jstor.org) | Paid | Required* | Limited | 1 request/sec | Historical journals, requires institutional access |
+| [SciSpace](https://scispace.net) | Freemium | Optional | Yes | 1 request/sec | Research discovery platform |
+| [ACM DL](https://dl.acm.org) | Paid | Required* | Limited | 3 requests/sec | Computer science, free API key available |
+| [Connected Papers](https://www.connectedpapers.com) | Free | No | Unlimited | 1 request/sec | Related paper discovery |
+| [DOAJ](https://doaj.org) | Free | No | Unlimited | 1 request/sec | Quality open access journals |
+| [WorldWideScience](https://www.worldwidescience.org) | Free | No | Unlimited | 1 request/sec | Global science gateway |
+| [OSF Preprints](https://osf.io/preprints) | Free | No | Unlimited | 1 request/sec | Open Science Framework |
+| [BASE](https://www.base-search.net) | Free | No | Unlimited | 1 request/sec | Bielefeld Academic Search Engine |
+| [Springer](https://link.springer.com) | Paid | Required* | Limited | 1 request/sec | Academic publisher, some open access |
+| [Google Scholar](https://scholar.google.com) | Free | No | Limited | 1 request/sec | Disabled by default, scraping-based |
+
+*Requires API key for full access. Free API keys are available but have rate limits.
+
+### Detailed Source Information
+
+#### Completely Free Sources (No API Key Needed)
+
+The following sources are completely free to use without any API key requirements. They are funded by academic institutions, governments, or operate as open access repositories.
+
+**arXiv** is the premier open access preprint repository for physics, mathematics, computer science, and related fields. Operated by Cornell University, it provides unlimited access to millions of preprints without any API key or registration requirements.
+
+**PubMed** and **PMC** are NIH-funded databases providing free access to biomedical and life sciences literature. PubMed contains abstracts and citations, while PMC provides full-text articles. Both are completely free and require no API key.
+
+**OpenAlex** is an open infrastructure funded by various academic organizations, providing a comprehensive catalog of scholarly papers, authors, institutions, and more. While completely free, providing an email address via `OPENALEX_EMAIL` gives access to the "polite pool" with better rate limits.
+
+**HAL** is France's national open access repository, providing free access to academic papers from French institutions. It requires no API key and offers unlimited queries.
+
+**DBLP** specializes in computer science bibliography, providing free access to citations for conference proceedings, journals, and books in CS. While comprehensive for its niche, it only supports search and does not provide full paper downloads.
+
+**CrossRef** provides DOI (Digital Object Identifier) lookup services for free. It does not support full-text search but is invaluable for looking up paper metadata by DOI.
+
+**IACR ePrint** focuses exclusively on cryptology research from the International Association for Cryptologic Research. All papers are freely available, and no API key is required.
+
+**bioRxiv** is the primary preprint server for biology and life sciences, operated by Cold Spring Harbor Laboratory. All preprints are free to access.
+
+**Zenodo** is CERN-hosted open science repository, providing free access to research data and papers from researchers worldwide. No API key is required for basic access.
+
+**Unpaywall** helps find open access versions of papers by checking thousands of open access repositories. It's completely free and requires no API key.
+
+**DOAJ** (Directory of Open Access Journals) indexes only peer-reviewed, open access journals. It provides free access to journal metadata and paper information.
+
+**Connected Papers** helps researchers discover related papers using a visual graph approach. It offers a free tier with reasonable rate limits.
+
+**WorldWideScience** is a global science gateway providing access to scientific databases from multiple countries. It's completely free and operated by the scientific community.
+
+**OSF Preprints** provides access to preprints from the Open Science Framework, covering many disciplines. No API key is required.
+
+**BASE** (Bielefeld Academic Search Engine) aggregates content from over 4,000 data sources. It provides free access to academic resources.
+
+**Dimensions** is a research discovery platform funded by Digital Science, offering free access to papers, grants, patents, and clinical trials.
+
+**MDPI** is an open access publisher that provides free access to all its journal articles. The website is free to use.
+
+**Google Scholar** is completely free but disabled by default because it uses scraping techniques rather than an official API. Enabling it requires both compile-time feature flags and runtime configuration (see below).
+
+#### Freemium Sources (Optional API Key for Higher Limits)
+
+**Semantic Scholar** offers a free tier with approximately 100 papers per day and 1 request per second. Providing a `SEMANTIC_SCHOLAR_API_KEY` significantly increases these limits. The API key is free to obtain from the Semantic Scholar website.
+
+**CORE** aggregates millions of open access papers from repositories worldwide. A free API key is available at core.ac.uk and increases rate limits. Without a key, functionality is limited.
+
+**SciSpace** provides a research discovery platform with both free and paid tiers. An optional API key can be configured for enhanced access.
+
+#### API Key Required (Free Registration Available)
+
+**IEEE Xplore** requires an API key for programmatic access. Free API keys are available by registering at developer.ieee.org. The free tier provides limited requests per second, and full access requires institutional subscriptions.
+
+**ACM Digital Library** requires an API key for its programmatic search API. Free API keys can be obtained from the ACM Developer Portal (developers.acm.org). Without an API key, functionality is severely limited.
+
+**Springer** may require an API key for full programmatic access. Check the Springer Nature Developer Portal for registration and access details.
+
+**JSTOR** is primarily a subscription-based service. Institutional access is typically required, and API access may need additional licensing.
+
+### Source-Specific Configuration
+
+#### Google Scholar Setup
+
+Google Scholar is disabled by default both at compile-time and runtime due to its scraping-based approach:
+
+1. **Compile with the feature flag:**
+   ```bash
+   cargo build --features google_scholar
+   ```
+
+2. **Enable at runtime:**
+   ```bash
+   export GOOGLE_SCHOLAR_ENABLED=true
+   ```
+
+#### Semantic Scholar API Key
+
+```bash
+export SEMANTIC_SCHOLAR_API_KEY="your-api-key-here"
+```
+
+Get your free API key at: https://www.semanticscholar.org/product/api
+
+#### CORE API Key
+
+```bash
+export CORE_API_KEY="your-core-api-key"
+```
+
+Register for a free API key at: https://core.ac.uk/services/api
+
+#### IEEE Xplore API Key
+
+```bash
+export IEEE_XPLORE_API_KEY="your-ieee-api-key"
+```
+
+Register for a free API key at: https://developer.ieee.org/
+
+#### ACM API Key
+
+```bash
+export ACM_API_KEY="your-acm-api-key"
+```
+
+Register for a free API key at: https://developers.acm.org/
+
+#### OpenAlex Email (Recommended)
+
+```bash
+export OPENALEX_EMAIL="your-email@example.com"
+```
+
+Providing an email gives you access to OpenAlex's "polite pool" with better rate limits.
+
+### Rate Limit Configuration
+
+Without API keys, sources enforce rate limits to prevent abuse. You can customize these limits:
+
+```bash
+# Semantic Scholar rate limit (requests per second)
+export SEMANTIC_SCHOLAR_RATE_LIMIT=5
+
+# Global rate limit
+export RESEARCH_MASTER_RATE_LIMITS_DEFAULT_REQUESTS_PER_SECOND=10
+
+# Disable rate limiting entirely
+export RESEARCH_MASTER_RATE_LIMITS_DEFAULT_REQUESTS_PER_SECOND=0
+```
+
+**Note:** Disabling rate limits or setting them too high may result in your IP being blocked by the source APIs. Use with caution.
 
 ### Advanced Search Capabilities
 
@@ -410,13 +582,85 @@ Options:
 
 ## Claude Desktop Integration
 
-Add to your Claude Desktop MCP configuration:
+For setup instructions, see the [MCP Client Integration](#mcp-client-integration) section which includes Claude Desktop configuration alongside other popular editors and tools.
 
-**macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`
+## MCP Client Integration
 
-**Windows**: `%APPDATA%/Claude/claude_desktop_config.json`
+Research Master MCP is compatible with any Model Context Protocol client. Below are setup instructions for popular MCP-compatible applications.
 
-**Linux**: `~/.config/Claude/claude_desktop_config.json`
+<details>
+<summary><b>Claude Desktop</b></summary>
+
+**macOS:** `~/Library/Application Support/Claude/claude_desktop_config.json`
+
+**Windows:** `%APPDATA%/Claude/claude_desktop_config.json`
+
+**Linux:** `~/.config/Claude/claude_desktop_config.json`
+
+```json
+{
+  "mcpServers": {
+    "research-master": {
+      "command": "research-master-mcp",
+      "args": ["serve"]
+    }
+  }
+}
+```
+</details>
+
+<details>
+<summary><b>Zed Editor</b></summary>
+
+Add to **project settings** (`.zed/settings.json`) or **global settings** (`~/.config/zed/settings.json`):
+
+```json
+{
+  "model_context_provider": {
+    "servers": {
+      "research-master": {
+        "command": "research-master-mcp",
+        "args": ["serve"]
+      }
+    }
+  }
+}
+```
+
+For per-project configuration, create `.zed/settings.json` in your project root.
+</details>
+
+<details>
+<summary><b>Continue (VS Code / JetBrains)</b></summary>
+
+Add to **Continue config** (`~/.continue/config.json` or project `.continue/config.json`):
+
+```json
+{
+  "models": [
+    {
+      "name": "claude",
+      "provider": "anthropic"
+    }
+  ],
+  "mcpServers": {
+    "research-master": {
+      "command": "research-master-mcp",
+      "args": ["serve"]
+    }
+  }
+}
+```
+
+The `~` prefix expands to your home directory. Config file location:
+- **VS Code:** `~/.continue/config.json`
+- **JetBrains:** `~/.continue/config.json` or project `.continue/config.json`
+</details>
+
+<details>
+<summary><b>Cursor</b></summary>
+
+Cursor is compatible with Claude Desktop config. Edit `~/.cursor/mcp.json`:
 
 ```json
 {
@@ -429,54 +673,175 @@ Add to your Claude Desktop MCP configuration:
 }
 ```
 
-### Advanced Configuration
+Or use **Settings > Features > MCP** to configure via UI.
+</details>
 
-You can configure sources using a config file or environment variables. Environment variables always take precedence over config file settings.
+<details>
+<summary><b>Goose</b></summary>
 
-**Using a config file:**
-
-Create `~/.config/research-master/config.toml`:
-```toml
-[sources]
-enabled_sources = "arxiv,pubmed,semantic"
-disabled_sources = "dblp,jstor"
-```
-
-**Using environment variables:**
-
-To enable only specific sources:
+Goose uses the same config format as Claude Desktop. Edit `~/.config/goose/mcp_config.json`:
 
 ```json
 {
   "mcpServers": {
     "research-master": {
       "command": "research-master-mcp",
-      "args": ["serve"],
-      "env": {
-        "RESEARCH_MASTER_ENABLED_SOURCES": "arxiv,pubmed,semantic"
-      }
+      "args": ["serve"]
     }
   }
 }
 ```
 
-To enable Google Scholar (requires compile-time feature):
-
+Ensure the binary is in your PATH or use absolute path:
 ```json
 {
   "mcpServers": {
     "research-master": {
+      "command": "/usr/local/bin/research-master-mcp",
+      "args": ["serve"]
+    }
+  }
+}
+```
+</details>
+
+<details>
+<summary><b>Tabby</b></summary>
+
+Tabby supports MCP servers via its configuration. Edit `~/.tabby/mcp/servers.json`:
+
+```json
+{
+  "servers": {
+    "research-master": {
       "command": "research-master-mcp",
-      "args": ["serve"],
-      "env": {
-        "GOOGLE_SCHOLAR_ENABLED": "true"
-      }
+      "args": ["serve"]
     }
   }
 }
 ```
 
-To set custom rate limits:
+Restart Tabby after configuration changes.
+</details>
+
+<details>
+<summary><b>CLI with MCP Proxy</b></summary>
+
+Use with any MCP proxy tool (e.g., `mcp-cli`, `glama-cli`):
+
+```bash
+# Install proxy
+pip install mcp-cli
+
+# Run with proxy
+mcp-cli run --command "research-master-mcp" --args "serve"
+```
+
+Or use with Smithery for easy MCP server discovery:
+
+```bash
+# Install Smithery CLI
+npm install -g @smithery/cli
+
+# Add Research Master MCP
+smithery add research-master-mcp
+```
+</details>
+
+<details>
+<summary><b>Homebrew Cask (macOS)</b></summary>
+
+If installed via Homebrew cask, the binary is already in your PATH:
+
+```bash
+# Using Homebrew to install
+brew tap hongkongkiwi/research-master-mcp
+brew install --cask research-master-mcp
+
+# Verify installation
+research-master-mcp --version
+```
+
+The MCP server command in configs can simply be `"research-master-mcp"`.
+</details>
+
+<details>
+<summary><b>Docker</b></summary>
+
+Run via Docker for isolated execution:
+
+```bash
+# Build image
+docker build -t research-master-mcp .
+
+# Run with stdio mode
+docker run --rm -i research-master-mcp serve --stdio
+
+# Or use pre-built image
+docker run --rm -i ghcr.io/hongkongkiwi/research-master-mcp serve --stdio
+```
+
+For persistent configuration, mount volumes:
+```bash
+docker run --rm -i \
+  -v ~/.config/research-master:/root/.config/research-master \
+  -v ./downloads:/downloads \
+  ghcr.io/hongkongkiwi/research-master-mcp serve --stdio
+```
+</details>
+
+<details>
+<summary><b>Cline (VS Code / JetBrains)</b></summary>
+
+Cline supports MCP servers via `~/.cline/mcp_servers.json` or project `.cline/mcp_servers.json`:
+
+```json
+{
+  "mcpServers": {
+    "research-master": {
+      "command": "research-master-mcp",
+      "args": ["serve"]
+    }
+  }
+}
+```
+
+**Or use absolute path:**
+
+```json
+{
+  "mcpServers": {
+    "research-master": {
+      "command": "/usr/local/bin/research-master-mcp",
+      "args": ["serve"]
+    }
+  }
+}
+```
+</details>
+
+<details>
+<summary><b>Roo Code</b></summary>
+
+Roo Code (formerly Rui) uses the same MCP config format as Claude Desktop. Edit `~/.config/roo/mcp_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "research-master": {
+      "command": "research-master-mcp",
+      "args": ["serve"]
+    }
+  }
+}
+```
+
+**Or use Settings UI:**
+- Open Roo Code Settings
+- Navigate to **Extensions > MCP**
+- Add server configuration manually
+
+**With environment variables:**
 
 ```json
 {
@@ -485,12 +850,238 @@ To set custom rate limits:
       "command": "research-master-mcp",
       "args": ["serve"],
       "env": {
+        "RESEARCH_MASTER_ENABLED_SOURCES": "arxiv,semantic"
+      }
+    }
+  }
+}
+```
+</details>
+
+<details>
+<summary><b>Kilo Code</b></summary>
+
+Kilo Code supports MCP in `~/.config/kilo/mcp.json`:
+
+```json
+{
+  "mcpServers": {
+    "research-master": {
+      "command": "research-master-mcp",
+      "args": ["serve"]
+    }
+  }
+}
+```
+
+**Or per-project:** Create `.kilo/mcp.json` in your project root.
+</details>
+
+<details>
+<summary><b>VS Code (Direct MCP)</b></summary>
+
+VS Code requires the **MCP for VS Code** extension or use with Continue extension (see above).
+
+**Using MCP for VS Code extension:**
+1. Install "MCP" extension from marketplace
+2. Open Settings (Ctrl+,)
+3. Search for "MCP Servers"
+4. Add configuration:
+
+```json
+{
+  "mcp.servers": {
+    "research-master": {
+      "command": "research-master-mcp",
+      "args": ["serve"]
+    }
+  }
+}
+```
+</details>
+
+<details>
+<summary><b>1MCP</b></summary>
+
+1MCP is an MCP proxy/aggregator. Configure in `~/.config/1mcp/servers.json`:
+
+```json
+{
+  "servers": {
+    "research-master": {
+      "command": "research-master-mcp",
+      "args": ["serve"]
+    }
+  }
+}
+```
+
+Run 1MCP with your preferred client:
+
+```bash
+# Start 1MCP proxy
+1mcp serve --port 3000
+
+# Or with custom config
+1mcp serve --config ~/.config/1mcp/config.json
+```
+</details>
+
+<details>
+<summary><b>OpenAI Codex CLI</b></summary>
+
+Codex CLI uses MCP configuration via `~/.config/codex/mcp.json`:
+
+```json
+{
+  "mcpServers": {
+    "research-master": {
+      "command": "research-master-mcp",
+      "args": ["serve"]
+    }
+  }
+}
+```
+
+**Or use environment variable:**
+
+```bash
+export MCP_SERVERS='{"research-master": {"command": "research-master-mcp", "args": ["serve"]}}'
+```
+</details>
+
+<details>
+<summary><b>Gemini CLI</b></summary>
+
+Gemini CLI supports MCP via `~/.config/gemini/mcp.json`:
+
+```json
+{
+  "mcpServers": {
+    "research-master": {
+      "command": "research-master-mcp",
+      "args": ["serve"]
+    }
+  }
+}
+```
+
+**With API keys in environment:**
+
+```json
+{
+  "mcpServers": {
+    "research-master": {
+      "command": "research-master-mcp",
+      "args": ["serve"],
+      "env": {
+        "SEMANTIC_SCHOLAR_API_KEY": "${SEMANTIC_SCHOLAR_API_KEY}",
         "RESEARCH_MASTER_RATE_LIMITS_DEFAULT_REQUESTS_PER_SECOND": "10"
       }
     }
   }
 }
 ```
+</details>
+
+<details>
+<summary><b>OpenCode</b></summary>
+
+OpenCode supports MCP servers. Configure via **Settings > MCP**:
+
+```json
+{
+  "mcpServers": {
+    "research-master": {
+      "command": "research-master-mcp",
+      "args": ["serve"]
+    }
+  }
+}
+```
+
+**Or via config file:** `~/.opencode/mcp.json`
+
+```json
+{
+  "servers": {
+    "research-master": {
+      "type": "stdio",
+      "command": "research-master-mcp",
+      "args": ["serve"]
+    }
+  }
+}
+```
+</details>
+
+<details>
+<summary><b>Other MCP Clients</b></summary>
+
+Research Master MCP works with any MCP-compatible client. General configuration pattern:
+
+```json
+{
+  "mcpServers": {
+    "research-master": {
+      "command": "research-master-mcp",
+      "args": ["serve"]
+    }
+  }
+}
+```
+
+**Key clients known to work:**
+- **Aider**: `~/.aider.mcp.json`
+- **CopilotKit**: Uses environment variables
+- **AgentOps**: Configure via dashboard
+- **LangChain agents**: Pass via MCPConfig
+
+For HTTP/SSE mode (alternative to stdio):
+
+```bash
+research-master-mcp serve --port 3000 --host 0.0.0.0
+```
+
+Then configure with HTTP endpoint:
+```json
+{
+  "mcpServers": {
+    "research-master": {
+      "url": "http://localhost:3000/sse"
+    }
+  }
+}
+```
+</details>
+
+---
+
+**Common Configuration Options:**
+
+| Option | Description |
+|--------|-------------|
+| `command` | Binary name or full path to `research-master-mcp` |
+| `args` | `["serve"]` for stdio mode, `["serve", "--port", "3000"]` for SSE |
+| `env` | Optional environment variables (API keys, rate limits) |
+
+**Example with environment variables:**
+
+```json
+{
+  "mcpServers": {
+    "research-master": {
+      "command": "research-master-mcp",
+      "args": ["serve"],
+      "env": {
+        "RESEARCH_MASTER_ENABLED_SOURCES": "arxiv,semantic,openalex",
+        "RESEARCH_MASTER_RATE_LIMITS_DEFAULT_REQUESTS_PER_SECOND": "10"
+      }
+    }
+  }
+}
+```
+</details>
 
 ## Available MCP Tools
 

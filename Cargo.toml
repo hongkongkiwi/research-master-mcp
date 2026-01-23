@@ -12,6 +12,9 @@ readme = "README.md"
 homepage = "https://github.com/hongkongkiwi/research-master-mcp"
 documentation = "https://docs.rs/research-master-mcp"
 
+# Publish to both crates.io and GitHub Packages
+publish = ["crates-io", "ghcr-io"]
+
 # Binary configuration
 [[bin]]
 name = "research-master-mcp"
