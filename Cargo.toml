@@ -1,6 +1,6 @@
 [package]
 name = "research-master-mcp"
-version = "0.1.3"
+version = "0.1.4"
 edition = "2021"
 description = "MCP server for searching and downloading academic papers from multiple research sources"
 authors = ["hongkongkiwi"]
@@ -194,6 +194,13 @@ cargo-husky = "1"
 # Configure cargo-husky to run lint and security audit before push
 [workspace.metadata.husky]
 pre-push = ["cargo clippy", "cargo audit"]
+
+# RPM package configuration
+[package.metadata.rpm]
+package = "research-master-mcp"
+assets = [
+    { path = "target/x86_64-unknown-linux-gnu/release/research-master-mcp", dest = "usr/bin/research-master-mcp" }
+]
 
 # The library is also available for use as a library
 [lib]

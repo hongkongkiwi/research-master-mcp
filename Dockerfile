@@ -8,6 +8,9 @@ WORKDIR /build
 # Install dependencies for building
 RUN apk add --no-cache musl-dev openssl-dev
 
+# Add cross-compilation target for glibc builds
+RUN rustup target add ${CARGO_BUILD_TARGET}
+
 # Copy source and build
 COPY . .
 RUN cargo build --release --target ${CARGO_BUILD_TARGET}

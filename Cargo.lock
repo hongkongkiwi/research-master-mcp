@@ -3596,7 +3596,7 @@ dependencies = [
 
 [[package]]
 name = "research-master-mcp"
-version = "0.1.2"
+version = "0.1.4"
 dependencies = [
  "anyhow",
  "async-trait",
