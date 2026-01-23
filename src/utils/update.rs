@@ -39,15 +39,21 @@ pub fn detect_installation() -> InstallationMethod {
 
     // Check if running from Homebrew prefix
     if let Ok(homebrew_prefix) = std::env::var("HOMEBREW_PREFIX") {
-        let homebrew_bin = PathBuf::from(homebrew_prefix).join("bin").join("research-master-mcp");
-        if exe_path == homebrew_bin || exe_path.starts_with(homebrew_bin.parent().unwrap_or(&homebrew_bin)) {
+        let homebrew_bin = PathBuf::from(homebrew_prefix)
+            .join("bin")
+            .join("research-master-mcp");
+        if exe_path == homebrew_bin
+            || exe_path.starts_with(homebrew_bin.parent().unwrap_or(&homebrew_bin))
+        {
             return InstallationMethod::Homebrew { path: exe_path };
         }
     }
 
     // Check if installed via cargo (check if ~/.cargo/bin is in the path)
     if let Ok(cargo_home) = std::env::var("CARGO_HOME") {
-        let cargo_bin = PathBuf::from(cargo_home).join("bin").join("research-master-mcp");
+        let cargo_bin = PathBuf::from(cargo_home)
+            .join("bin")
+            .join("research-master-mcp");
         if exe_path == cargo_bin {
             return InstallationMethod::Cargo { path: exe_path };
         }
@@ -122,10 +128,16 @@ pub async fn fetch_latest_release() -> Result<ReleaseInfo> {
         .context("Failed to fetch latest release")?;
 
     if !response.status().is_success() {
-        bail!("GitHub API request failed with status: {}", response.status());
+        bail!(
+            "GitHub API request failed with status: {}",
+            response.status()
+        );
     }
 
-    let json: serde_json::Value = response.json().await.context("Failed to parse release info")?;
+    let json: serde_json::Value = response
+        .json()
+        .await
+        .context("Failed to parse release info")?;
 
     let tag_name = json["tag_name"]
         .as_str()
@@ -214,22 +226,30 @@ pub fn find_asset_for_platform(release: &ReleaseInfo) -> Option<&ReleaseAsset> {
     }
 
     // Look for tar.gz first (Linux/macOS), then zip (Windows)
-    let preferred_ext = if cfg!(target_os = "windows") { ".zip" } else { ".tar.gz" };
+    let preferred_ext = if cfg!(target_os = "windows") {
+        ".zip"
+    } else {
+        ".tar.gz"
+    };
 
     // Try to find exact match
-    if let Some(asset) = release.assets.iter().find(|asset| asset.name.contains(target) && asset.name.ends_with(preferred_ext)) {
+    if let Some(asset) = release
+        .assets
+        .iter()
+        .find(|asset| asset.name.contains(target) && asset.name.ends_with(preferred_ext))
+    {
         return Some(asset);
     }
 
     // Fallback: just find any asset with the target
-    release.assets.iter().find(|asset| asset.name.contains(target))
+    release
+        .assets
+        .iter()
+        .find(|asset| asset.name.contains(target))
 }
 
 /// Download and extract a release asset
-pub async fn download_and_extract_asset(
-    asset: &ReleaseAsset,
-    temp_dir: &Path,
-) -> Result<PathBuf> {
+pub async fn download_and_extract_asset(asset: &ReleaseAsset, temp_dir: &Path) -> Result<PathBuf> {
     let client = reqwest::Client::new();
 
     // Download the archive
@@ -271,19 +291,32 @@ fn extract_tar_gz(archive_path: &Path, dest_dir: &Path) -> Result<PathBuf> {
 
     // Use tar to extract
     let output = Command::new("tar")
-        .args(["xzf", archive_path.to_str().unwrap(), "-C", dest_dir.to_str().unwrap()])
+        .args([
+            "xzf",
+            archive_path.to_str().unwrap(),
+            "-C",
+            dest_dir.to_str().unwrap(),
+        ])
         .output()
         .context("Failed to extract tar.gz")?;
 
     if !output.status.success() {
-        bail!("tar extraction failed: {}", String::from_utf8_lossy(&output.stderr));
+        bail!(
+            "tar extraction failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
     }
 
     // Find the extracted binary
     for entry in fs::read_dir(dest_dir)? {
         let entry = entry?;
         let path = entry.path();
-        if path.is_file() && path.file_name().map(|n| n.to_string_lossy().starts_with("research-master-mcp")).unwrap_or(false) {
+        if path.is_file()
+            && path
+                .file_name()
+                .map(|n| n.to_string_lossy().starts_with("research-master-mcp"))
+                .unwrap_or(false)
+        {
             // Make executable
             let mut perms = fs::metadata(&path)?.permissions();
             perms.set_mode(0o755);
@@ -326,7 +359,12 @@ fn extract_zip(archive_path: &Path, dest_dir: &Path) -> Result<PathBuf> {
     for entry in fs::read_dir(dest_dir)? {
         let entry = entry?;
         let path = entry.path();
-        if path.is_file() && path.file_name().map(|n| n.to_string_lossy().starts_with("research-master-mcp")).unwrap_or(false) {
+        if path.is_file()
+            && path
+                .file_name()
+                .map(|n| n.to_string_lossy().starts_with("research-master-mcp"))
+                .unwrap_or(false)
+        {
             return Ok(path);
         }
     }
@@ -345,7 +383,10 @@ pub fn replace_binary(current: &Path, new: &Path) -> Result<()> {
     {
         // On Unix, we need to copy to a temp location first, then rename
         // because the current binary is still running
-        let temp_path = current.with_file_name(format!("{}.new", current.file_name().unwrap().to_string_lossy()));
+        let temp_path = current.with_file_name(format!(
+            "{}.new",
+            current.file_name().unwrap().to_string_lossy()
+        ));
 
         // Copy new binary to temp location
         fs::copy(new, &temp_path)?;
@@ -353,7 +394,10 @@ pub fn replace_binary(current: &Path, new: &Path) -> Result<()> {
 
         // Rename temp to current (atomic on POSIX)
         // First, rename current to backup
-        let backup_path = current.with_file_name(format!("{}.backup", current.file_name().unwrap().to_string_lossy()));
+        let backup_path = current.with_file_name(format!(
+            "{}.backup",
+            current.file_name().unwrap().to_string_lossy()
+        ));
         if current.exists() {
             fs::rename(current, &backup_path)?;
         }
@@ -393,10 +437,7 @@ pub fn cleanup_temp_files(files: Vec<PathBuf>) {
 }
 
 /// Fetch and verify SHA256 checksum for a file
-pub async fn fetch_and_verify_sha256(
-    asset_name: &str,
-    _temp_dir: &Path,
-) -> Result<String> {
+pub async fn fetch_and_verify_sha256(asset_name: &str, _temp_dir: &Path) -> Result<String> {
     let client = reqwest::Client::new();
     let checksums_url = "https://github.com/hongkongkiwi/research-master-mcp/releases/download/latest/SHA256SUMS.txt";
 

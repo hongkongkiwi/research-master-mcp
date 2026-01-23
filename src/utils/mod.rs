@@ -62,6 +62,6 @@ pub use retry::{
 pub use update::{
     cleanup_temp_files, compute_sha256, detect_installation, download_and_extract_asset,
     fetch_and_verify_sha256, fetch_latest_release, find_asset_for_platform, get_current_target,
-    get_update_instructions, InstallationMethod, ReleaseAsset, ReleaseInfo, replace_binary,
-    verify_sha256,
+    get_update_instructions, replace_binary, verify_sha256, InstallationMethod, ReleaseAsset,
+    ReleaseInfo,
 };

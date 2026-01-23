@@ -1048,12 +1048,12 @@ async fn main() -> Result<()> {
 
         Some(Commands::Update { force, dry_run }) => {
             use anyhow::Context as _;
-            use std::os::unix::fs::PermissionsExt;
             use research_master_mcp::utils::{
                 detect_installation, download_and_extract_asset, fetch_and_verify_sha256,
-                find_asset_for_platform, get_current_target, get_update_instructions,
-                fetch_latest_release, replace_binary, verify_sha256, InstallationMethod,
+                fetch_latest_release, find_asset_for_platform, get_current_target,
+                get_update_instructions, replace_binary, verify_sha256, InstallationMethod,
             };
+            use std::os::unix::fs::PermissionsExt;
 
             let current_version = env!("CARGO_PKG_VERSION");
             println!("Research Master MCP Updater");
@@ -1081,8 +1081,10 @@ async fn main() -> Result<()> {
             let needs_update = if force {
                 true
             } else {
-                let current = semver::Version::parse(current_version).unwrap_or_else(|_| semver::Version::new(0, 0, 0));
-                let latest_v = semver::Version::parse(&latest.version).unwrap_or_else(|_| semver::Version::new(0, 0, 0));
+                let current = semver::Version::parse(current_version)
+                    .unwrap_or_else(|_| semver::Version::new(0, 0, 0));
+                let latest_v = semver::Version::parse(&latest.version)
+                    .unwrap_or_else(|_| semver::Version::new(0, 0, 0));
                 latest_v > current
             };
 
@@ -1152,7 +1154,12 @@ async fn main() -> Result<()> {
                     match download_and_extract_asset(&asset, &temp_dir).await {
                         Ok(archive_path) => {
                             // Fetch expected SHA256 checksum
-                            let expected_checksum = match fetch_and_verify_sha256(&asset.name, &temp_dir).await {
+                            let expected_checksum = match fetch_and_verify_sha256(
+                                &asset.name,
+                                &temp_dir,
+                            )
+                            .await
+                            {
                                 Ok(hash) => hash,
                                 Err(e) => {
                                     eprintln!("Warning: Could not fetch SHA256 checksums: {}. Proceeding without verification.", e);
@@ -1184,12 +1191,20 @@ async fn main() -> Result<()> {
                             let binary_path = if asset.name.ends_with(".tar.gz") {
                                 use std::process::Command;
                                 let output = Command::new("tar")
-                                    .args(["xzf", archive_path.to_str().unwrap(), "-C", temp_dir.to_str().unwrap()])
+                                    .args([
+                                        "xzf",
+                                        archive_path.to_str().unwrap(),
+                                        "-C",
+                                        temp_dir.to_str().unwrap(),
+                                    ])
                                     .output()
                                     .context("Failed to extract archive")?;
 
                                 if !output.status.success() {
-                                    anyhow::bail!("Extraction failed: {}", String::from_utf8_lossy(&output.stderr));
+                                    anyhow::bail!(
+                                        "Extraction failed: {}",
+                                        String::from_utf8_lossy(&output.stderr)
+                                    );
                                 }
 
                                 // Find the binary
@@ -1197,7 +1212,15 @@ async fn main() -> Result<()> {
                                 for entry in std::fs::read_dir(&temp_dir)? {
                                     let entry = entry?;
                                     let path = entry.path();
-                                    if path.is_file() && path.file_name().map(|n| n.to_string_lossy().starts_with("research-master-mcp")).unwrap_or(false) {
+                                    if path.is_file()
+                                        && path
+                                            .file_name()
+                                            .map(|n| {
+                                                n.to_string_lossy()
+                                                    .starts_with("research-master-mcp")
+                                            })
+                                            .unwrap_or(false)
+                                    {
                                         // Make executable
                                         let mut perms = std::fs::metadata(&path)?.permissions();
                                         perms.set_mode(0o755);
@@ -1214,8 +1237,9 @@ async fn main() -> Result<()> {
                             println!("\nDownloaded and extracted to: {}", binary_path.display());
 
                             // Get current binary path
-                            let current_exe = std::env::current_exe()
-                                .map_err(|e| anyhow::anyhow!("Failed to get current executable path: {}", e))?;
+                            let current_exe = std::env::current_exe().map_err(|e| {
+                                anyhow::anyhow!("Failed to get current executable path: {}", e)
+                            })?;
 
                             // Replace binary
                             match replace_binary(&current_exe, &binary_path) {
@@ -1225,7 +1249,10 @@ async fn main() -> Result<()> {
                                 }
                                 Err(e) => {
                                     eprintln!("\nFailed to replace binary: {}", e);
-                                    eprintln!("You may need to manually replace the binary at: {}", current_exe.display());
+                                    eprintln!(
+                                        "You may need to manually replace the binary at: {}",
+                                        current_exe.display()
+                                    );
                                 }
                             }
 

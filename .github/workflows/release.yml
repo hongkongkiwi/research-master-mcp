@@ -314,7 +314,7 @@ jobs:
       - name: Generate SHA256 checksums
         run: |
           cd release-packages
-          sha256sum * > SHA256SUMS.txt
+          sha256sum ./* > SHA256SUMS.txt
           cat SHA256SUMS.txt
 
       - name: Setup GPG for signing
