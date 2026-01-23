@@ -15,6 +15,20 @@ env:
   RUST_BACKTRACE: 1
 
 jobs:
+  # Lint GitHub Actions workflows
+  actionlint:
+    name: Lint Actions
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run actionlint
+        uses: docker://rhysd/actionlint:latest
+        with:
+          args: '-color'
+
+  # Check code quality
   check:
     name: Check
     runs-on: ubuntu-latest
@@ -51,6 +65,7 @@ jobs:
       - name: Run clippy
         run: cargo clippy --all-targets -- -D warnings
 
+  # Run tests
   test:
     name: Test
     runs-on: ubuntu-latest
@@ -83,6 +98,7 @@ jobs:
       - name: Run tests
         run: cargo test --all-features
 
+  # Security audit
   security:
     name: Security Audit
     runs-on: ubuntu-latest

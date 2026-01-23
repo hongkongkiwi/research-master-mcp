@@ -104,6 +104,30 @@ check: fmt-check clippy doc test
     @echo "All checks passed!"
 
 # ============================================
+# PRE-COMMIT HOOKS
+# ============================================
+
+# Install pre-commit hooks
+precommit-install:
+    @if command -v pre-commit &> /dev/null; then \
+        pre-commit install; \
+        echo "Pre-commit hooks installed"; \
+    else \
+        echo "Installing pre-commit..."; \
+        pip install pre-commit; \
+        pre-commit install; \
+        echo "Pre-commit hooks installed"; \
+    fi
+
+# Run pre-commit on all files
+precommit-run:
+    pre-commit run --all-files
+
+# Run pre-commit on staged files only
+precommit-check:
+    pre-commit run
+
+# ============================================
 # SECURITY
 # ============================================
 
