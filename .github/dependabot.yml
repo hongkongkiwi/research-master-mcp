@@ -1,0 +1,28 @@
+# Please see the documentation for all configuration options:
+# https://docs.github.com/en/code-security/dependabot/working-with-dependabot/dependabot-version-updates/configuration-options-for-the-dependabot.yml-file
+
+version: 2
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "Asia/Hong_Kong"
+    # Group related updates together
+    groups:
+      # All GitHub Actions updates
+      - patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
+    # Automatically squash merge when all checks pass
+    merge-method: "squash"
+    # Allow these labels on auto-merged PRs
+    labels:
+      - "dependencies"
+      - "github-actions"
+    # Target branch for updates (main by default)
+    target-branch: "main"

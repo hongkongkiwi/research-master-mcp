@@ -24,7 +24,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Run actionlint
-        uses: rhysd/actionlint@v1
+        uses: rhysd/actionlint@v1.7.10
 
   # Check code quality
   check:
@@ -79,7 +79,9 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Install cargo-audit
-        uses: taiki-e/install-action@cargo-audit
+        uses: taiki-e/install-action@v2.67.4
+        with:
+          tool: cargo-audit
 
       - name: Run cargo audit
         run: cargo audit
