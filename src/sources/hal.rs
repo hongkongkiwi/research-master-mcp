@@ -361,3 +361,34 @@ struct HALDoc {
     #[serde(rename = "docType_s")]
     doc_type_s: Option<String>,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_hal_source_creation() {
+        let source = HalSource::new();
+        assert!(source.is_ok());
+    }
+
+    #[test]
+    fn test_hal_capabilities() {
+        let source = HalSource::new().unwrap();
+        let caps = source.capabilities();
+        assert!(caps.contains(SourceCapabilities::SEARCH));
+        assert!(caps.contains(SourceCapabilities::DOWNLOAD));
+    }
+
+    #[test]
+    fn test_hal_id() {
+        let source = HalSource::new().unwrap();
+        assert_eq!(source.id(), "hal");
+    }
+
+    #[test]
+    fn test_hal_name() {
+        let source = HalSource::new().unwrap();
+        assert_eq!(source.name(), "HAL");
+    }
+}

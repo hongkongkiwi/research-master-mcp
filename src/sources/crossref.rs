@@ -225,3 +225,34 @@ struct CRItem {
 struct CRDate {
     date: Option<String>,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_crossref_source_creation() {
+        let source = CrossRefSource::new();
+        assert!(source.is_ok());
+    }
+
+    #[test]
+    fn test_crossref_capabilities() {
+        let source = CrossRefSource::new().unwrap();
+        let caps = source.capabilities();
+        assert!(caps.contains(SourceCapabilities::SEARCH));
+        assert!(caps.contains(SourceCapabilities::DOI_LOOKUP));
+    }
+
+    #[test]
+    fn test_crossref_id() {
+        let source = CrossRefSource::new().unwrap();
+        assert_eq!(source.id(), "crossref");
+    }
+
+    #[test]
+    fn test_crossref_name() {
+        let source = CrossRefSource::new().unwrap();
+        assert_eq!(source.name(), "CrossRef");
+    }
+}

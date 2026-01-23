@@ -121,6 +121,16 @@ pub struct SourceConfig {
     /// Maps to RESEARCH_MASTER_DISABLED_SOURCES environment variable
     #[serde(default)]
     pub disabled_sources: Option<String>,
+
+    /// Per-source HTTP proxy configuration
+    /// Format: source_id:proxy_url (e.g., "arxiv:http://proxy:8080")
+    #[serde(default)]
+    pub proxy_http: Option<String>,
+
+    /// Per-source HTTPS proxy configuration
+    /// Format: source_id:proxy_url (e.g., "semantic:https://proxy:8080")
+    #[serde(default)]
+    pub proxy_https: Option<String>,
 }
 
 impl Default for SourceConfig {
@@ -128,6 +138,8 @@ impl Default for SourceConfig {
         Self {
             enabled_sources: std::env::var("RESEARCH_MASTER_ENABLED_SOURCES").ok(),
             disabled_sources: std::env::var("RESEARCH_MASTER_DISABLED_SOURCES").ok(),
+            proxy_http: std::env::var("RESEARCH_MASTER_PROXY_HTTP").ok(),
+            proxy_https: std::env::var("RESEARCH_MASTER_PROXY_HTTPS").ok(),
         }
     }
 }

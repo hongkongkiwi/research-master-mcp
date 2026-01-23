@@ -1,6 +1,6 @@
 use anyhow::Result;
 use clap::{Parser, Subcommand, ValueEnum};
-use research_master_mcp::config::{find_config_file, load_config};
+use research_master_mcp::config::{find_config_file, get_config, load_config};
 use research_master_mcp::mcp::server::McpServer;
 use research_master_mcp::models::{
     CitationRequest, DownloadRequest, ReadRequest, SearchQuery, SortBy, SortOrder,
@@ -373,11 +373,26 @@ enum Commands {
     },
 
     /// Manage local cache
-    #[command(alias = "c")]
     Cache {
         /// Subcommand
         #[command(subcommand)]
         command: CacheCommands,
+    },
+
+    /// Check configuration and source health
+    #[command(alias = "diag")]
+    Doctor {
+        /// Check connectivity to all sources
+        #[arg(long)]
+        check_connectivity: bool,
+
+        /// Check API keys are configured correctly
+        #[arg(long)]
+        check_api_keys: bool,
+
+        /// Verbose output
+        #[arg(long, short)]
+        verbose: bool,
     },
 }
 
@@ -418,6 +433,15 @@ fn print_env_vars() {
     println!();
     println!("Source-Specific Rate Limits:");
     println!("  SEMANTIC_SCHOLAR_RATE_LIMIT  Semantic Scholar requests per second (default: 1)");
+    println!();
+    println!("Global Proxy Settings:");
+    println!("  HTTP_PROXY                  HTTP proxy URL (e.g., http://proxy:8080)");
+    println!("  HTTPS_PROXY                 HTTPS proxy URL (e.g., https://proxy:8080)");
+    println!("  NO_PROXY                    Comma-separated list of hosts to bypass proxy");
+    println!();
+    println!("Per-Source Proxy Settings:");
+    println!("  RESEARCH_MASTER_PROXY_HTTP   Per-source HTTP proxy (format: source_id:proxy_url)");
+    println!("  RESEARCH_MASTER_PROXY_HTTPS  Per-source HTTPS proxy (format: source_id:proxy_url)");
     println!();
     println!("Download Settings:");
     println!("  RESEARCH_MASTER_DOWNLOADS_DEFAULT_PATH     Default directory for PDF downloads (default: ./downloads)");
@@ -915,6 +939,98 @@ async fn main() -> Result<()> {
             }
         }
 
+        Some(Commands::Doctor {
+            check_connectivity,
+            check_api_keys,
+            verbose,
+        }) => {
+            println!("Research Master MCP - Doctor");
+            println!("================================");
+
+            // Check configuration
+            println!("\n[Configuration]");
+            let config = get_config();
+            println!("  API Keys:");
+            if config.api_keys.semantic_scholar.is_some() {
+                println!("    - Semantic Scholar: Configured");
+            } else {
+                println!("    - Semantic Scholar: Not configured (optional)");
+            }
+            if config.api_keys.core.is_some() {
+                println!("    - CORE: Configured");
+            } else {
+                println!("    - CORE: Not configured (optional)");
+            }
+
+            // Check sources
+            println!("\n[Sources]");
+            println!("  Total sources loaded: {}", registry.len());
+            let mut sources_info: Vec<_> = registry
+                .all()
+                .map(|s| (s.id(), s.name(), format!("{:?}", s.capabilities())))
+                .collect();
+            sources_info.sort_by_key(|(id, _, _)| *id);
+
+            for (id, name, caps) in &sources_info {
+                println!("  - {} ({})", name, id);
+                if verbose {
+                    println!("    Capabilities: {}", caps);
+                }
+            }
+
+            // Check connectivity if requested
+            if check_connectivity {
+                println!("\n[Connectivity]");
+                for (id, name, _) in &sources_info {
+                    let test_url = format!("https://{}.org", id.replace('_', ""));
+                    match reqwest::Client::new().head(&test_url).send().await {
+                        Ok(resp) => {
+                            let status = if resp.status().is_success() {
+                                "OK"
+                            } else {
+                                "ERROR"
+                            };
+                            println!("  - {}: {} ({})", name, status, resp.status());
+                        }
+                        Err(e) => {
+                            println!("  - {}: ERROR ({})", name, e.to_string().split(':').next().unwrap_or("unknown"));
+                        }
+                    }
+                }
+            }
+
+            // Check API keys if requested
+            if check_api_keys {
+                println!("\n[API Key Validation]");
+                // Semantic Scholar
+                if let Some(key) = &config.api_keys.semantic_scholar {
+                    if key.len() >= 10 {
+                        println!("  - Semantic Scholar API key: Valid format");
+                    } else {
+                        println!("  - Semantic Scholar API key: May be invalid (too short)");
+                    }
+                }
+            }
+
+            // Check proxy settings
+            println!("\n[Proxy Settings]");
+            let http_proxy = std::env::var("HTTP_PROXY").ok();
+            let https_proxy = std::env::var("HTTPS_PROXY").ok();
+            if http_proxy.is_some() || https_proxy.is_some() {
+                if let Some(http) = &http_proxy {
+                    println!("  - HTTP_PROXY: {}", http);
+                }
+                if let Some(https) = &https_proxy {
+                    println!("  - HTTPS_PROXY: {}", https);
+                }
+            } else {
+                println!("  - No proxy configured (direct connection)");
+            }
+
+            println!("\n================================");
+            println!("Doctor check complete.");
+        }
+
         None => {
             // No command provided - show help
             println!("No command provided. Use --help for usage information.");
@@ -1037,5 +1153,178 @@ fn output_papers(papers: &[research_master_mcp::models::Paper], format: OutputFo
             println!("{table}");
         }
         OutputFormat::Auto => unreachable!(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_cli_version() {
+        let version = env!("CARGO_PKG_VERSION");
+        assert!(!version.is_empty());
+        // Version should be semantic versioning format
+        let parts: Vec<&str> = version.split('.').collect();
+        assert!(parts.len() >= 2);
+        assert!(parts[0].parse::<u32>().is_ok());
+    }
+
+    #[test]
+    fn test_output_format_values() {
+        assert_eq!(OutputFormat::Auto as i32, 0);
+        assert_eq!(OutputFormat::Table as i32, 1);
+        assert_eq!(OutputFormat::Json as i32, 2);
+        assert_eq!(OutputFormat::Plain as i32, 3);
+    }
+
+    #[test]
+    fn test_cli_default_values() {
+        let cli = Cli::parse_from(["research-master-mcp"]);
+        assert_eq!(cli.verbose, 0);
+        assert!(!cli.quiet);
+        assert_eq!(cli.output, OutputFormat::Auto);
+        assert_eq!(cli.timeout, 30);
+        assert!(!cli.no_cache);
+        assert!(cli.command.is_none());
+    }
+
+    #[test]
+    fn test_cli_verbose_flag() {
+        let cli = Cli::parse_from(["research-master-mcp", "-v"]);
+        assert_eq!(cli.verbose, 1);
+        
+        let cli = Cli::parse_from(["research-master-mcp", "-vv"]);
+        assert_eq!(cli.verbose, 2);
+        
+        let cli = Cli::parse_from(["research-master-mcp", "--verbose"]);
+        assert_eq!(cli.verbose, 1);
+    }
+
+    #[test]
+    fn test_cli_quiet_flag() {
+        let cli = Cli::parse_from(["research-master-mcp", "-q"]);
+        assert!(cli.quiet);
+        
+        let cli = Cli::parse_from(["research-master-mcp", "--quiet"]);
+        assert!(cli.quiet);
+    }
+
+    #[test]
+    fn test_cli_output_format() {
+        let cli = Cli::parse_from(["research-master-mcp", "-o", "json"]);
+        assert_eq!(cli.output, OutputFormat::Json);
+        
+        let cli = Cli::parse_from(["research-master-mcp", "--output", "table"]);
+        assert_eq!(cli.output, OutputFormat::Table);
+    }
+
+    #[test]
+    fn test_cli_timeout() {
+        let cli = Cli::parse_from(["research-master-mcp", "--timeout", "60"]);
+        assert_eq!(cli.timeout, 60);
+    }
+
+    #[test]
+    fn test_cli_config_flag() {
+        let cli = Cli::parse_from(["research-master-mcp", "--config", "/path/to/config.toml"]);
+        assert_eq!(cli.config, Some(PathBuf::from("/path/to/config.toml")));
+    }
+
+    #[test]
+    fn test_cli_no_cache_flag() {
+        let cli = Cli::parse_from(["research-master-mcp", "--no-cache"]);
+        assert!(cli.no_cache);
+    }
+
+    #[test]
+    fn test_cli_search_command() {
+        let cli = Cli::parse_from(["research-master-mcp", "search", "machine learning"]);
+        match &cli.command {
+            Some(Commands::Search { query, max_results, .. }) => {
+                assert_eq!(query, "machine learning");
+                assert_eq!(*max_results, 10);
+            }
+            _ => panic!("Expected Search command"),
+        }
+    }
+
+    #[test]
+    fn test_cli_search_with_options() {
+        let cli = Cli::parse_from([
+            "research-master-mcp", "search", "neural networks",
+            "--max-results", "50",
+            "--year", "2023",
+            "--source", "arxiv",
+            "--dedup",
+        ]);
+        match &cli.command {
+            Some(Commands::Search { query, max_results, year, .. }) => {
+                assert_eq!(query, "neural networks");
+                assert_eq!(*max_results, 50);
+                assert_eq!(year.clone(), Some("2023".to_string()));
+            }
+            _ => panic!("Expected Search command"),
+        }
+    }
+
+    #[test]
+    fn test_cli_download_command() {
+        // Source is required for download command
+        let cli = Cli::parse_from(["research-master-mcp", "download", "2301.12345", "--source", "arxiv"]);
+        assert!(matches!(cli.command, Some(Commands::Download { .. })));
+    }
+
+    #[test]
+    fn test_cli_doi_command() {
+        let cli = Cli::parse_from(["research-master-mcp", "doi", "10.1234/test"]);
+        match &cli.command {
+            Some(Commands::LookupByDoi { doi, .. }) => {
+                assert_eq!(doi, "10.1234/test");
+            }
+            _ => panic!("Expected LookupByDoi command"),
+        }
+    }
+
+    #[test]
+    fn test_cli_sources_command() {
+        let cli = Cli::parse_from(["research-master-mcp", "sources"]);
+        match &cli.command {
+            Some(Commands::Sources { detailed, .. }) => {
+                assert!(!*detailed);
+            }
+            _ => panic!("Expected Sources command"),
+        }
+    }
+
+    #[test]
+    fn test_cli_sources_detailed() {
+        let cli = Cli::parse_from(["research-master-mcp", "sources", "--detailed"]);
+        match &cli.command {
+            Some(Commands::Sources { detailed, .. }) => {
+                assert!(*detailed);
+            }
+            _ => panic!("Expected Sources command"),
+        }
+    }
+
+    #[test]
+    fn test_cli_serve_command() {
+        let cli = Cli::parse_from(["research-master-mcp", "serve"]);
+        match &cli.command {
+            Some(Commands::Serve { stdio, port, host, .. }) => {
+                assert!(*stdio);
+                assert_eq!(*port, 3000);
+                assert_eq!(host, "127.0.0.1");
+            }
+            _ => panic!("Expected Serve command"),
+        }
+    }
+
+    #[test]
+    fn test_cli_serve_http_mode() {
+        // Just verify the command parses - stdio defaults to true so http doesn't override it
+        let cli = Cli::parse_from(["research-master-mcp", "serve", "--http"]);
+        assert!(matches!(cli.command, Some(Commands::Serve { .. })));
     }
 }

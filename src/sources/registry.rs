@@ -27,6 +27,8 @@ use super::dblp::DblpSource;
 use super::dimensions::DimensionsSource;
 #[cfg(feature = "source-doaj")]
 use super::doaj::DoajSource;
+#[cfg(feature = "source-europe_pmc")]
+use super::europe_pmc::EuropePmcSource;
 #[cfg(feature = "source-google_scholar")]
 use super::google_scholar::GoogleScholarSource;
 #[cfg(feature = "source-hal")]
@@ -253,6 +255,9 @@ impl SourceRegistry {
 
         #[cfg(feature = "source-doaj")]
         try_register!(DoajSource::new());
+
+        #[cfg(feature = "source-europe_pmc")]
+        try_register!(EuropePmcSource::new());
 
         #[cfg(feature = "source-worldwidescience")]
         try_register!(WorldWideScienceSource::new());

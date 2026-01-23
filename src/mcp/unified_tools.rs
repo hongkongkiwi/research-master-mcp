@@ -609,3 +609,23 @@ fn paper_id_upper_start(paper_id: &str, prefix: &str) -> bool {
 
     paper_id[..prefix.len()].to_uppercase() == prefix
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_paper_id_upper_start_basic() {
+        assert!(paper_id_upper_start("PMC12345", "PMC"));
+        assert!(paper_id_upper_start("pmc12345", "PMC"));
+        assert!(paper_id_upper_start("Pmc12345", "PMC"));
+        assert!(!paper_id_upper_start("ABC12345", "PMC"));
+        assert!(!paper_id_upper_start("PM", "PMC")); // Too short
+    }
+
+    #[test]
+    fn test_paper_id_upper_start_edge_cases() {
+        assert!(!paper_id_upper_start("", "PMC"));
+        assert!(!paper_id_upper_start("PM", "PMC"));
+    }
+}

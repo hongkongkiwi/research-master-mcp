@@ -470,3 +470,35 @@ struct ESearchResponse {
 struct ESearchResult {
     idlist: Vec<String>,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_pmc_source_creation() {
+        let source = PmcSource::new();
+        assert!(source.is_ok());
+    }
+
+    #[test]
+    fn test_pmc_capabilities() {
+        let source = PmcSource::new().unwrap();
+        let caps = source.capabilities();
+        assert!(caps.contains(SourceCapabilities::SEARCH));
+        assert!(caps.contains(SourceCapabilities::DOWNLOAD));
+        assert!(caps.contains(SourceCapabilities::READ));
+    }
+
+    #[test]
+    fn test_pmc_id() {
+        let source = PmcSource::new().unwrap();
+        assert_eq!(source.id(), "pmc");
+    }
+
+    #[test]
+    fn test_pmc_name() {
+        let source = PmcSource::new().unwrap();
+        assert_eq!(source.name(), "PubMed Central");
+    }
+}

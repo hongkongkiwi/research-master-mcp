@@ -550,3 +550,38 @@ struct ReferencesResponse {
 struct RelatedResponse {
     data: Vec<S2Paper>,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_semantic_source_creation() {
+        let source = SemanticScholarSource::new();
+        assert!(source.is_ok());
+    }
+
+    #[test]
+    fn test_semantic_capabilities() {
+        let source = SemanticScholarSource::new().unwrap();
+        let caps = source.capabilities();
+        assert!(caps.contains(SourceCapabilities::SEARCH));
+        assert!(caps.contains(SourceCapabilities::DOWNLOAD));
+        assert!(caps.contains(SourceCapabilities::READ));
+        assert!(caps.contains(SourceCapabilities::CITATIONS));
+        assert!(caps.contains(SourceCapabilities::DOI_LOOKUP));
+        assert!(caps.contains(SourceCapabilities::AUTHOR_SEARCH));
+    }
+
+    #[test]
+    fn test_semantic_id() {
+        let source = SemanticScholarSource::new().unwrap();
+        assert_eq!(source.id(), "semantic");
+    }
+
+    #[test]
+    fn test_semantic_name() {
+        let source = SemanticScholarSource::new().unwrap();
+        assert_eq!(source.name(), "Semantic Scholar");
+    }
+}

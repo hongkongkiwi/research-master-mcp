@@ -14,7 +14,6 @@ A Model Context Protocol (MCP) server for searching and downloading academic pap
 - [Quick Start](#quick-start)
 - [Installation](#installation)
 - [Usage](#usage)
-- [Claude Desktop Integration](#claude-desktop-integration)
 - [MCP Client Integration](#mcp-client-integration)
 - [Development](#development)
 - [Configuration](#configuration)
@@ -46,7 +45,7 @@ Search across **26 academic research sources** simultaneously:
 | [IACR ePrint](https://eprint.iacr.org) | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ |
 | [SSRN](https://www.ssrn.com) | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ |
 | [CORE](https://core.ac.uk) | ✅ | ✅ | ✅ | ❌ | ✅ | ❌ |
-| [EuropePMC](https://europepmc.org) | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ |
+| [EuropePMC](https://europepmc.org) | ✅ | ❌ | ✅ | ❌ | ❌ | ❌ |
 | [Dimensions](https://app.dimensions.ai) | ✅ | ❌ | ❌ | ✅ | ❌ | ❌ |
 | [IEEE Xplore](https://ieeexplore.ieee.org) | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
 | [Zenodo](https://zenodo.org) | ✅ | ✅ | ✅ | ❌ | ✅ | ❌ |
@@ -85,6 +84,7 @@ Understanding which sources are free, which require API keys, and their access l
 | [IACR ePrint](https://eprint.iacr.org) | Free | No | Unlimited | 1 request/sec | Cryptology research only |
 | [SSRN](https://www.ssrn.com) | Free | No | Limited | 1 request/sec | Social sciences preprints |
 | [CORE](https://core.ac.uk) | Freemium | Optional | Yes | 1 request/sec | Aggregates open access papers |
+| [EuropePMC](https://europepmc.org) | Free | No | Unlimited | 1 request/sec | Biomedical literature, indexes PubMed/PMC |
 | [Dimensions](https://app.dimensions.ai) | Free | No | Unlimited | 1 request/sec | Research metrics and discovery |
 | [IEEE Xplore](https://ieeexplore.ieee.org) | Paid | Required* | Yes | 3 requests/sec | Free API key from developer.ieee.org |
 | [Zenodo](https://zenodo.org) | Free | No | Unlimited | 1 request/sec | CERN-hosted open science repository |
@@ -336,10 +336,10 @@ brew install research-master-mcp
 
 ```bash
 # Download .deb package from GitHub Releases
-wget https://github.com/hongkongkiwi/research-master-mcp/releases/download/v0.1.1/research-master-mcp_0.1.1_amd64.deb
+wget https://github.com/hongkongkiwi/research-master-mcp/releases/download/vx.x.x/research-master-mcp_x.x.x_amd64.deb
 
 # Install the package
-sudo dpkg -i research-master-mcp_0.1.1_amd64.deb
+sudo dpkg -i research-master-mcp_x.x.x_amd64.deb
 
 # Install dependencies if needed
 sudo apt-get install -f
@@ -349,20 +349,20 @@ sudo apt-get install -f
 
 ```bash
 # Download .apk package from GitHub Releases
-wget https://github.com/hongkongkiwi/research-master-mcp/releases/download/v0.1.1/research-master-mcp-0.1.1-x86_64.apk
+wget https://github.com/hongkongkiwi/research-master-mcp/releases/download/vx.x.x/research-master-mcp-x.x.x-x86_64.apk
 
 # Install the package
-sudo apk add --allow-untrusted research-master-mcp-0.1.1-x86_64.apk
+sudo apk add --allow-untrusted research-master-mcp-x.x.x-x86_64.apk
 ```
 
 ### Linux (RedHat/Fedora) - RPM Package
 
 ```bash
 # Download .rpm package from GitHub Releases
-wget https://github.com/hongkongkiwi/research-master-mcp/releases/download/v0.1.1/research-master-mcp-0.1.1-1.x86_64.rpm
+wget https://github.com/hongkongkiwi/research-master-mcp/releases/download/vx.x.x/research-master-mcp-x.x.x-1.x86_64.rpm
 
 # Install the package
-sudo dnf install research-master-mcp-0.1.1-1.x86_64.rpm
+sudo dnf install research-master-mcp-x.x.x-1.x86_64.rpm
 ```
 
 ### Crates.io
@@ -389,7 +389,7 @@ Individual research sources can be disabled at compile time using Cargo features
 |---------|-------------|
 | `arxiv` | Enable arXiv source |
 | `pubmed` | Enable PubMed source |
-| `biorxiv` | Enable bioRxiv source |
+| `biorxiv` | Enable bioRxiv/medRxiv source |
 | `semantic` | Enable Semantic Scholar source |
 | `openalex` | Enable OpenAlex source |
 | `crossref` | Enable CrossRef source |
@@ -400,6 +400,7 @@ Individual research sources can be disabled at compile time using Cargo features
 | `ssrn` | Enable SSRN source |
 | `dimensions` | Enable Dimensions source |
 | `ieee_xplore` | Enable IEEE Xplore source |
+| `europe_pmc` | Enable EuropePMC source |
 | `core_repo` | Enable CORE source |
 | `zenodo` | Enable Zenodo source |
 | `unpaywall` | Enable Unpaywall source |
@@ -579,10 +580,6 @@ Options:
   -s, --source <SOURCE>  Source to search (default: all with DOI lookup)
   --json                 Output as JSON
 ```
-
-## Claude Desktop Integration
-
-For setup instructions, see the [MCP Client Integration](#mcp-client-integration) section which includes Claude Desktop configuration alongside other popular editors and tools.
 
 ## MCP Client Integration
 
@@ -1315,9 +1312,9 @@ research-master-mcp/
 │   │   ├── dblp.rs              # DBLP
 │   │   ├── ssrn.rs              # SSRN
 │   │   ├── core.rs              # CORE
-│   │   ├── europepmc.rs         # EuropePMC
 │   │   ├── dimensions.rs        # Dimensions
 │   │   ├── ieee_xplore.rs       # IEEE Xplore
+│   │   ├── europe_pmc.rs        # EuropePMC
 │   │   ├── zenodo.rs            # Zenodo
 │   │   ├── unpaywall.rs         # Unpaywall
 │   │   ├── mdpi.rs              # MDPI
@@ -1550,7 +1547,7 @@ export RESEARCH_MASTER_DISABLED_SOURCES="semantic"
 |----------|-------------|---------|
 | `SEMANTIC_SCHOLAR_RATE_LIMIT` | Semantic Scholar requests per second | `1` |
 | `IEEEXPLORE_RATE_LIMIT` | IEEE Xplore requests per second | `3` |
-| `ACMRATE_LIMIT` | ACM Digital Library requests per second | `3` |
+| `ACM_RATE_LIMIT` | ACM Digital Library requests per second | `3` |
 
 **Note:** Without an API key, Semantic Scholar limits you to 1 request per second. Set to a higher value if you have an API key.
 

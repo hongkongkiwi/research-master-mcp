@@ -450,3 +450,29 @@ impl Source for MedrxivSource {
         self.inner.read(request).await
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_biorxiv_source_creation() {
+        let source = BiorxivSource::new();
+        assert!(source.is_ok());
+    }
+
+    #[test]
+    fn test_medrxiv_source_creation() {
+        let source = MedrxivSource::new();
+        assert!(source.is_ok());
+    }
+
+    #[test]
+    fn test_biorxiv_capabilities() {
+        let source = BiorxivSource::new().unwrap();
+        let caps = source.capabilities();
+        assert!(caps.contains(SourceCapabilities::SEARCH));
+        assert!(caps.contains(SourceCapabilities::DOWNLOAD));
+        assert!(caps.contains(SourceCapabilities::READ));
+    }
+}

@@ -301,3 +301,35 @@ impl Source for SsrnSource {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_ssrn_source_creation() {
+        let source = SsrnSource::new();
+        assert!(source.is_ok());
+    }
+
+    #[test]
+    fn test_ssrn_capabilities() {
+        let source = SsrnSource::new().unwrap();
+        let caps = source.capabilities();
+        assert!(caps.contains(SourceCapabilities::SEARCH));
+        assert!(caps.contains(SourceCapabilities::DOWNLOAD));
+        assert!(caps.contains(SourceCapabilities::READ));
+    }
+
+    #[test]
+    fn test_ssrn_id() {
+        let source = SsrnSource::new().unwrap();
+        assert_eq!(source.id(), "ssrn");
+    }
+
+    #[test]
+    fn test_ssrn_name() {
+        let source = SsrnSource::new().unwrap();
+        assert_eq!(source.name(), "SSRN");
+    }
+}

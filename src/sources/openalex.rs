@@ -527,3 +527,38 @@ struct AuthorsResponse {
 struct OAAuthorData {
     id: Option<String>,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_openalex_source_creation() {
+        let source = OpenAlexSource::new();
+        assert!(source.is_ok());
+    }
+
+    #[test]
+    fn test_openalex_capabilities() {
+        let source = OpenAlexSource::new().unwrap();
+        let caps = source.capabilities();
+        assert!(caps.contains(SourceCapabilities::SEARCH));
+        assert!(caps.contains(SourceCapabilities::DOWNLOAD));
+        assert!(caps.contains(SourceCapabilities::READ));
+        assert!(caps.contains(SourceCapabilities::CITATIONS));
+        assert!(caps.contains(SourceCapabilities::DOI_LOOKUP));
+        assert!(caps.contains(SourceCapabilities::AUTHOR_SEARCH));
+    }
+
+    #[test]
+    fn test_openalex_id() {
+        let source = OpenAlexSource::new().unwrap();
+        assert_eq!(source.id(), "openalex");
+    }
+
+    #[test]
+    fn test_openalex_name() {
+        let source = OpenAlexSource::new().unwrap();
+        assert_eq!(source.name(), "OpenAlex");
+    }
+}

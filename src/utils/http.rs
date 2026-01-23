@@ -20,6 +20,46 @@ const DEFAULT_REQUESTS_PER_SECOND: u32 = 5;
 /// Environment variable for rate limiting (requests per second)
 const RATE_LIMIT_ENV_VAR: &str = "RESEARCH_MASTER_RATE_LIMITS_DEFAULT_REQUESTS_PER_SECOND";
 
+/// Environment variable for HTTP proxy
+const HTTP_PROXY_ENV_VAR: &str = "HTTP_PROXY";
+
+/// Environment variable for HTTPS proxy
+const HTTPS_PROXY_ENV_VAR: &str = "HTTPS_PROXY";
+
+/// Environment variable for no proxy (comma-separated list of hosts to bypass proxy)
+const NO_PROXY_ENV_VAR: &str = "NO_PROXY";
+
+/// Proxy configuration
+/// Note: no_proxy is collected but not currently applied by reqwest
+#[derive(Debug, Clone, Default)]
+#[allow(dead_code)]
+pub struct ProxyConfig {
+    pub http_proxy: Option<String>,
+    pub https_proxy: Option<String>,
+    pub no_proxy: Option<String>,
+}
+
+/// Create proxy configuration from environment variables
+pub fn create_proxy_config() -> ProxyConfig {
+    let http_proxy = std::env::var(HTTP_PROXY_ENV_VAR).ok();
+    let https_proxy = std::env::var(HTTPS_PROXY_ENV_VAR).ok();
+    let no_proxy = std::env::var(NO_PROXY_ENV_VAR).ok();
+
+    if http_proxy.is_some() || https_proxy.is_some() {
+        tracing::info!(
+            "Proxy configured: HTTP={:?}, HTTPS={:?}",
+            http_proxy,
+            https_proxy
+        );
+    }
+
+    ProxyConfig {
+        http_proxy,
+        https_proxy,
+        no_proxy,
+    }
+}
+
 /// Shared HTTP client with sensible defaults and rate limiting
 #[derive(Debug, Clone)]
 pub struct HttpClient {
@@ -118,12 +158,23 @@ impl HttpClient {
     /// Create a new HTTP client with a custom user agent
     pub fn with_user_agent(user_agent: &str) -> Result<Self, SourceError> {
         let rate_limiter = Self::create_rate_limiter();
+        let proxy = create_proxy_config();
 
-        let client = Client::builder()
+        let mut builder = Client::builder()
             .user_agent(user_agent)
             .timeout(Duration::from_secs(30))
             .connect_timeout(Duration::from_secs(10))
-            .pool_idle_timeout(Duration::from_secs(90))
+            .pool_idle_timeout(Duration::from_secs(90));
+
+        // Apply proxy if configured
+        if let Some(proxy_url) = proxy.http_proxy {
+            builder = builder.proxy(reqwest::Proxy::http(&proxy_url)?);
+        }
+        if let Some(proxy_url) = proxy.https_proxy {
+            builder = builder.proxy(reqwest::Proxy::https(&proxy_url)?);
+        }
+
+        let client = builder
             .build()
             .map_err(|e| SourceError::Network(format!("Failed to create HTTP client: {}", e)))?;
 
@@ -135,11 +186,21 @@ impl HttpClient {
 
     /// Create a new HTTP client without rate limiting
     pub fn without_rate_limit(user_agent: &str) -> Result<Self, SourceError> {
-        let client = Client::builder()
+        let proxy = create_proxy_config();
+        let mut builder = Client::builder()
             .user_agent(user_agent)
             .timeout(Duration::from_secs(30))
             .connect_timeout(Duration::from_secs(10))
-            .pool_idle_timeout(Duration::from_secs(90))
+            .pool_idle_timeout(Duration::from_secs(90));
+
+        if let Some(proxy_url) = proxy.http_proxy {
+            builder = builder.proxy(reqwest::Proxy::http(&proxy_url)?);
+        }
+        if let Some(proxy_url) = proxy.https_proxy {
+            builder = builder.proxy(reqwest::Proxy::https(&proxy_url)?);
+        }
+
+        let client = builder
             .build()
             .map_err(|e| SourceError::Network(format!("Failed to create HTTP client: {}", e)))?;
 
@@ -163,11 +224,60 @@ impl HttpClient {
             Some(Arc::new(RateLimiter::direct(quota)))
         };
 
-        let client = Client::builder()
+        let proxy = create_proxy_config();
+        let mut builder = Client::builder()
             .user_agent(user_agent)
             .timeout(Duration::from_secs(30))
             .connect_timeout(Duration::from_secs(10))
-            .pool_idle_timeout(Duration::from_secs(90))
+            .pool_idle_timeout(Duration::from_secs(90));
+
+        if let Some(proxy_url) = proxy.http_proxy {
+            builder = builder.proxy(reqwest::Proxy::http(&proxy_url)?);
+        }
+        if let Some(proxy_url) = proxy.https_proxy {
+            builder = builder.proxy(reqwest::Proxy::https(&proxy_url)?);
+        }
+
+        let client = builder
+            .build()
+            .map_err(|e| SourceError::Network(format!("Failed to create HTTP client: {}", e)))?;
+
+        Ok(Self {
+            client: Arc::new(client),
+            rate_limiter,
+        })
+    }
+
+    /// Create HTTP client with per-source proxy
+    pub fn with_proxy(
+        user_agent: &str,
+        http_proxy: Option<String>,
+        https_proxy: Option<String>,
+        requests_per_second: u32,
+    ) -> Result<Self, SourceError> {
+        let rate_limiter = if requests_per_second == 0 {
+            None
+        } else {
+            let nonzero = NonZeroU32::new(requests_per_second)
+                .expect("requests_per_second should be > 0 when not 0 branch");
+            let quota = Quota::per_second(nonzero);
+            Some(Arc::new(RateLimiter::direct(quota)))
+        };
+
+        let mut builder = Client::builder()
+            .user_agent(user_agent)
+            .timeout(Duration::from_secs(30))
+            .connect_timeout(Duration::from_secs(10))
+            .pool_idle_timeout(Duration::from_secs(90));
+
+        if let Some(proxy_url) = http_proxy {
+            builder = builder.proxy(reqwest::Proxy::http(&proxy_url)?);
+        }
+        if let Some(proxy_url) = https_proxy {
+            builder = builder.proxy(reqwest::Proxy::https(&proxy_url)?);
+        }
+
+        let client = builder
             .build()
             .map_err(|e| SourceError::Network(format!("Failed to create HTTP client: {}", e)))?;
 

@@ -102,6 +102,7 @@ dblp = ["source-dblp"]
 ssrn = ["source-ssrn"]
 dimensions = ["source-dimensions"]
 ieee_xplore = ["source-ieee_xplore"]
+europe_pmc = ["source-europe_pmc"]
 core_repo = ["source-core-repo"]
 zenodo = ["source-zenodo"]
 unpaywall = ["source-unpaywall"]
@@ -131,6 +132,7 @@ source-dblp = []
 source-ssrn = []
 source-dimensions = []
 source-ieee_xplore = []
+source-europe_pmc = []
 source-core-repo = []
 source-zenodo = []
 source-unpaywall = []
@@ -187,6 +189,10 @@ tokio-test = "0.4"
 mockito = "1.5"
 cargo-dist = "0.22"
 cargo-husky = "1"
+
+# Configure cargo-husky to run lint and security audit before push
+[workspace.metadata.husky]
+pre-push = ["cargo clippy", "cargo audit"]
 
 # The library is also available for use as a library
 [lib]

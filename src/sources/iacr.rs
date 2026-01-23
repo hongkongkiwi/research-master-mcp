@@ -191,3 +191,35 @@ struct IACRPaper {
 struct IACRAuthor {
     name: String,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_iacr_source_creation() {
+        let source = IacrSource::new();
+        assert!(source.is_ok());
+    }
+
+    #[test]
+    fn test_iacr_capabilities() {
+        let source = IacrSource::new().unwrap();
+        let caps = source.capabilities();
+        assert!(caps.contains(SourceCapabilities::SEARCH));
+        assert!(caps.contains(SourceCapabilities::DOWNLOAD));
+        assert!(caps.contains(SourceCapabilities::READ));
+    }
+
+    #[test]
+    fn test_iacr_id() {
+        let source = IacrSource::new().unwrap();
+        assert_eq!(source.id(), "iacr");
+    }
+
+    #[test]
+    fn test_iacr_name() {
+        let source = IacrSource::new().unwrap();
+        assert_eq!(source.name(), "IACR ePrint");
+    }
+}

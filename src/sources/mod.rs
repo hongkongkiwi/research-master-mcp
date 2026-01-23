@@ -75,6 +75,8 @@ mod dblp;
 mod dimensions;
 #[cfg(feature = "source-doaj")]
 mod doaj;
+#[cfg(feature = "source-europe_pmc")]
+mod europe_pmc;
 #[cfg(feature = "source-google_scholar")]
 mod google_scholar;
 #[cfg(feature = "source-hal")]
