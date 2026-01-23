@@ -993,7 +993,11 @@ async fn main() -> Result<()> {
                             println!("  - {}: {} ({})", name, status, resp.status());
                         }
                         Err(e) => {
-                            println!("  - {}: ERROR ({})", name, e.to_string().split(':').next().unwrap_or("unknown"));
+                            println!(
+                                "  - {}: ERROR ({})",
+                                name,
+                                e.to_string().split(':').next().unwrap_or("unknown")
+                            );
                         }
                     }
                 }
@@ -1193,10 +1197,10 @@ mod tests {
     fn test_cli_verbose_flag() {
         let cli = Cli::parse_from(["research-master-mcp", "-v"]);
         assert_eq!(cli.verbose, 1);
-        
+
         let cli = Cli::parse_from(["research-master-mcp", "-vv"]);
         assert_eq!(cli.verbose, 2);
-        
+
         let cli = Cli::parse_from(["research-master-mcp", "--verbose"]);
         assert_eq!(cli.verbose, 1);
     }
@@ -1205,7 +1209,7 @@ mod tests {
     fn test_cli_quiet_flag() {
         let cli = Cli::parse_from(["research-master-mcp", "-q"]);
         assert!(cli.quiet);
-        
+
         let cli = Cli::parse_from(["research-master-mcp", "--quiet"]);
         assert!(cli.quiet);
     }
@@ -1214,7 +1218,7 @@ mod tests {
     fn test_cli_output_format() {
         let cli = Cli::parse_from(["research-master-mcp", "-o", "json"]);
         assert_eq!(cli.output, OutputFormat::Json);
-        
+
         let cli = Cli::parse_from(["research-master-mcp", "--output", "table"]);
         assert_eq!(cli.output, OutputFormat::Table);
     }
@@ -1241,7 +1245,9 @@ mod tests {
     fn test_cli_search_command() {
         let cli = Cli::parse_from(["research-master-mcp", "search", "machine learning"]);
         match &cli.command {
-            Some(Commands::Search { query, max_results, .. }) => {
+            Some(Commands::Search {
+                query, max_results, ..
+            }) => {
                 assert_eq!(query, "machine learning");
                 assert_eq!(*max_results, 10);
             }
@@ -1252,14 +1258,24 @@ mod tests {
     #[test]
     fn test_cli_search_with_options() {
         let cli = Cli::parse_from([
-            "research-master-mcp", "search", "neural networks",
-            "--max-results", "50",
-            "--year", "2023",
-            "--source", "arxiv",
+            "research-master-mcp",
+            "search",
+            "neural networks",
+            "--max-results",
+            "50",
+            "--year",
+            "2023",
+            "--source",
+            "arxiv",
             "--dedup",
         ]);
         match &cli.command {
-            Some(Commands::Search { query, max_results, year, .. }) => {
+            Some(Commands::Search {
+                query,
+                max_results,
+                year,
+                ..
+            }) => {
                 assert_eq!(query, "neural networks");
                 assert_eq!(*max_results, 50);
                 assert_eq!(year.clone(), Some("2023".to_string()));
@@ -1270,7 +1286,13 @@ mod tests {
 
     #[test]
     fn test_cli_download_command() {
-        let cli = Cli::parse_from(["research-master-mcp", "download", "2301.12345", "--source", "arxiv"]);
+        let cli = Cli::parse_from([
+            "research-master-mcp",
+            "download",
+            "2301.12345",
+            "--source",
+            "arxiv",
+        ]);
         match &cli.command {
             Some(Commands::Download {
                 paper_id,
@@ -1324,7 +1346,9 @@ mod tests {
     fn test_cli_serve_command() {
         let cli = Cli::parse_from(["research-master-mcp", "serve"]);
         match &cli.command {
-            Some(Commands::Serve { stdio, port, host, .. }) => {
+            Some(Commands::Serve {
+                stdio, port, host, ..
+            }) => {
                 assert!(*stdio);
                 assert_eq!(*port, 3000);
                 assert_eq!(host, "127.0.0.1");

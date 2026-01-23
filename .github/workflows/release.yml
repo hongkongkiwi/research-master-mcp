@@ -318,7 +318,8 @@ jobs:
     runs-on: ubuntu-latest
     # This job requires a custom crates.io-index fork for GitHub Packages
     # Skip for now as it requires additional setup
-    if: false
+    # Temporarily disabled - uncomment when ready to set up
+    # if: false
     steps:
       - name: Checkout
         uses: actions/checkout@v4

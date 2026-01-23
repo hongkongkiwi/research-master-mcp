@@ -138,7 +138,8 @@ fn extract_with_lopdf(path: &Path) -> Result<String, PdfExtractError> {
         .map_err(|e| PdfExtractError::ExtractionFailed(e.to_string()))?;
 
     let pages: Vec<u32> = (1..=doc.get_pages().len() as u32).collect();
-    let text = doc.extract_text(&pages)
+    let text = doc
+        .extract_text(&pages)
         .map_err(|e| PdfExtractError::ExtractionFailed(e.to_string()))?;
 
     Ok(text)

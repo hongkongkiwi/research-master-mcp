@@ -107,15 +107,14 @@ impl EuropePmcSource {
                 if let Some(pmid) = &result.pubmed_id {
                     format!("https://europepmc.org/article/med/{}", pmid)
                 } else {
-                    format!("https://europepmc.org/search?query={}", urlencoding::encode(&title))
+                    format!(
+                        "https://europepmc.org/search?query={}",
+                        urlencoding::encode(&title)
+                    )
                 }
             });
 
-        let authors = result
-            .author_string
-            .as_ref()
-            .cloned()
-            .unwrap_or_default();
+        let authors = result.author_string.as_ref().cloned().unwrap_or_default();
 
         let abstract_text = result.abstract_text.clone().unwrap_or_default();
 
@@ -183,9 +182,10 @@ impl Source for EuropePmcSource {
                     )));
                 }
 
-                response.text().await.map_err(|e| {
-                    SourceError::Network(format!("Failed to read response: {}", e))
-                })
+                response
+                    .text()
+                    .await
+                    .map_err(|e| SourceError::Network(format!("Failed to read response: {}", e)))
             }
         })
         .await?;
