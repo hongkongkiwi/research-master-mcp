@@ -1,7 +1,7 @@
 //! CORE research source implementation.
 //!
 //! Uses the CORE API for searching and retrieving research papers.
-//! API documentation: https://core.ac.uk/services/api
+//! API documentation: <https://core.ac.uk/services/api>
 
 use async_trait::async_trait;
 use serde::Deserialize;

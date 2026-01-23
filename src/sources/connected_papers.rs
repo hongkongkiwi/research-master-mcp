@@ -1,7 +1,7 @@
 //! Connected Papers research source implementation.
 //!
 //! Uses the Connected Papers API for finding related research papers.
-//! API documentation: https://docs.connectedpapers.com
+//! API documentation: <https://docs.connectedpapers.com>
 //!
 //! Connected Papers is free and requires no API key.
 

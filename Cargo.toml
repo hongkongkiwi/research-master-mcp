@@ -10,7 +10,7 @@ categories = ["science", "api-bindings", "command-line-utilities"]
 keywords = ["mcp", "academic", "research", "papers", "scholar", "arxiv", "pubmed"]
 readme = "README.md"
 homepage = "https://github.com/hongkongkiwi/research-master-mcp"
-documentation = "https://github.com/hongkongkiwi/research-master-mcp#readme"
+documentation = "https://docs.rs/research-master-mcp"
 
 # Binary configuration
 [[bin]]
@@ -180,7 +180,12 @@ tokio-test = "0.4"
 mockito = "1.5"
 cargo-dist = "0.22"
 
-# The binary is already defined above
+# The library is also available for use as a library
 [lib]
 name = "research_master_mcp"
 path = "src/lib.rs"
+
+# Examples
+[[example]]
+name = "basic_usage"
+path = "examples/basic_usage.rs"

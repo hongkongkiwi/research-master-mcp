@@ -1,7 +1,7 @@
 //! ACM research source implementation.
 //!
 //! Uses the ACM Digital Library API for searching and retrieving research papers.
-//! API documentation: https://dl.acm.org/api
+//! API documentation: <https://dl.acm.org/api>
 //!
 //! Requires an API key from the ACM Developer Portal.
 

@@ -1,7 +1,7 @@
 //! SciSpace research source implementation.
 //!
 //! Uses the SciSpace (Typeset) API for searching and retrieving research papers.
-//! API documentation: https://typeset.io/api
+//! API documentation: <https://typeset.io/api>
 //!
 //! SciSpace is free and requires no API key for basic search.
 

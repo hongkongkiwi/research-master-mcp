@@ -1,7 +1,7 @@
 //! Zenodo research source implementation.
 //!
 //! Uses the Zenodo API for searching and retrieving research papers.
-//! API documentation: https://developers.zenodo.org
+//! API documentation: <https://developers.zenodo.org>
 
 use async_trait::async_trait;
 use serde::Deserialize;

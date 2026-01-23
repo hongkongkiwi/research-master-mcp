@@ -1,7 +1,7 @@
 //! MDPI research source implementation.
 //!
 //! Uses the MDPI API for searching and retrieving research papers.
-//! API documentation: https://developer.mdpi.com
+//! API documentation: <https://developer.mdpi.com>
 
 use async_trait::async_trait;
 use serde::Deserialize;

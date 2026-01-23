@@ -100,7 +100,40 @@ brew tap hongkongkiwi/research-master-mcp
 brew install research-master-mcp
 ```
 
-### From Crates.io
+### Linux (Debian/Ubuntu) - DEB Package
+
+```bash
+# Download .deb package from GitHub Releases
+wget https://github.com/hongkongkiwi/research-master-mcp/releases/download/v0.1.0/research-master-mcp_0.1.0_amd64.deb
+
+# Install the package
+sudo dpkg -i research-master-mcp_0.1.0_amd64.deb
+
+# Install dependencies if needed
+sudo apt-get install -f
+```
+
+### Linux (Alpine) - APK Package
+
+```bash
+# Download .apk package from GitHub Releases
+wget https://github.com/hongkongkiwi/research-master-mcp/releases/download/v0.1.0/research-master-mcp-0.1.0-x86_64.apk
+
+# Install the package
+sudo apk add --allow-untrusted research-master-mcp-0.1.0-x86_64.apk
+```
+
+### Linux (RedHat/Fedora) - RPM Package
+
+```bash
+# Download .rpm package from GitHub Releases
+wget https://github.com/hongkongkiwi/research-master-mcp/releases/download/v0.1.0/research-master-mcp-0.1.0-1.x86_64.rpm
+
+# Install the package
+sudo dnf install research-master-mcp-0.1.0-1.x86_64.rpm
+```
+
+### Crates.io
 
 ```bash
 cargo install research-master-mcp

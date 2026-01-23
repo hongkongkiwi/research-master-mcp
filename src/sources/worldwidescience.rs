@@ -1,7 +1,7 @@
 //! WorldWideScience research source implementation.
 //!
 //! Uses the WorldWideScience API for searching international scientific literature.
-//! API documentation: https://worldwidescience.org/api
+//! API documentation: <https://worldwidescience.org/api>
 //!
 //! WorldWideScience is free and requires no API key.
 

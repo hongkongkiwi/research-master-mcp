@@ -1,7 +1,7 @@
 //! BASE (Bielefeld Academic Search Engine) research source implementation.
 //!
 //! Uses the BASE API for searching academic resources from repositories worldwide.
-//! API documentation: https://www.base-search.net/about/en/developers.php
+//! API documentation: <https://www.base-search.net/about/en/developers.php>
 //!
 //! BASE requires a free API key for higher rate limits, but works with basic access.
 

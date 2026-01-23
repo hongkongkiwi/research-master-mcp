@@ -1,7 +1,7 @@
 //! Dimensions research source implementation.
 //!
 //! Uses the Dimensions API for comprehensive research paper discovery.
-//! API documentation: https://docs.dimensions.ai
+//! API documentation: <https://docs.dimensions.ai>
 
 use async_trait::async_trait;
 use serde::Deserialize;

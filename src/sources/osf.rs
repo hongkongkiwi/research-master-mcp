@@ -1,7 +1,7 @@
 //! OSF Preprints research source implementation.
 //!
 //! Uses the OSF API for searching preprints from the Open Science Framework.
-//! API documentation: https://developer.osf.io
+//! API documentation: <https://developer.osf.io>
 //!
 //! OSF is free and requires no API key for public data.
 

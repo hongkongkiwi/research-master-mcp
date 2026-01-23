@@ -1,7 +1,7 @@
 //! Springer research source implementation.
 //!
 //! Uses the Springer Nature API for searching publications from Springer Link.
-//! API documentation: https://dev.springernature.com
+//! API documentation: <https://dev.springernature.com>
 //!
 //! Requires a free API key from developer.springernature.com
 

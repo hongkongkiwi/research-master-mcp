@@ -1,7 +1,7 @@
 //! Unpaywall research source implementation.
 //!
 //! Uses the Unpaywall API for checking open access status of papers.
-//! API documentation: https://unpaywall.org/api/v2
+//! API documentation: <https://unpaywall.org/api/v2>
 
 use async_trait::async_trait;
 use serde::Deserialize;

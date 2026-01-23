@@ -1,7 +1,7 @@
 //! DOAJ (Directory of Open Access Journals) research source implementation.
 //!
 //! Uses the DOAJ API for searching open access journals and articles.
-//! API documentation: https://doaj.org/api/v2
+//! API documentation: <https://doaj.org/api/v2>
 //!
 //! DOAJ is free and requires no API key for basic search.
 

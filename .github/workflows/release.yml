@@ -1,52 +1,5 @@
-# CI to verify the build is healthy (runs on every PR)
-name: CI
+# Build native Linux packages for distributions
 
-on:
-  pull_request:
-  push:
-    branches: [main]
-
-env:
-  CARGO_TERM_COLOR: always
-
-jobs:
-  # Run tests and lints on all platforms
-  test:
-    name: Test
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          components: rustfmt, clippy
-
-      - name: Install dependencies (Ubuntu)
-        if: matrix.os == 'ubuntu-latest'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libpoppler-cpp-dev
-
-      - name: Install dependencies (macOS)
-        if: matrix.os == 'macos-latest'
-        run: brew install poppler
-
-      - name: Check formatting
-        run: cargo fmt --all -- --check
-
-      - name: Run clippy
-        run: cargo clippy --all-targets -- -D warnings
-
-      - name: Run tests
-        run: cargo test --all-features
-
-# Releases to GitHub and crates.io
 name: Release
 
 on:
@@ -84,9 +37,9 @@ jobs:
         run: cargo dist plan
         id: plan
 
-  # Build for all targets
-  build:
-    name: Build (${{ matrix.target }})
+  # Build binary releases using cargo-dist
+  build-binaries:
+    name: Build Binaries (${{ matrix.target }})
     needs: plan
     runs-on: ${{ matrix.os }}
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
@@ -94,20 +47,20 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # Linux - glibc (Debian, Ubuntu, RedHat/Fedora)
+          # Linux - glibc (for manual install, we'll build packages separately)
           - os: ubuntu-24.04
             target: x86_64-unknown-linux-gnu
-            suffix: linux-amd64-deb
+            suffix: linux-amd64
           - os: ubuntu-24.04
             target: aarch64-unknown-linux-gnu
-            suffix: linux-arm64-deb
+            suffix: linux-arm64
           # Linux - musl (Alpine)
           - os: ubuntu-24.04
             target: x86_64-unknown-linux-musl
-            suffix: linux-amd64-alpine
+            suffix: linux-amd64-musl
           - os: ubuntu-24.04
             target: aarch64-unknown-linux-musl
-            suffix: linux-arm64-alpine
+            suffix: linux-arm64-musl
           # macOS
           - os: macos-13
             target: x86_64-apple-darwin
@@ -145,13 +98,268 @@ jobs:
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: artifacts-${{ matrix.suffix }}
+          name: binary-${{ matrix.suffix }}
           path: target/dist/*
+
+  # Build Debian/Ubuntu packages (.deb)
+  build-deb:
+    name: Build DEB (${{ matrix.arch }})
+    needs: plan
+    runs-on: ubuntu-24.04
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [amd64, arm64]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install cargo-deb
+        run: |
+          cargo install cargo-deb
+
+      - name: Install cross-compilation tools (ARM64)
+        if: matrix.arch == 'arm64'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
+
+      - name: Extract version
+        id: version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+
+      - name: Build DEB package
+        env:
+          VERSION: ${{ steps.version.outputs.VERSION }}
+          TARGET: ${{ matrix.arch == 'amd64' && 'x86_64-unknown-linux-gnu' || 'aarch64-unknown-linux-gnu' }}
+        run: |
+          # Build the release binary first
+          cargo build --release --target $TARGET
+
+          # Create DEB package structure
+          DEB_DIR="research-master-mcp_${VERSION}_${{ matrix.arch }}"
+          mkdir -p "$DEB_DIR/DEBIAN"
+
+          # Control file
+          cat > "$DEB_DIR/DEBIAN/control" << EOF
+          Package: research-master-mcp
+          Version: ${VERSION}
+          Architecture: ${{ matrix.arch == 'amd64' && 'amd64' || 'arm64' }}
+          Maintainer: hongkongkiwi <hongkongkiwi@users.noreply.github.com>
+          Description: MCP server for searching and downloading academic papers
+           Research Master MCP provides unified access to 26 major research repositories
+           and databases. It implements the Model Context Protocol (MCP) to integrate
+           seamlessly with AI assistants.
+          Homepage: https://github.com/hongkongkiwi/research-master-mcp
+          License: MIT
+          Depends: libc6 (>= 2.27), libpoppler-cpp0
+          Section: utils
+          Priority: optional
+          EOF
+
+          # changelog
+          cat > "$DEB_DIR/DEBIAN/changelog" << EOF
+          research-master-mcp (${VERSION}) unstable; urgency=medium
+
+            * New release
+           -- hongkongkiwi <hongkongkiwi@users.noreply.github.com>  $(date -R -u)
+          EOF
+
+          # rules
+          cat > "$DEB_DIR/DEBIAN/rules" << 'EOF'
+          #!/usr/bin/make -f
+
+          CARGO = cargo
+          CARGO_FLAGS = --release
+
+          TARGET = $(shell dpkg-architecture | sed -e 's/arm64/aarch64/' -e 's/amd64/x86_64_/')
+
+          build:
+          	cargo build --release --target $(TARGET)
+
+          binary:
+          	cargo install --path $(DEB_DIR)/usr --root $(DEB_DIR) --target $(TARGET)
+
+          clean:
+          	cargo clean
+
+          .PHONY: build binary clean
+          EOF
+
+          chmod +x "$DEB_DIR/DEBIAN/rules"
+
+          # Copy binary
+          mkdir -p "$DEB_DIR/usr/bin"
+          cp "target/${TARGET}/release/research-master-mcp" "$DEB_DIR/usr/bin/research-master-mcp"
+
+          # Build the package
+          dpkg-deb --build "$DEB_DIR"
+
+          # Rename to proper format
+          mv "${DEB_DIR}.deb" "research-master-mcp_${VERSION}_${{ matrix.arch }}.deb"
+
+      - name: Upload DEB package
+        uses: actions/upload-artifact@v4
+        with:
+          name: deb-${{ matrix.arch }}
+          path: research-master-mcp_*.deb
+
+  # Build Alpine packages (.apk)
+  build-apk:
+    name: Build APK (${{ matrix.arch }})
+    needs: plan
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [x86_64, aarch64]
+    container:
+      image: alpine:latest
+      options: --arch ${{ matrix.arch }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust and build dependencies
+        run: |
+          apk add --no-cache rust cargo build-base openssl-dev poppler-dev musl-dev git
+
+      - name: Extract version
+        id: version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+
+      - name: Build binary
+        env:
+          VERSION: ${{ steps.version.outputs.VERSION }}
+        run: |
+          TARGET="${{ matrix.arch }}-unknown-linux-musl"
+          cargo build --release --target $TARGET
+
+      - name: Create APK package
+        env:
+          VERSION: ${{ steps.version.outputs.VERSION }}
+        run: |
+          apk build-base
+
+          # Create package directory
+          PKGDIR="research-master-mcp-${VERSION}"
+          mkdir -p "$PKGDIR/usr/bin"
+
+          # Copy binary
+          cp "target/${{ matrix.arch }}-unknown-linux-musl/release/research-master-mcp" "$PKGDIR/usr/bin/"
+          chmod +x "$PKGDIR/usr/bin/research-master-mcp"
+
+          # Create APKBUILD
+          cat > "$PKGDIR/APKBUILD" << EOF
+          # Contributor: hongkongkiwi <hongkongkiwi@users.noreply.github.com>
+          # Maintainer: hongkongkiwi <hongkongkiwi@users.noreply.github.com>
+          pkgname=research-master-mcp
+          pkgver=${VERSION}
+          pkgrel=0
+          pkgdesc="MCP server for searching and downloading academic papers from multiple research sources"
+          url="https://github.com/hongkongkiwi/research-master-mcp"
+          arch="${{ matrix.arch }}"
+          license="MIT"
+          depends="poppler"
+
+          package() {
+            mkdir -p "\$pkgdir"/usr/bin
+            cp research-master-mcp "\$pkgdir"/usr/bin/
+          }
+
+          build() {
+            cargo build --release --target="${{ matrix.arch }}-unknown-linux-musl"
+          }
+
+          package() {
+            mkdir -p "\$pkgdir"/usr/bin
+            cp target/${{ matrix.arch }}-unknown-linux-musl/release/research-master-mcp "\$pkgdir"/usr/bin/
+          }
+          EOF
+
+          # Build the APK
+          cd "$PKGDIR"
+          abuild checksum
+          abuild -r -F
+
+          # Copy the built APK
+          cp ~/packages/${{ matrix.arch }}/research-master-mcp-${VERSION}-r0.apk ../
+
+      - name: Upload APK package
+        uses: actions/upload-artifact@v4
+        with:
+          name: apk-${{ matrix.arch }}
+          path: research-master-mcp-*-r0.apk
+
+  # Build RedHat/Fedora RPM packages
+  build-rpm:
+    name: Build RPM (${{ matrix.arch }})
+    needs: plan
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86_64
+            docker_arch: x86_64
+            fedora_arch: x86_64
+          - arch: aarch64
+            docker_arch: aarch64
+            fedora_arch: aarch64
+    container:
+      image: fedora:latest
+      options: --arch ${{ matrix.docker_arch }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install build tools
+        run: |
+          dnf install -y cargo rpm-build rust-poppler-devel openssl-devel
+
+      - name: Install cargo-generate-rpm
+        run: |
+          cargo install cargo-generate-rpm
+
+      - name: Extract version
+        id: version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+
+      - name: Build RPM package
+        env:
+          VERSION: ${{ steps.version.outputs.VERSION }}
+        run: |
+          # Build the binary
+          cargo build --release
+
+          # Generate RPM using cargo-generate-rpm
+          cargo generate-rpm \
+            --name research-master-mcp \
+            --version ${VERSION} \
+            --license "MIT" \
+            --summary "MCP server for searching and downloading academic papers" \
+            --description "Research Master MCP provides unified access to 26 major research repositories and databases." \
+            --url "https://github.com/hongkongkiwi/research-master-mcp" \
+            --requires "poppler" \
+            --replaces "research-master-mcp" \
+            --output-dir target/rpm
+
+      - name: Upload RPM package
+        uses: actions/upload-artifact@v4
+        with:
+          name: rpm-${{ matrix.arch }}
+          path: target/rpm/*/*.rpm
 
   # Create GitHub release with all artifacts
   release:
     name: Release
-    needs: [plan, build]
+    needs: [plan, build-binaries, build-deb, build-apk, build-rpm]
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
     steps:
@@ -169,37 +377,42 @@ jobs:
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
-          path: target/dist
+          path: .
 
-      - name: Create tar.gz archives for manual installation
+      - name: Organize artifacts for release
         run: |
-          cd target/dist
-          for dir in */; do
-            if [ -d "$dir" ]; then
-              tar -czf "${dir%/}.tar.gz" "$dir"
-            fi
-          done
+          mkdir -p release-artifacts
 
-      - name: Upload release assets
+          # Copy binary archives
+          find . -name "*.tar.gz" -exec cp {} release-artifacts/ \;
+          find . -name "*.zip" -exec cp {} release-artifacts/ \;
+          find . -name "*.exe" -exec cp {} release-artifacts/ \;
+
+          # Copy DEB packages
+          find . -name "*.deb" -exec cp {} release-artifacts/ \;
+
+          # Copy APK packages
+          find . -name "*.apk" -exec cp {} release-artifacts/ \;
+
+          # Copy RPM packages
+          find . -name "*.rpm" -exec cp {} release-artifacts/ \;
+
+          ls -la release-artifacts/
+
+      - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           draft: false
           prerelease: false
           generate_release_notes: true
-          files: |
-            target/dist/*.tar.gz
-            target/dist/*/*.zip
-            target/dist/*/*.exe
-            target/dist/*/*.deb
-            target/dist/*/*.rpm
-            target/dist/*/*.apk
+          files: release-artifacts/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   # Publish to crates.io
   publish-crate:
     name: Publish to crates.io
-    needs: [plan, build]
+    needs: [plan, build-binaries]
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
     steps:

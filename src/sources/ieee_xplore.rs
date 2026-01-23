@@ -1,7 +1,7 @@
 //! IEEE Xplore research source implementation.
 //!
 //! Uses the IEEE Xplore API for searching and retrieving research papers.
-//! API documentation: https://developer.ieee.org/
+//! API documentation: <https://developer.ieee.org/>
 
 use async_trait::async_trait;
 use serde::Deserialize;

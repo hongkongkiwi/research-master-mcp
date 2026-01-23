@@ -1,9 +1,9 @@
 //! JSTOR research source implementation.
 //!
 //! Uses the JSTOR API for searching and retrieving research papers.
-//! API documentation: https://www.jstor.org/api
+//! API documentation: <https://www.jstor.org/api>
 //!
-//! Requires a JSTOR API key. Get one from: https://www.jstor.org/developer
+//! Requires a JSTOR API key. Get one from: <https://www.jstor.org/developer>
 
 use async_trait::async_trait;
 use serde::Deserialize;
