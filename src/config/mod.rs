@@ -3,6 +3,8 @@
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
+const TEST_MODE_ENV_VAR: &str = "RESEARCH_MASTER_TEST_MODE";
+
 /// Cache configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CacheConfig {
@@ -135,11 +137,26 @@ pub struct SourceConfig {
 
 impl Default for SourceConfig {
     fn default() -> Self {
+        Self::from_env()
+    }
+}
+
+impl SourceConfig {
+    fn from_env() -> Self {
         Self {
             enabled_sources: std::env::var("RESEARCH_MASTER_ENABLED_SOURCES").ok(),
             disabled_sources: std::env::var("RESEARCH_MASTER_DISABLED_SOURCES").ok(),
             proxy_http: std::env::var("RESEARCH_MASTER_PROXY_HTTP").ok(),
             proxy_https: std::env::var("RESEARCH_MASTER_PROXY_HTTPS").ok(),
+        }
+    }
+
+    fn without_env() -> Self {
+        Self {
+            enabled_sources: None,
+            disabled_sources: None,
+            proxy_http: None,
+            proxy_https: None,
         }
     }
 }
@@ -158,9 +175,44 @@ pub struct ApiKeys {
 
 impl Default for ApiKeys {
     fn default() -> Self {
+        Self::from_env()
+    }
+}
+
+impl ApiKeys {
+    fn from_env() -> Self {
         Self {
             semantic_scholar: std::env::var("SEMANTIC_SCHOLAR_API_KEY").ok(),
             core: std::env::var("CORE_API_KEY").ok(),
+        }
+    }
+
+    fn without_env() -> Self {
+        Self {
+            semantic_scholar: None,
+            core: None,
+        }
+    }
+}
+
+impl Config {
+    fn from_env() -> Self {
+        Self {
+            api_keys: ApiKeys::from_env(),
+            downloads: DownloadConfig::default(),
+            rate_limits: RateLimitConfig::default(),
+            sources: SourceConfig::from_env(),
+            cache: CacheConfig::default(),
+        }
+    }
+
+    fn without_env() -> Self {
+        Self {
+            api_keys: ApiKeys::without_env(),
+            downloads: DownloadConfig::default(),
+            rate_limits: RateLimitConfig::default(),
+            sources: SourceConfig::without_env(),
+            cache: CacheConfig::default(),
         }
     }
 }
@@ -244,7 +296,15 @@ pub fn load_config(path: &Path) -> Result<Config, config::ConfigError> {
 
 /// Get the configuration (from env vars or defaults)
 pub fn get_config() -> Config {
-    Config::default()
+    let test_mode = std::env::var(TEST_MODE_ENV_VAR)
+        .map(|value| value.eq_ignore_ascii_case("true"))
+        .unwrap_or(false);
+
+    if test_mode {
+        Config::without_env()
+    } else {
+        Config::from_env()
+    }
 }
 
 /// Search for configuration file in default locations
