@@ -35,18 +35,11 @@ jobs:
       - name: Install cargo-dist
         run: |
           cargo install cargo-dist --locked
-          ls -la ~/.cargo/bin/
-          echo "---"
-          which cargo
-          echo "---"
-          echo "CARGO_HOME=$CARGO_HOME"
-          echo "HOME=$HOME"
 
       - name: Plan release
         run: |
-          ls -la ~/.cargo/bin/ 2>/dev/null || echo "bin dir not found"
           export PATH="$HOME/.cargo/bin:$PATH"
-          cargo dist plan || echo "cargo dist failed with exit code $?"
+          cargo dist plan
 
   # Build binary releases using cargo-dist
   build-binaries:
@@ -101,11 +94,10 @@ jobs:
       - name: Install cargo-dist
         run: |
           cargo install cargo-dist --locked
-          echo "/home/runner/.cargo/bin" >> $GITHUB_PATH
 
       - name: Build
         run: |
-          export PATH="/home/runner/.cargo/bin:$PATH"
+          export PATH="$HOME/.cargo/bin:$PATH"
           cargo dist build ${{ matrix.target }} --artifacts
 
       - name: Upload artifacts
