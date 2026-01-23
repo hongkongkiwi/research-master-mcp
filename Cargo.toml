@@ -183,6 +183,7 @@ full = ["default"]
 tokio-test = "0.4"
 mockito = "1.5"
 cargo-dist = "0.22"
+cargo-husky = "1"
 
 # The library is also available for use as a library
 [lib]
