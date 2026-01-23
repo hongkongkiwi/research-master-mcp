@@ -276,6 +276,12 @@ jobs:
         with:
           tool: cargo-deb
 
+      - name: Download release binary
+        uses: actions/download-artifact@v4
+        with:
+          name: binary-${{ matrix.target }}
+          path: target/${{ matrix.target }}/release
+
       - name: Build .deb package
         run: cargo deb --target ${{ matrix.target }} --no-build
 
@@ -330,7 +336,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y rpm
 
       - name: Build .rpm package
-        run: cargo rpm build --target ${{ matrix.target }}
+        run: cargo rpm build --target ${{ matrix.target }} --no-build --no-sign
 
       - name: Upload .rpm package
         uses: actions/upload-artifact@v4
@@ -429,7 +435,7 @@ jobs:
             sh -c 'apk add --no-cache alpine-sdk && \
               adduser -D builder && \
               chown -R builder:builder /work/apk-build /work/apk-packages && \
-              su builder -c "export REPODEST=/work/apk-packages PACKAGER=research-master-mcp && abuild-keygen -a -n && abuild -r"'
+              su builder -c "export REPODEST=/work/apk-packages PACKAGER= && abuild-keygen -a -n && abuild -r"'
 
       - name: Upload Alpine package
         uses: actions/upload-artifact@v4
