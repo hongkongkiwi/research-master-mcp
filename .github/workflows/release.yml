@@ -29,27 +29,21 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # Linux x86_64 (glibc)
           - os: ubuntu-24.04
             target: x86_64-unknown-linux-gnu
-            extra-tags: linux,linux-glibc
-          - os: ubuntu-24.04
-            target: aarch64-unknown-linux-gnu
-            extra-tags: linux,linux-glibc,arm64
+          # Linux x86_64 (musl)
           - os: ubuntu-24.04
             target: x86_64-unknown-linux-musl
-            extra-tags: linux,linux-musl
-          - os: ubuntu-24.04
-            target: aarch64-unknown-linux-musl
-            extra-tags: linux,linux-musl,arm64
+          # macOS Intel
           - os: macos-14
             target: x86_64-apple-darwin
-            extra-tags: macos,macos-intel
+          # macOS Apple Silicon
           - os: macos-latest
             target: aarch64-apple-darwin
-            extra-tags: macos,macos-apple
+          # Windows
           - os: windows-latest
             target: x86_64-pc-windows-msvc
-            extra-tags: windows
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -66,7 +60,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: binary-${{ matrix.target }}
-          path: target/${{ matrix.target }}/release/research-master-mcp
+          path: target/${{ matrix.target }}/release/research-master-mcp${{ matrix.target == 'x86_64-pc-windows-msvc' && '.exe' || '' }}
           retention-days: 5
 
   # Create GitHub release
@@ -87,22 +81,26 @@ jobs:
         run: |
           mkdir -p release
           for dir in binaries/binary-*; do
-            target=$(basename "$dir" | sed 's/binary-//')
-            cp "$dir/research-master-mcp" "release/research-master-mcp-${target}"
+            cp "$dir"/* "release/" 2>/dev/null || true
           done
 
           # Create tarballs for Linux/macOS
           cd release
-          for f in research-master-mcp-*linux*; do
-            [ -f "$f" ] && gzip -c "$f" > "${f}.gz" || true
-          done
-          for f in research-master-mcp-*darwin*; do
-            [ -f "$f" ] && gzip -c "$f" > "${f}.gz" || true
+          for f in research-master-mcp*; do
+            case "$f" in
+              *.gz|*.zip) continue ;;
+              *linux*|*darwin*)
+                if [ -f "$f" ] && [ ! -f "${f}.gz" ]; then
+                  gzip -c "$f" > "${f}.gz" && rm "$f"
+                fi
+                ;;
+            esac
           done
 
           # Create zip for Windows
-          if [ -f "research-master-mcp-x86_64-pc-windows-msvc" ]; then
-            zip -r research-master-mcp-x86_64-pc-windows-msvc.zip research-master-mcp-x86_64-pc-windows-msvc
+          if [ -f "research-master-mcp.exe" ]; then
+            zip -r research-master-mcp-windows.zip research-master-mcp.exe
+            rm research-master-mcp.exe
           fi
 
           ls -la
