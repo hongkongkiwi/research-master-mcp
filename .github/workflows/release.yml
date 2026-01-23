@@ -141,7 +141,7 @@ jobs:
 
   # Publish to GitHub Packages (Docker images)
   publish-docker:
-    name: Publish Docker Image
+    name: Publish Docker Image (Multi-Arch)
     needs: release
     runs-on: ubuntu-latest
     steps:
@@ -167,16 +167,14 @@ jobs:
             type=ref,event=tag
             type=raw,value=latest,enable={{is_default_branch}}
 
-      - name: Build and push Docker image
-        uses: docker/build-push-action@v5
+      - name: Build and push multi-architecture Docker image
+        uses: docker/build-push-action@v6
         with:
           context: .
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          build-args: |
-            CARGO_BUILD_TARGET=x86_64-unknown-linux-musl
-          platforms: linux/amd64
+          platforms: linux/amd64,linux/arm64
 
   # Build platform-specific packages
   build-deb:
@@ -300,7 +298,7 @@ jobs:
       - build-deb
       - build-rpm
       - build-apk
-      # - publish-docker  # Docker publish is optional, doesn't block release
+      - publish-docker
     runs-on: ubuntu-latest
     steps:
       - name: Download release binaries
