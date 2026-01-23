@@ -84,10 +84,9 @@ impl Source for SpringerSource {
                     request = request.header("Authorization", format!("Bearer {}", key));
                 }
 
-                let response = request
-                    .send()
-                    .await
-                    .map_err(|e| SourceError::Network(format!("Failed to search Springer: {}", e)))?;
+                let response = request.send().await.map_err(|e| {
+                    SourceError::Network(format!("Failed to search Springer: {}", e))
+                })?;
 
                 if !response.status().is_success() {
                     let status = response.status();
@@ -98,10 +97,9 @@ impl Source for SpringerSource {
                     )));
                 }
 
-                let json: SpringerResponse = response
-                    .json()
-                    .await
-                    .map_err(|e| SourceError::Parse(format!("Failed to parse Springer response: {}", e)))?;
+                let json: SpringerResponse = response.json().await.map_err(|e| {
+                    SourceError::Parse(format!("Failed to parse Springer response: {}", e))
+                })?;
 
                 Ok(json)
             }
@@ -128,7 +126,11 @@ impl Source for SpringerSource {
             .trim()
             .to_string();
 
-        let url = format!("{}?q=doi:\"{}\"&p=1", SPRINGER_API_BASE, urlencoding::encode(&clean_doi));
+        let url = format!(
+            "{}?q=doi:\"{}\"&p=1",
+            SPRINGER_API_BASE,
+            urlencoding::encode(&clean_doi)
+        );
 
         let client = Arc::clone(&self.client);
         let url_for_retry = url.clone();
@@ -145,10 +147,9 @@ impl Source for SpringerSource {
                     request = request.header("Authorization", format!("Bearer {}", key));
                 }
 
-                let response = request
-                    .send()
-                    .await
-                    .map_err(|e| SourceError::Network(format!("Failed to lookup DOI in Springer: {}", e)))?;
+                let response = request.send().await.map_err(|e| {
+                    SourceError::Network(format!("Failed to lookup DOI in Springer: {}", e))
+                })?;
 
                 if !response.status().is_success() {
                     return Err(SourceError::Api(format!(
@@ -157,18 +158,18 @@ impl Source for SpringerSource {
                     )));
                 }
 
-                let json: SpringerResponse = response
-                    .json()
-                    .await
-                    .map_err(|e| SourceError::Parse(format!("Failed to parse Springer response: {}", e)))?;
+                let json: SpringerResponse = response.json().await.map_err(|e| {
+                    SourceError::Parse(format!("Failed to parse Springer response: {}", e))
+                })?;
 
                 Ok(json)
             }
         })
         .await?;
 
-        let record = response.records.into_iter().next()
-            .ok_or_else(|| SourceError::NotFound(format!("Paper not found in Springer: {}", doi)))?;
+        let record = response.records.into_iter().next().ok_or_else(|| {
+            SourceError::NotFound(format!("Paper not found in Springer: {}", doi))
+        })?;
 
         self.parse_result(&record)
     }

@@ -215,7 +215,12 @@ impl Paper {
     pub fn category_list(&self) -> Vec<&str> {
         self.categories
             .as_ref()
-            .map(|c| c.split(';').map(|s| s.trim()).filter(|s| !s.is_empty()).collect())
+            .map(|c| {
+                c.split(';')
+                    .map(|s| s.trim())
+                    .filter(|s| !s.is_empty())
+                    .collect()
+            })
             .unwrap_or_default()
     }
 
@@ -223,7 +228,12 @@ impl Paper {
     pub fn keyword_list(&self) -> Vec<&str> {
         self.keywords
             .as_ref()
-            .map(|k| k.split(';').map(|s| s.trim()).filter(|s| !s.is_empty()).collect())
+            .map(|k| {
+                k.split(';')
+                    .map(|s| s.trim())
+                    .filter(|s| !s.is_empty())
+                    .collect()
+            })
             .unwrap_or_default()
     }
 
@@ -241,7 +251,12 @@ pub struct PaperBuilder {
 
 impl PaperBuilder {
     /// Create a new builder with required fields
-    pub fn new(paper_id: impl Into<String>, title: impl Into<String>, url: impl Into<String>, source: SourceType) -> Self {
+    pub fn new(
+        paper_id: impl Into<String>,
+        title: impl Into<String>,
+        url: impl Into<String>,
+        source: SourceType,
+    ) -> Self {
         Self {
             paper: Paper::new(paper_id.into(), title.into(), url.into(), source),
         }
@@ -309,7 +324,8 @@ impl PaperBuilder {
 
     /// Add extra metadata
     pub fn extra(mut self, key: impl Into<String>, value: serde_json::Value) -> Self {
-        self.paper.extra
+        self.paper
+            .extra
             .get_or_insert_with(HashMap::new)
             .insert(key.into(), value);
         self
@@ -327,13 +343,18 @@ mod tests {
 
     #[test]
     fn test_paper_builder() {
-        let paper = PaperBuilder::new("1234.5678", "Test Paper", "https://example.com", SourceType::Arxiv)
-            .authors("John Doe; Jane Smith")
-            .abstract_text("This is a test abstract.")
-            .doi("10.1234/test.1234")
-            .pdf_url("https://example.com/paper.pdf")
-            .citations(42)
-            .build();
+        let paper = PaperBuilder::new(
+            "1234.5678",
+            "Test Paper",
+            "https://example.com",
+            SourceType::Arxiv,
+        )
+        .authors("John Doe; Jane Smith")
+        .abstract_text("This is a test abstract.")
+        .doi("10.1234/test.1234")
+        .pdf_url("https://example.com/paper.pdf")
+        .citations(42)
+        .build();
 
         assert_eq!(paper.paper_id, "1234.5678");
         assert_eq!(paper.title, "Test Paper");

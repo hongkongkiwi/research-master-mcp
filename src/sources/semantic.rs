@@ -66,7 +66,10 @@ impl SemanticScholarSource {
     }
 
     /// Add API key to request headers if available
-    fn add_api_key_if_present(&self, builder: RateLimitedRequestBuilder) -> RateLimitedRequestBuilder {
+    fn add_api_key_if_present(
+        &self,
+        builder: RateLimitedRequestBuilder,
+    ) -> RateLimitedRequestBuilder {
         if let Some(ref key) = self.api_key {
             builder.header("x-api-key", key)
         } else {
@@ -101,16 +104,25 @@ impl SemanticScholarSource {
             .clone()
             .unwrap_or_else(|| format!("CorpusId:{}", data.corpus_id));
 
-        let pdf_url = data.open_access_pdf.as_ref().and_then(|p| p.url.clone()).unwrap_or_default();
+        let pdf_url = data
+            .open_access_pdf
+            .as_ref()
+            .and_then(|p| p.url.clone())
+            .unwrap_or_default();
 
-        PaperBuilder::new(paper_id, data.title.clone(), url, SourceType::SemanticScholar)
-            .authors(authors)
-            .abstract_text(data.r#abstract.clone().unwrap_or_default())
-            .doi(doi)
-            .published_date(published_date.unwrap_or_default())
-            .pdf_url(pdf_url)
-            .citations(data.citation_count.unwrap_or(0) as u32)
-            .build()
+        PaperBuilder::new(
+            paper_id,
+            data.title.clone(),
+            url,
+            SourceType::SemanticScholar,
+        )
+        .authors(authors)
+        .abstract_text(data.r#abstract.clone().unwrap_or_default())
+        .doi(doi)
+        .published_date(published_date.unwrap_or_default())
+        .pdf_url(pdf_url)
+        .citations(data.citation_count.unwrap_or(0) as u32)
+        .build()
     }
 }
 
@@ -160,10 +172,9 @@ impl Source for SemanticScholarSource {
                 if let Some(ref key) = api_key {
                     request = request.header("x-api-key", key);
                 }
-                let response = request
-                    .send()
-                    .await
-                    .map_err(|e| SourceError::Network(format!("Failed to search Semantic Scholar: {}", e)))?;
+                let response = request.send().await.map_err(|e| {
+                    SourceError::Network(format!("Failed to search Semantic Scholar: {}", e))
+                })?;
 
                 if !response.status().is_success() {
                     return Err(SourceError::Api(format!(
@@ -186,7 +197,11 @@ impl Source for SemanticScholarSource {
             .map(|item| Ok(Self::parse_paper(&item)))
             .collect();
 
-        Ok(SearchResponse::new(papers?, "Semantic Scholar", &query.query))
+        Ok(SearchResponse::new(
+            papers?,
+            "Semantic Scholar",
+            &query.query,
+        ))
     }
 
     async fn search_by_author(
@@ -199,7 +214,10 @@ impl Source for SemanticScholarSource {
         let api_key = self.api_key.clone();
 
         // First, search for the author
-        let author_url = format!("/author/search?query={}&limit=1", urlencoding::encode(author));
+        let author_url = format!(
+            "/author/search?query={}&limit=1",
+            urlencoding::encode(author)
+        );
 
         let author_data: AuthorSearchResponse = with_retry(api_retry_config(), || {
             let client = Arc::clone(&client);
@@ -230,10 +248,7 @@ impl Source for SemanticScholarSource {
             .ok_or_else(|| SourceError::NotFound("Author not found".to_string()))?;
 
         // Then get papers by that author
-        let papers_url = format!(
-            "/author/{}/papers?limit={}",
-            author_id, max_results
-        );
+        let papers_url = format!("/author/{}/papers?limit={}", author_id, max_results);
 
         let papers_data: PapersResponse = with_retry(api_retry_config(), || {
             let client = Arc::clone(&client);
@@ -244,10 +259,9 @@ impl Source for SemanticScholarSource {
                 if let Some(ref key) = api_key {
                     request = request.header("x-api-key", key);
                 }
-                let response = request
-                    .send()
-                    .await
-                    .map_err(|e| SourceError::Network(format!("Failed to fetch author papers: {}", e)))?;
+                let response = request.send().await.map_err(|e| {
+                    SourceError::Network(format!("Failed to fetch author papers: {}", e))
+                })?;
 
                 response
                     .json()
@@ -320,10 +334,12 @@ impl Source for SemanticScholarSource {
         let filename = format!("{}.pdf", request.paper_id.replace('/', "_"));
         let path = std::path::Path::new(&request.save_path).join(&filename);
 
-        std::fs::write(&path, bytes.as_ref())
-            .map_err(|e| SourceError::Io(e.into()))?;
+        std::fs::write(&path, bytes.as_ref()).map_err(|e| SourceError::Io(e.into()))?;
 
-        Ok(DownloadResult::success(path.to_string_lossy().to_string(), bytes.len() as u64))
+        Ok(DownloadResult::success(
+            path.to_string_lossy().to_string(),
+            bytes.len() as u64,
+        ))
     }
 
     async fn read(&self, request: &ReadRequest) -> Result<ReadResult, SourceError> {
@@ -336,9 +352,10 @@ impl Source for SemanticScholarSource {
                 let pages = (text.len() / 3000).max(1);
                 Ok(ReadResult::success(text).pages(pages))
             }
-            Err(e) => {
-                Ok(ReadResult::error(format!("PDF downloaded but text extraction failed: {}", e)))
-            }
+            Err(e) => Ok(ReadResult::error(format!(
+                "PDF downloaded but text extraction failed: {}",
+                e
+            ))),
         }
     }
 
@@ -369,7 +386,11 @@ impl Source for SemanticScholarSource {
             .map(|item| Ok(Self::parse_paper(&item)))
             .collect();
 
-        Ok(SearchResponse::new(papers?, "Semantic Scholar", &request.paper_id))
+        Ok(SearchResponse::new(
+            papers?,
+            "Semantic Scholar",
+            &request.paper_id,
+        ))
     }
 
     async fn get_references(
@@ -399,13 +420,14 @@ impl Source for SemanticScholarSource {
             .map(|item| Ok(Self::parse_paper(&item)))
             .collect();
 
-        Ok(SearchResponse::new(papers?, "Semantic Scholar", &request.paper_id))
+        Ok(SearchResponse::new(
+            papers?,
+            "Semantic Scholar",
+            &request.paper_id,
+        ))
     }
 
-    async fn get_related(
-        &self,
-        request: &CitationRequest,
-    ) -> Result<SearchResponse, SourceError> {
+    async fn get_related(&self, request: &CitationRequest) -> Result<SearchResponse, SourceError> {
         let url = format!(
             "/paper/{}/related?limit={}",
             urlencoding::encode(&request.paper_id),
@@ -429,7 +451,11 @@ impl Source for SemanticScholarSource {
             .map(|item| Ok(Self::parse_paper(&item)))
             .collect();
 
-        Ok(SearchResponse::new(papers?, "Semantic Scholar", &request.paper_id))
+        Ok(SearchResponse::new(
+            papers?,
+            "Semantic Scholar",
+            &request.paper_id,
+        ))
     }
 
     async fn get_by_doi(&self, doi: &str) -> Result<Paper, SourceError> {

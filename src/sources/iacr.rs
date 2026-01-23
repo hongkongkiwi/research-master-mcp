@@ -5,8 +5,10 @@ use serde::Deserialize;
 use std::sync::Arc;
 
 use crate::models::{Paper, PaperBuilder, SearchQuery, SearchResponse, SourceType};
-use crate::sources::{DownloadRequest, DownloadResult, ReadRequest, ReadResult, Source,
-                   SourceCapabilities, SourceError};
+use crate::sources::{
+    DownloadRequest, DownloadResult, ReadRequest, ReadResult, Source, SourceCapabilities,
+    SourceError,
+};
 use crate::utils::{api_retry_config, with_retry, HttpClient};
 
 const IACR_SEARCH_URL: &str = "https://eprint.iacr.org/search";
@@ -142,10 +144,12 @@ impl Source for IacrSource {
         let filename = format!("{}.pdf", request.paper_id);
         let path = std::path::Path::new(&request.save_path).join(&filename);
 
-        std::fs::write(&path, bytes.as_ref())
-            .map_err(|e| SourceError::Io(e.into()))?;
+        std::fs::write(&path, bytes.as_ref()).map_err(|e| SourceError::Io(e.into()))?;
 
-        Ok(DownloadResult::success(path.to_string_lossy().to_string(), bytes.len() as u64))
+        Ok(DownloadResult::success(
+            path.to_string_lossy().to_string(),
+            bytes.len() as u64,
+        ))
     }
 
     async fn read(&self, request: &ReadRequest) -> Result<ReadResult, SourceError> {
@@ -158,9 +162,10 @@ impl Source for IacrSource {
                 let pages = (text.len() / 3000).max(1);
                 Ok(ReadResult::success(text).pages(pages))
             }
-            Err(e) => {
-                Ok(ReadResult::error(format!("PDF downloaded but text extraction failed: {}", e)))
-            }
+            Err(e) => Ok(ReadResult::error(format!(
+                "PDF downloaded but text extraction failed: {}",
+                e
+            ))),
         }
     }
 }

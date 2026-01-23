@@ -83,10 +83,9 @@ impl Source for MdpiSource {
                     )));
                 }
 
-                let json: MdpiResponse = response
-                    .json()
-                    .await
-                    .map_err(|e| SourceError::Parse(format!("Failed to parse MDPI response: {}", e)))?;
+                let json: MdpiResponse = response.json().await.map_err(|e| {
+                    SourceError::Parse(format!("Failed to parse MDPI response: {}", e))
+                })?;
 
                 Ok(json)
             }
@@ -124,13 +123,15 @@ impl Source for MdpiSource {
             async move {
                 let request = client.get(&url);
 
-                let response = request
-                    .send()
-                    .await
-                    .map_err(|e| SourceError::Network(format!("Failed to lookup DOI in MDPI: {}", e)))?;
+                let response = request.send().await.map_err(|e| {
+                    SourceError::Network(format!("Failed to lookup DOI in MDPI: {}", e))
+                })?;
 
                 if response.status() == 404 {
-                    return Err(SourceError::NotFound(format!("Paper not found in MDPI: {}", doi)));
+                    return Err(SourceError::NotFound(format!(
+                        "Paper not found in MDPI: {}",
+                        doi
+                    )));
                 }
 
                 if !response.status().is_success() {
@@ -140,10 +141,9 @@ impl Source for MdpiSource {
                     )));
                 }
 
-                response
-                    .json()
-                    .await
-                    .map_err(|e| SourceError::Parse(format!("Failed to parse MDPI response: {}", e)))
+                response.json().await.map_err(|e| {
+                    SourceError::Parse(format!("Failed to parse MDPI response: {}", e))
+                })
             }
         })
         .await?;
@@ -174,12 +174,14 @@ impl MdpiSource {
             format!("https://www.mdpi.com/{}", item.id)
         };
 
-        Ok(PaperBuilder::new(id, title, url, SourceType::Other("mdpi".to_string()))
-            .authors(&authors)
-            .published_date(&year)
-            .abstract_text(&abstract_text)
-            .doi(&doi)
-            .build())
+        Ok(
+            PaperBuilder::new(id, title, url, SourceType::Other("mdpi".to_string()))
+                .authors(&authors)
+                .published_date(&year)
+                .abstract_text(&abstract_text)
+                .doi(&doi)
+                .build(),
+        )
     }
 }
 

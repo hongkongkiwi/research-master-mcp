@@ -72,11 +72,9 @@ impl Source for CrossRefSource {
             let client = Arc::clone(&client);
             let url = url_for_retry.clone();
             async move {
-                let response = client
-                    .get(&url)
-                    .send()
-                    .await
-                    .map_err(|e| SourceError::Network(format!("Failed to search CrossRef: {}", e)))?;
+                let response = client.get(&url).send().await.map_err(|e| {
+                    SourceError::Network(format!("Failed to search CrossRef: {}", e))
+                })?;
 
                 if !response.status().is_success() {
                     return Err(SourceError::Api(format!(
@@ -183,11 +181,13 @@ impl Source for CrossRefSource {
             .and_then(|d| d.date.clone())
             .unwrap_or_default();
 
-        Ok(PaperBuilder::new(doi.clone(), title, url, SourceType::CrossRef)
-            .authors(authors)
-            .doi(doi)
-            .published_date(published_date)
-            .build())
+        Ok(
+            PaperBuilder::new(doi.clone(), title, url, SourceType::CrossRef)
+                .authors(authors)
+                .doi(doi)
+                .published_date(published_date)
+                .build(),
+        )
     }
 }
 

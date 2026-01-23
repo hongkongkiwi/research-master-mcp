@@ -1,12 +1,12 @@
 use anyhow::Result;
 use clap::{Parser, Subcommand, ValueEnum};
 use research_master_mcp::config::{find_config_file, load_config};
+use research_master_mcp::mcp::server::McpServer;
 use research_master_mcp::models::{
     CitationRequest, DownloadRequest, ReadRequest, SearchQuery, SortBy, SortOrder,
 };
 use research_master_mcp::sources::{SourceCapabilities, SourceRegistry};
-use research_master_mcp::utils::{deduplicate_papers, DuplicateStrategy, find_duplicates};
-use research_master_mcp::mcp::server::McpServer;
+use research_master_mcp::utils::{deduplicate_papers, find_duplicates, DuplicateStrategy};
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
@@ -424,15 +424,12 @@ async fn main() -> Result<()> {
         _ => "trace",
     };
 
-    let env_filter = if cli.quiet {
-        "error"
-    } else {
-        log_level
-    };
+    let env_filter = if cli.quiet { "error" } else { log_level };
 
     tracing_subscriber::registry()
         .with(tracing_subscriber::EnvFilter::new(
-            std::env::var("RUST_LOG").unwrap_or_else(|_| format!("research_master_mcp={}", env_filter)),
+            std::env::var("RUST_LOG")
+                .unwrap_or_else(|_| format!("research_master_mcp={}", env_filter)),
         ))
         .with(tracing_subscriber::fmt::layer())
         .init();
@@ -674,14 +671,27 @@ async fn main() -> Result<()> {
             anyhow::bail!("Paper not found in any source");
         }
 
-        Some(Commands::Sources { detailed, with_capability }) => {
+        Some(Commands::Sources {
+            detailed,
+            with_capability,
+        }) => {
             let sources: Vec<_> = match with_capability {
-                Some(CapabilityFilter::Search) => registry.with_capability(SourceCapabilities::SEARCH),
-                Some(CapabilityFilter::Download) => registry.with_capability(SourceCapabilities::DOWNLOAD),
+                Some(CapabilityFilter::Search) => {
+                    registry.with_capability(SourceCapabilities::SEARCH)
+                }
+                Some(CapabilityFilter::Download) => {
+                    registry.with_capability(SourceCapabilities::DOWNLOAD)
+                }
                 Some(CapabilityFilter::Read) => registry.with_capability(SourceCapabilities::READ),
-                Some(CapabilityFilter::Citations) => registry.with_capability(SourceCapabilities::CITATIONS),
-                Some(CapabilityFilter::DoiLookup) => registry.with_capability(SourceCapabilities::DOI_LOOKUP),
-                Some(CapabilityFilter::AuthorSearch) => registry.with_capability(SourceCapabilities::AUTHOR_SEARCH),
+                Some(CapabilityFilter::Citations) => {
+                    registry.with_capability(SourceCapabilities::CITATIONS)
+                }
+                Some(CapabilityFilter::DoiLookup) => {
+                    registry.with_capability(SourceCapabilities::DOI_LOOKUP)
+                }
+                Some(CapabilityFilter::AuthorSearch) => {
+                    registry.with_capability(SourceCapabilities::AUTHOR_SEARCH)
+                }
                 None => registry.all().collect(),
             };
 
@@ -695,7 +705,12 @@ async fn main() -> Result<()> {
             }
         }
 
-        Some(Commands::Serve { stdio, http, port, host }) => {
+        Some(Commands::Serve {
+            stdio,
+            http,
+            port,
+            host,
+        }) => {
             let server = McpServer::new(Arc::new(registry))?;
 
             // Use HTTP mode if --http flag is provided, otherwise use --stdio flag
@@ -708,7 +723,9 @@ async fn main() -> Result<()> {
                 tracing::info!("MCP server listening on {}", bound_addr);
 
                 // Wait for the server to finish
-                handle.await.map_err(|e| anyhow::anyhow!("Server task failed: {}", e))?;
+                handle
+                    .await
+                    .map_err(|e| anyhow::anyhow!("Server task failed: {}", e))?;
             } else {
                 tracing::info!("Running MCP server in stdio mode");
                 server.run().await?;
@@ -749,7 +766,11 @@ async fn main() -> Result<()> {
                 let output_path = output.as_ref().unwrap_or(&input);
                 std::fs::write(output_path, output_json)?;
                 if !cli.quiet {
-                    eprintln!("Deduplicated: {} -> {} papers", input.display(), deduped.len());
+                    eprintln!(
+                        "Deduplicated: {} -> {} papers",
+                        input.display(),
+                        deduped.len()
+                    );
                 }
             }
         }
@@ -769,12 +790,17 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
-fn get_source(registry: &SourceRegistry, source: Source) -> Result<&std::sync::Arc<dyn research_master_mcp::sources::Source>> {
+fn get_source(
+    registry: &SourceRegistry,
+    source: Source,
+) -> Result<&std::sync::Arc<dyn research_master_mcp::sources::Source>> {
     let source_id = match source {
         Source::All => anyhow::bail!("Please specify a specific source"),
         s => source_to_id(s),
     };
-    registry.get_required(&source_id).map_err(|e| anyhow::anyhow!(e))
+    registry
+        .get_required(&source_id)
+        .map_err(|e| anyhow::anyhow!(e))
 }
 
 fn get_sources(
@@ -837,13 +863,15 @@ fn output_papers(papers: &[research_master_mcp::models::Paper], format: OutputFo
             }
         }
         OutputFormat::Table => {
-            use comfy_table::{Table, Cell, Attribute};
+            use comfy_table::{Attribute, Cell, Table};
             let mut table = Table::new();
             table.load_preset(comfy_table::presets::UTF8_FULL);
             table.set_header(vec!["Title", "Authors", "Source", "Year"]);
 
             for paper in papers {
-                let year = paper.published_date.as_ref()
+                let year = paper
+                    .published_date
+                    .as_ref()
                     .map(|d| d.chars().take(4).collect::<String>())
                     .unwrap_or_default();
 

@@ -73,10 +73,9 @@ impl Source for ConnectedPapersSource {
             async move {
                 let request = client.get(&url);
 
-                let response = request
-                    .send()
-                    .await
-                    .map_err(|e| SourceError::Network(format!("Failed to search Connected Papers: {}", e)))?;
+                let response = request.send().await.map_err(|e| {
+                    SourceError::Network(format!("Failed to search Connected Papers: {}", e))
+                })?;
 
                 if !response.status().is_success() {
                     let status = response.status();
@@ -87,10 +86,9 @@ impl Source for ConnectedPapersSource {
                     )));
                 }
 
-                let json: ConnectedPapersResponse = response
-                    .json()
-                    .await
-                    .map_err(|e| SourceError::Parse(format!("Failed to parse Connected Papers response: {}", e)))?;
+                let json: ConnectedPapersResponse = response.json().await.map_err(|e| {
+                    SourceError::Parse(format!("Failed to parse Connected Papers response: {}", e))
+                })?;
 
                 Ok(json)
             }
@@ -117,7 +115,11 @@ impl Source for ConnectedPapersSource {
             .trim()
             .to_string();
 
-        let url = format!("{}/papers/doi/{}", CONNECTED_PAPERS_API_BASE, urlencoding::encode(&clean_doi));
+        let url = format!(
+            "{}/papers/doi/{}",
+            CONNECTED_PAPERS_API_BASE,
+            urlencoding::encode(&clean_doi)
+        );
 
         let client = Arc::clone(&self.client);
         let url_for_retry = url.clone();
@@ -128,13 +130,15 @@ impl Source for ConnectedPapersSource {
             async move {
                 let request = client.get(&url);
 
-                let response = request
-                    .send()
-                    .await
-                    .map_err(|e| SourceError::Network(format!("Failed to lookup DOI in Connected Papers: {}", e)))?;
+                let response = request.send().await.map_err(|e| {
+                    SourceError::Network(format!("Failed to lookup DOI in Connected Papers: {}", e))
+                })?;
 
                 if response.status() == 404 {
-                    return Err(SourceError::NotFound(format!("Paper not found in Connected Papers: {}", doi)));
+                    return Err(SourceError::NotFound(format!(
+                        "Paper not found in Connected Papers: {}",
+                        doi
+                    )));
                 }
 
                 if !response.status().is_success() {
@@ -144,10 +148,9 @@ impl Source for ConnectedPapersSource {
                     )));
                 }
 
-                let json: ConnectedPapersPaper = response
-                    .json()
-                    .await
-                    .map_err(|e| SourceError::Parse(format!("Failed to parse Connected Papers response: {}", e)))?;
+                let json: ConnectedPapersPaper = response.json().await.map_err(|e| {
+                    SourceError::Parse(format!("Failed to parse Connected Papers response: {}", e))
+                })?;
 
                 Ok(json)
             }
@@ -157,10 +160,17 @@ impl Source for ConnectedPapersSource {
         self.parse_result(&response)
     }
 
-    async fn get_citations(&self, request: &crate::models::CitationRequest) -> Result<SearchResponse, SourceError> {
+    async fn get_citations(
+        &self,
+        request: &crate::models::CitationRequest,
+    ) -> Result<SearchResponse, SourceError> {
         let paper_id = request.paper_id.clone();
 
-        let url = format!("{}/papers/doi/{}/citations", CONNECTED_PAPERS_API_BASE, urlencoding::encode(&paper_id));
+        let url = format!(
+            "{}/papers/doi/{}/citations",
+            CONNECTED_PAPERS_API_BASE,
+            urlencoding::encode(&paper_id)
+        );
 
         let client = Arc::clone(&self.client);
         let url_for_retry = url.clone();
@@ -171,10 +181,12 @@ impl Source for ConnectedPapersSource {
             async move {
                 let request = client.get(&url);
 
-                let response = request
-                    .send()
-                    .await
-                    .map_err(|e| SourceError::Network(format!("Failed to get citations from Connected Papers: {}", e)))?;
+                let response = request.send().await.map_err(|e| {
+                    SourceError::Network(format!(
+                        "Failed to get citations from Connected Papers: {}",
+                        e
+                    ))
+                })?;
 
                 if !response.status().is_success() {
                     return Err(SourceError::Api(format!(
@@ -183,10 +195,9 @@ impl Source for ConnectedPapersSource {
                     )));
                 }
 
-                let json: ConnectedPapersResponse = response
-                    .json()
-                    .await
-                    .map_err(|e| SourceError::Parse(format!("Failed to parse Connected Papers response: {}", e)))?;
+                let json: ConnectedPapersResponse = response.json().await.map_err(|e| {
+                    SourceError::Parse(format!("Failed to parse Connected Papers response: {}", e))
+                })?;
 
                 Ok(json)
             }
@@ -206,10 +217,17 @@ impl Source for ConnectedPapersSource {
         Ok(search_response)
     }
 
-    async fn get_related(&self, request: &crate::models::CitationRequest) -> Result<SearchResponse, SourceError> {
+    async fn get_related(
+        &self,
+        request: &crate::models::CitationRequest,
+    ) -> Result<SearchResponse, SourceError> {
         let paper_id = request.paper_id.clone();
 
-        let url = format!("{}/papers/doi/{}/related", CONNECTED_PAPERS_API_BASE, urlencoding::encode(&paper_id));
+        let url = format!(
+            "{}/papers/doi/{}/related",
+            CONNECTED_PAPERS_API_BASE,
+            urlencoding::encode(&paper_id)
+        );
 
         let client = Arc::clone(&self.client);
         let url_for_retry = url.clone();
@@ -220,10 +238,12 @@ impl Source for ConnectedPapersSource {
             async move {
                 let request = client.get(&url);
 
-                let response = request
-                    .send()
-                    .await
-                    .map_err(|e| SourceError::Network(format!("Failed to get related papers from Connected Papers: {}", e)))?;
+                let response = request.send().await.map_err(|e| {
+                    SourceError::Network(format!(
+                        "Failed to get related papers from Connected Papers: {}",
+                        e
+                    ))
+                })?;
 
                 if !response.status().is_success() {
                     return Err(SourceError::Api(format!(
@@ -232,10 +252,9 @@ impl Source for ConnectedPapersSource {
                     )));
                 }
 
-                let json: ConnectedPapersResponse = response
-                    .json()
-                    .await
-                    .map_err(|e| SourceError::Parse(format!("Failed to parse Connected Papers response: {}", e)))?;
+                let json: ConnectedPapersResponse = response.json().await.map_err(|e| {
+                    SourceError::Parse(format!("Failed to parse Connected Papers response: {}", e))
+                })?;
 
                 Ok(json)
             }
@@ -278,12 +297,14 @@ impl ConnectedPapersSource {
             format!("https://www.connectedpapers.com/main/{}", paper.id)
         };
 
-        Ok(PaperBuilder::new(id, title, url, SourceType::ConnectedPapers)
-            .authors(&authors)
-            .published_date(&year)
-            .abstract_text(&abstract_text)
-            .doi(&doi)
-            .build())
+        Ok(
+            PaperBuilder::new(id, title, url, SourceType::ConnectedPapers)
+                .authors(&authors)
+                .published_date(&year)
+                .abstract_text(&abstract_text)
+                .doi(&doi)
+                .build(),
+        )
     }
 }
 

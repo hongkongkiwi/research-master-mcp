@@ -94,10 +94,9 @@ impl Source for BaseSource {
                     )));
                 }
 
-                let json: BaseResponse = response
-                    .json()
-                    .await
-                    .map_err(|e| SourceError::Parse(format!("Failed to parse BASE response: {}", e)))?;
+                let json: BaseResponse = response.json().await.map_err(|e| {
+                    SourceError::Parse(format!("Failed to parse BASE response: {}", e))
+                })?;
 
                 Ok(json)
             }
@@ -124,7 +123,11 @@ impl Source for BaseSource {
             .trim()
             .to_string();
 
-        let url = format!("{}?q=doi:\"{}\"&output=json&n=1", BASE_API_BASE, urlencoding::encode(&clean_doi));
+        let url = format!(
+            "{}?q=doi:\"{}\"&output=json&n=1",
+            BASE_API_BASE,
+            urlencoding::encode(&clean_doi)
+        );
 
         let client = Arc::clone(&self.client);
         let url_for_retry = url.clone();
@@ -141,10 +144,9 @@ impl Source for BaseSource {
                     request = request.header("Authorization", format!("Basic {}", key));
                 }
 
-                let response = request
-                    .send()
-                    .await
-                    .map_err(|e| SourceError::Network(format!("Failed to lookup DOI in BASE: {}", e)))?;
+                let response = request.send().await.map_err(|e| {
+                    SourceError::Network(format!("Failed to lookup DOI in BASE: {}", e))
+                })?;
 
                 if !response.status().is_success() {
                     return Err(SourceError::Api(format!(
@@ -153,18 +155,19 @@ impl Source for BaseSource {
                     )));
                 }
 
-                let json: BaseResponse = response
-                    .json()
-                    .await
-                    .map_err(|e| SourceError::Parse(format!("Failed to parse BASE response: {}", e)))?;
+                let json: BaseResponse = response.json().await.map_err(|e| {
+                    SourceError::Parse(format!("Failed to parse BASE response: {}", e))
+                })?;
 
                 Ok(json)
             }
         })
         .await?;
 
-        let doc = response.documents.into_iter().next()
-            .ok_or_else(|| SourceError::NotFound(format!("Paper not found in BASE: {}", doi)))?;
+        let doc =
+            response.documents.into_iter().next().ok_or_else(|| {
+                SourceError::NotFound(format!("Paper not found in BASE: {}", doi))
+            })?;
 
         self.parse_result(&doc)
     }

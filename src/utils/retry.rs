@@ -139,10 +139,7 @@ pub enum RetryResult<T> {
 /// # Returns
 ///
 /// The result of the operation, or an error after all retries are exhausted
-pub async fn with_retry<T, F, Fut>(
-    config: RetryConfig,
-    operation: F,
-) -> Result<T, SourceError>
+pub async fn with_retry<T, F, Fut>(config: RetryConfig, operation: F) -> Result<T, SourceError>
 where
     F: FnMut() -> Fut,
     Fut: std::future::Future<Output = Result<T, SourceError>>,
@@ -218,7 +215,11 @@ where
                 let delay = config.initial_delay;
                 total_elapsed += delay;
 
-                tracing::debug!("Operation timed out, attempt {}/{}", attempts, config.max_attempts);
+                tracing::debug!(
+                    "Operation timed out, attempt {}/{}",
+                    attempts,
+                    config.max_attempts
+                );
                 sleep(delay).await;
             }
         }
@@ -228,10 +229,7 @@ where
 /// Execute an async operation with retry logic that returns RetryResult
 ///
 /// This provides more detailed information about failures for callers that need it
-pub async fn with_retry_detailed<T, F, Fut>(
-    config: RetryConfig,
-    operation: F,
-) -> RetryResult<T>
+pub async fn with_retry_detailed<T, F, Fut>(config: RetryConfig, operation: F) -> RetryResult<T>
 where
     F: FnMut() -> Fut,
     Fut: std::future::Future<Output = Result<T, SourceError>>,
@@ -261,11 +259,7 @@ where
                     total_elapsed += delay;
 
                     if attempts >= config.max_attempts || total_elapsed >= config.max_total_time {
-                        return RetryResult::TransientFailure(
-                            error,
-                            transient,
-                            attempts,
-                        );
+                        return RetryResult::TransientFailure(error, transient, attempts);
                     }
 
                     sleep(delay).await;
@@ -277,11 +271,7 @@ where
             Err(_) => {
                 let error = SourceError::Network("Operation timed out".to_string());
                 if attempts >= config.max_attempts {
-                    return RetryResult::TransientFailure(
-                        error,
-                        TransientError::Timeout,
-                        attempts,
-                    );
+                    return RetryResult::TransientFailure(error, TransientError::Timeout, attempts);
                 }
 
                 let delay = config.initial_delay;
@@ -345,7 +335,7 @@ mod tests {
     async fn test_retry_success_after_failures() {
         // Use Network error which has 2s recommended delay, so we need longer max_total_time
         let config = RetryConfig {
-            max_attempts: 4,  // 4 attempts = 3 retries + final attempt
+            max_attempts: 4, // 4 attempts = 3 retries + final attempt
             initial_delay: Duration::from_millis(10),
             max_delay: Duration::from_millis(100),
             backoff_multiplier: 2.0,

@@ -37,7 +37,10 @@ impl GoogleScholarSource {
         let enabled = std::env::var(GOOGLE_SCHOLAR_ENABLED_VAR).unwrap_or_default() == "true";
 
         if !enabled {
-            tracing::info!("Google Scholar source is disabled. Set {} to enable.", GOOGLE_SCHOLAR_ENABLED_VAR);
+            tracing::info!(
+                "Google Scholar source is disabled. Set {} to enable.",
+                GOOGLE_SCHOLAR_ENABLED_VAR
+            );
         }
 
         Ok(Self {
@@ -72,9 +75,10 @@ impl Source for GoogleScholarSource {
 
     async fn search(&self, query: &SearchQuery) -> Result<SearchResponse, SourceError> {
         if !self.enabled {
-            return Err(SourceError::Other(
-                format!("Google Scholar is disabled. Set {} to enable.", GOOGLE_SCHOLAR_ENABLED_VAR)
-            ));
+            return Err(SourceError::Other(format!(
+                "Google Scholar is disabled. Set {} to enable.",
+                GOOGLE_SCHOLAR_ENABLED_VAR
+            )));
         }
 
         let max_results = query.max_results.min(10);
@@ -98,13 +102,14 @@ impl Source for GoogleScholarSource {
             let client = Arc::clone(&client);
             let url = url_for_retry.clone();
             async move {
-                let request = client.get(&url)
-                    .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36");
+                let request = client.get(&url).header(
+                    "User-Agent",
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+                );
 
-                let response = request
-                    .send()
-                    .await
-                    .map_err(|e| SourceError::Network(format!("Failed to search Google Scholar: {}", e)))?;
+                let response = request.send().await.map_err(|e| {
+                    SourceError::Network(format!("Failed to search Google Scholar: {}", e))
+                })?;
 
                 if !response.status().is_success() {
                     let status = response.status();
@@ -132,9 +137,10 @@ impl Source for GoogleScholarSource {
 
     async fn get_by_doi(&self, doi: &str) -> Result<Paper, SourceError> {
         if !self.enabled {
-            return Err(SourceError::Other(
-                format!("Google Scholar is disabled. Set {} to enable.", GOOGLE_SCHOLAR_ENABLED_VAR)
-            ));
+            return Err(SourceError::Other(format!(
+                "Google Scholar is disabled. Set {} to enable.",
+                GOOGLE_SCHOLAR_ENABLED_VAR
+            )));
         }
 
         // Search by DOI
@@ -146,24 +152,37 @@ impl Source for GoogleScholarSource {
 
         let client = Arc::clone(&self.client);
 
-        let response = client.get(&url)
-            .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+        let response = client
+            .get(&url)
+            .header(
+                "User-Agent",
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+            )
             .send()
             .await
-            .map_err(|e| SourceError::Network(format!("Failed to lookup DOI in Google Scholar: {}", e)))?;
+            .map_err(|e| {
+                SourceError::Network(format!("Failed to lookup DOI in Google Scholar: {}", e))
+            })?;
 
         if !response.status().is_success() {
-            return Err(SourceError::NotFound(format!("Paper not found in Google Scholar: {}", doi)));
+            return Err(SourceError::NotFound(format!(
+                "Paper not found in Google Scholar: {}",
+                doi
+            )));
         }
 
         // For DOI lookups, we return a basic paper with the DOI info
-        let clean_doi = doi.replace("https://doi.org/", "").replace("doi:", "").trim().to_string();
+        let clean_doi = doi
+            .replace("https://doi.org/", "")
+            .replace("doi:", "")
+            .trim()
+            .to_string();
 
         Ok(PaperBuilder::new(
             clean_doi.clone(),
             "Paper from Google Scholar".to_string(),
             format!("https://doi.org/{}", clean_doi),
-            SourceType::GoogleScholar
+            SourceType::GoogleScholar,
         )
         .doi(doi)
         .build())

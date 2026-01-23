@@ -13,7 +13,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let registry = Arc::new(SourceRegistry::new());
 
     println!("Initialized {} research sources", registry.len());
-    println!("Available sources: {}\n", registry.ids().collect::<Vec<_>>().join(", "));
+    println!(
+        "Available sources: {}\n",
+        registry.ids().collect::<Vec<_>>().join(", ")
+    );
 
     // Create a search query
     let query = SearchQuery::new("machine learning transformers")

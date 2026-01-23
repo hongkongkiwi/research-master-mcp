@@ -8,8 +8,10 @@ use serde::Deserialize;
 use std::sync::Arc;
 
 use crate::models::{Paper, PaperBuilder, SearchQuery, SearchResponse, SourceType};
-use crate::sources::{DownloadRequest, DownloadResult, ReadRequest, ReadResult, Source,
-                   SourceCapabilities, SourceError};
+use crate::sources::{
+    DownloadRequest, DownloadResult, ReadRequest, ReadResult, Source, SourceCapabilities,
+    SourceError,
+};
 use crate::utils::{api_retry_config, with_retry, HttpClient};
 
 const BIORXIV_API_URL: &str = "https://api.biorxiv.org";
@@ -99,11 +101,9 @@ impl BiorxivMedrxivSource {
             let url = url_for_retry.clone();
             let display_name = display_name.clone();
             async move {
-                let response = client
-                    .get(&url)
-                    .send()
-                    .await
-                    .map_err(|e| SourceError::Network(format!("Failed to fetch from {}: {}", display_name, e)))?;
+                let response = client.get(&url).send().await.map_err(|e| {
+                    SourceError::Network(format!("Failed to fetch from {}: {}", display_name, e))
+                })?;
 
                 if !response.status().is_success() {
                     return Err(SourceError::Api(format!(
@@ -127,16 +127,9 @@ impl BiorxivMedrxivSource {
 
         for collection in json.collection {
             for paper in collection.papers {
-                let authors = paper
-                    .authors
-                    .unwrap_or_default()
-                    .clone()
-                    .join("; ");
+                let authors = paper.authors.unwrap_or_default().clone().join("; ");
 
-                let categories = paper
-                    .category
-                    .unwrap_or_default()
-                    .clone();
+                let categories = paper.category.unwrap_or_default().clone();
 
                 let published_date = paper.date.clone();
 
@@ -245,7 +238,11 @@ impl Source for BiorxivMedrxivSource {
         // Truncate to max_results
         let papers = filtered.into_iter().take(query.max_results).collect();
 
-        Ok(SearchResponse::new(papers, self.server_type.display_name(), &query.query))
+        Ok(SearchResponse::new(
+            papers,
+            self.server_type.display_name(),
+            &query.query,
+        ))
     }
 
     async fn download(&self, request: &DownloadRequest) -> Result<DownloadResult, SourceError> {
@@ -272,10 +269,7 @@ impl Source for BiorxivMedrxivSource {
             .map_err(|e| SourceError::Network(format!("Failed to download PDF: {}", e)))?;
 
         if !response.status().is_success() {
-            return Err(SourceError::NotFound(format!(
-                "Paper not found: {}",
-                doi
-            )));
+            return Err(SourceError::NotFound(format!("Paper not found: {}", doi)));
         }
 
         let bytes = response
@@ -294,10 +288,12 @@ impl Source for BiorxivMedrxivSource {
         let filename = format!("{}.pdf", doi.replace('/', "_"));
         let path = std::path::Path::new(&request.save_path).join(&filename);
 
-        std::fs::write(&path, bytes.as_ref())
-            .map_err(|e| SourceError::Io(e.into()))?;
+        std::fs::write(&path, bytes.as_ref()).map_err(|e| SourceError::Io(e.into()))?;
 
-        Ok(DownloadResult::success(path.to_string_lossy().to_string(), bytes.len() as u64))
+        Ok(DownloadResult::success(
+            path.to_string_lossy().to_string(),
+            bytes.len() as u64,
+        ))
     }
 
     async fn read(&self, request: &ReadRequest) -> Result<ReadResult, SourceError> {
@@ -310,9 +306,10 @@ impl Source for BiorxivMedrxivSource {
                 let pages = (text.len() / 3000).max(1);
                 Ok(ReadResult::success(text).pages(pages))
             }
-            Err(e) => {
-                Ok(ReadResult::error(format!("PDF downloaded but text extraction failed: {}", e)))
-            }
+            Err(e) => Ok(ReadResult::error(format!(
+                "PDF downloaded but text extraction failed: {}",
+                e
+            ))),
         }
     }
 }

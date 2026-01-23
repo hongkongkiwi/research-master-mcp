@@ -144,10 +144,7 @@ pub fn extract_multiple<'a, P>(paths: P) -> Vec<Result<String, PdfExtractError>>
 where
     P: IntoIterator<Item = &'a Path>,
 {
-    paths
-        .into_iter()
-        .map(|path| extract_text(path))
-        .collect()
+    paths.into_iter().map(|path| extract_text(path)).collect()
 }
 
 #[cfg(test)]

@@ -60,7 +60,10 @@ impl Source for UnpaywallSource {
             .trim()
             .to_string();
 
-        let email = self.email.as_deref().unwrap_or("research-master@example.com");
+        let email = self
+            .email
+            .as_deref()
+            .unwrap_or("research-master@example.com");
 
         let url = format!(
             "{}/{}?email={}",
@@ -78,13 +81,15 @@ impl Source for UnpaywallSource {
             async move {
                 let request = client.get(&url);
 
-                let response = request
-                    .send()
-                    .await
-                    .map_err(|e| SourceError::Network(format!("Failed to lookup DOI in Unpaywall: {}", e)))?;
+                let response = request.send().await.map_err(|e| {
+                    SourceError::Network(format!("Failed to lookup DOI in Unpaywall: {}", e))
+                })?;
 
                 if response.status() == 404 {
-                    return Err(SourceError::NotFound(format!("Paper not found in Unpaywall: {}", doi)));
+                    return Err(SourceError::NotFound(format!(
+                        "Paper not found in Unpaywall: {}",
+                        doi
+                    )));
                 }
 
                 if !response.status().is_success() {
@@ -96,10 +101,9 @@ impl Source for UnpaywallSource {
                     )));
                 }
 
-                response
-                    .json()
-                    .await
-                    .map_err(|e| SourceError::Parse(format!("Failed to parse Unpaywall response: {}", e)))
+                response.json().await.map_err(|e| {
+                    SourceError::Parse(format!("Failed to parse Unpaywall response: {}", e))
+                })
             }
         })
         .await?;
@@ -123,15 +127,23 @@ impl UnpaywallSource {
             .collect::<Vec<_>>()
             .join("; ");
 
-        let pdf_url = item.best_oa_location.as_ref().and_then(|loc| loc.url_for_pdf.clone());
+        let pdf_url = item
+            .best_oa_location
+            .as_ref()
+            .and_then(|loc| loc.url_for_pdf.clone());
 
-        Ok(PaperBuilder::new(doi.to_string(), title, url, SourceType::Other("unpaywall".to_string()))
-            .authors(&authors)
-            .published_date(&year)
-            .abstract_text(&abstract_text)
-            .doi(doi)
-            .pdf_url(pdf_url.unwrap_or_default())
-            .build())
+        Ok(PaperBuilder::new(
+            doi.to_string(),
+            title,
+            url,
+            SourceType::Other("unpaywall".to_string()),
+        )
+        .authors(&authors)
+        .published_date(&year)
+        .abstract_text(&abstract_text)
+        .doi(doi)
+        .pdf_url(pdf_url.unwrap_or_default())
+        .build())
     }
 }
 

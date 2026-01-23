@@ -184,7 +184,9 @@ pub fn find_config_file() -> Option<PathBuf> {
 
     // 3. XDG Config Home
     if let Ok(xdg_home) = std::env::var("XDG_CONFIG_HOME") {
-        let path = PathBuf::from(xdg_home).join("research-master").join("config.toml");
+        let path = PathBuf::from(xdg_home)
+            .join("research-master")
+            .join("config.toml");
         if path.exists() {
             return Some(path);
         }
@@ -203,7 +205,10 @@ pub fn find_config_file() -> Option<PathBuf> {
         }
 
         // 5. Unix fallback (~/.config/research-master/config.toml)
-        let path = home_path.join(".config").join("research-master").join("config.toml");
+        let path = home_path
+            .join(".config")
+            .join("research-master")
+            .join("config.toml");
         if path.exists() {
             return Some(path);
         }

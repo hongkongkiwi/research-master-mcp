@@ -71,10 +71,9 @@ impl Source for WorldWideScienceSource {
             async move {
                 let request = client.get(&url);
 
-                let response = request
-                    .send()
-                    .await
-                    .map_err(|e| SourceError::Network(format!("Failed to search WorldWideScience: {}", e)))?;
+                let response = request.send().await.map_err(|e| {
+                    SourceError::Network(format!("Failed to search WorldWideScience: {}", e))
+                })?;
 
                 if !response.status().is_success() {
                     let status = response.status();
@@ -85,10 +84,9 @@ impl Source for WorldWideScienceSource {
                     )));
                 }
 
-                let json: WwsResponse = response
-                    .json()
-                    .await
-                    .map_err(|e| SourceError::Parse(format!("Failed to parse WorldWideScience response: {}", e)))?;
+                let json: WwsResponse = response.json().await.map_err(|e| {
+                    SourceError::Parse(format!("Failed to parse WorldWideScience response: {}", e))
+                })?;
 
                 Ok(json)
             }
@@ -126,13 +124,15 @@ impl Source for WorldWideScienceSource {
             async move {
                 let request = client.get(&url);
 
-                let response = request
-                    .send()
-                    .await
-                    .map_err(|e| SourceError::Network(format!("Failed to lookup DOI in WorldWideScience: {}", e)))?;
+                let response = request.send().await.map_err(|e| {
+                    SourceError::Network(format!("Failed to lookup DOI in WorldWideScience: {}", e))
+                })?;
 
                 if response.status() == 404 {
-                    return Err(SourceError::NotFound(format!("Paper not found in WorldWideScience: {}", doi)));
+                    return Err(SourceError::NotFound(format!(
+                        "Paper not found in WorldWideScience: {}",
+                        doi
+                    )));
                 }
 
                 if !response.status().is_success() {
@@ -142,10 +142,9 @@ impl Source for WorldWideScienceSource {
                     )));
                 }
 
-                let json: WwsRecord = response
-                    .json()
-                    .await
-                    .map_err(|e| SourceError::Parse(format!("Failed to parse WorldWideScience response: {}", e)))?;
+                let json: WwsRecord = response.json().await.map_err(|e| {
+                    SourceError::Parse(format!("Failed to parse WorldWideScience response: {}", e))
+                })?;
 
                 Ok(json)
             }
@@ -178,12 +177,14 @@ impl WorldWideScienceSource {
             format!("https://worldwidescience.org/records/{}", record.id)
         };
 
-        Ok(PaperBuilder::new(id, title, url, SourceType::WorldWideScience)
-            .authors(&authors)
-            .published_date(&year)
-            .abstract_text(&abstract_text)
-            .doi(&doi)
-            .build())
+        Ok(
+            PaperBuilder::new(id, title, url, SourceType::WorldWideScience)
+                .authors(&authors)
+                .published_date(&year)
+                .abstract_text(&abstract_text)
+                .doi(&doi)
+                .build(),
+        )
     }
 }
 

@@ -55,67 +55,67 @@
 //! cargo build --features -dblp
 //! ```
 
+#[cfg(feature = "source-acm")]
+mod acm;
 #[cfg(feature = "source-arxiv")]
 mod arxiv;
+#[cfg(feature = "source-base")]
+mod base;
 #[cfg(feature = "source-biorxiv")]
 mod biorxiv;
+#[cfg(feature = "source-connected_papers")]
+mod connected_papers;
+#[cfg(feature = "source-core-repo")]
+mod core;
 #[cfg(feature = "source-crossref")]
 mod crossref;
 #[cfg(feature = "source-dblp")]
 mod dblp;
 #[cfg(feature = "source-dimensions")]
 mod dimensions;
-#[cfg(feature = "source-ieee_xplore")]
-mod ieee_xplore;
-#[cfg(feature = "source-core-repo")]
-mod core;
-#[cfg(feature = "source-zenodo")]
-mod zenodo;
-#[cfg(feature = "source-unpaywall")]
-mod unpaywall;
-#[cfg(feature = "source-mdpi")]
-mod mdpi;
+#[cfg(feature = "source-doaj")]
+mod doaj;
+#[cfg(feature = "source-google_scholar")]
+mod google_scholar;
 #[cfg(feature = "source-hal")]
 mod hal;
 #[cfg(feature = "source-iacr")]
 mod iacr;
+#[cfg(feature = "source-ieee_xplore")]
+mod ieee_xplore;
+#[cfg(feature = "source-jstor")]
+mod jstor;
+#[cfg(feature = "source-mdpi")]
+mod mdpi;
 #[cfg(feature = "source-openalex")]
 mod openalex;
+#[cfg(feature = "source-osf")]
+mod osf;
 #[cfg(feature = "source-pmc")]
 mod pmc;
 #[cfg(feature = "source-pubmed")]
 mod pubmed;
 mod registry;
-#[cfg(feature = "source-semantic")]
-mod semantic;
-#[cfg(feature = "source-ssrn")]
-mod ssrn;
-#[cfg(feature = "source-jstor")]
-mod jstor;
 #[cfg(feature = "source-scispace")]
 mod scispace;
-#[cfg(feature = "source-acm")]
-mod acm;
-#[cfg(feature = "source-connected_papers")]
-mod connected_papers;
-#[cfg(feature = "source-doaj")]
-mod doaj;
-#[cfg(feature = "source-worldwidescience")]
-mod worldwidescience;
-#[cfg(feature = "source-osf")]
-mod osf;
-#[cfg(feature = "source-base")]
-mod base;
+#[cfg(feature = "source-semantic")]
+mod semantic;
 #[cfg(feature = "source-springer")]
 mod springer;
-#[cfg(feature = "source-google_scholar")]
-mod google_scholar;
+#[cfg(feature = "source-ssrn")]
+mod ssrn;
+#[cfg(feature = "source-unpaywall")]
+mod unpaywall;
+#[cfg(feature = "source-worldwidescience")]
+mod worldwidescience;
+#[cfg(feature = "source-zenodo")]
+mod zenodo;
 
 pub use registry::{SourceCapabilities, SourceRegistry};
 
 use crate::models::{
-    CitationRequest, DownloadRequest, DownloadResult, Paper, ReadRequest, ReadResult,
-    SearchQuery, SearchResponse,
+    CitationRequest, DownloadRequest, DownloadResult, Paper, ReadRequest, ReadResult, SearchQuery,
+    SearchResponse,
 };
 use async_trait::async_trait;
 
@@ -169,7 +169,8 @@ pub trait Source: Send + Sync + std::fmt::Debug {
 
     /// Whether this source supports author search
     fn supports_author_search(&self) -> bool {
-        self.capabilities().contains(SourceCapabilities::AUTHOR_SEARCH)
+        self.capabilities()
+            .contains(SourceCapabilities::AUTHOR_SEARCH)
     }
 
     // ========== SEARCH METHODS ==========

@@ -1,12 +1,14 @@
 //! PubMed Central (PMC) research source implementation.
 
 use async_trait::async_trait;
-use quick_xml::events::{Event, BytesStart};
+use quick_xml::events::{BytesStart, Event};
 use quick_xml::reader::Reader;
 use serde::Deserialize;
 use std::sync::Arc;
 
-use crate::models::{Paper, PaperBuilder, ReadRequest, ReadResult, SearchQuery, SearchResponse, SourceType};
+use crate::models::{
+    Paper, PaperBuilder, ReadRequest, ReadResult, SearchQuery, SearchResponse, SourceType,
+};
 use crate::sources::{DownloadRequest, DownloadResult, Source, SourceCapabilities, SourceError};
 use crate::utils::{api_retry_config, with_retry, HttpClient};
 
@@ -242,14 +244,16 @@ impl PmcSource {
         let url = format!("{}/{}", PMC_BASE_URL, full_pmcid);
         let pdf_url = format!("{}/articles/{}/pdf/", PMC_BASE_URL, full_pmcid);
 
-        Ok(PaperBuilder::new(full_pmcid.clone(), title, url, SourceType::PMC)
-            .authors(authors.join("; "))
-            .abstract_text(abstract_text)
-            .doi(doi)
-            .published_date(published_date)
-            .categories(journal)
-            .pdf_url(pdf_url)
-            .build())
+        Ok(
+            PaperBuilder::new(full_pmcid.clone(), title, url, SourceType::PMC)
+                .authors(authors.join("; "))
+                .abstract_text(abstract_text)
+                .doi(doi)
+                .published_date(published_date)
+                .categories(journal)
+                .pdf_url(pdf_url)
+                .build(),
+        )
     }
 }
 
@@ -306,11 +310,10 @@ impl Source for PmcSource {
             let client = Arc::clone(&client);
             let url = url_for_retry.clone();
             async move {
-                let response = client
-                    .get(&url)
-                    .send()
-                    .await
-                    .map_err(|e| SourceError::Network(format!("Failed to search PMC: {}", e)))?;
+                let response =
+                    client.get(&url).send().await.map_err(|e| {
+                        SourceError::Network(format!("Failed to search PMC: {}", e))
+                    })?;
 
                 if !response.status().is_success() {
                     return Err(SourceError::Api(format!(
@@ -386,10 +389,12 @@ impl Source for PmcSource {
         let filename = format!("{}.pdf", full_pmcid);
         let path = std::path::Path::new(&request.save_path).join(&filename);
 
-        std::fs::write(&path, bytes.as_ref())
-            .map_err(|e| SourceError::Io(e.into()))?;
+        std::fs::write(&path, bytes.as_ref()).map_err(|e| SourceError::Io(e.into()))?;
 
-        Ok(DownloadResult::success(path.to_string_lossy().to_string(), bytes.len() as u64))
+        Ok(DownloadResult::success(
+            path.to_string_lossy().to_string(),
+            bytes.len() as u64,
+        ))
     }
 
     async fn read(&self, request: &ReadRequest) -> Result<ReadResult, SourceError> {
@@ -406,7 +411,10 @@ impl Source for PmcSource {
             }
             Err(e) => {
                 // If extraction fails, return a result indicating partial success
-                Ok(ReadResult::error(format!("PDF downloaded but text extraction failed: {}", e)))
+                Ok(ReadResult::error(format!(
+                    "PDF downloaded but text extraction failed: {}",
+                    e
+                )))
             }
         }
     }
@@ -444,7 +452,11 @@ fn get_attr<'a>(e: &BytesStart<'a>, attr_name: &str) -> Option<String> {
     e.attributes()
         .filter_map(|a| a.ok())
         .find(|a| a.key.as_ref() == attr_name.as_bytes())
-        .and_then(|a| std::str::from_utf8(a.value.as_ref()).ok().map(|s| s.to_string()))
+        .and_then(|a| {
+            std::str::from_utf8(a.value.as_ref())
+                .ok()
+                .map(|s| s.to_string())
+        })
 }
 
 // ===== PMC API Types =====

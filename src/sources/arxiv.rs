@@ -4,7 +4,9 @@ use async_trait::async_trait;
 use feed_rs::parser;
 use std::sync::Arc;
 
-use crate::models::{Paper, PaperBuilder, ReadRequest, ReadResult, SearchQuery, SearchResponse, SourceType};
+use crate::models::{
+    Paper, PaperBuilder, ReadRequest, ReadResult, SearchQuery, SearchResponse, SourceType,
+};
 use crate::sources::{DownloadRequest, DownloadResult, Source, SourceCapabilities, SourceError};
 use crate::utils::{api_retry_config, with_retry, HttpClient};
 
@@ -104,10 +106,7 @@ impl ArxivSource {
                 }
             } else if year.len() == 4 {
                 // Single year
-                parts.push(format!(
-                    "submitted_date:[{}0101 TO {}1231]",
-                    year, year
-                ));
+                parts.push(format!("submitted_date:[{}0101 TO {}1231]", year, year));
             }
         }
 
@@ -184,19 +183,16 @@ impl ArxivSource {
             .collect::<Vec<_>>()
             .join(";");
 
-        Ok(PaperBuilder::new(
-            paper_id.clone(),
-            title,
-            url,
-            SourceType::Arxiv,
+        Ok(
+            PaperBuilder::new(paper_id.clone(), title, url, SourceType::Arxiv)
+                .authors(authors)
+                .abstract_text(abstract_text)
+                .published_date(published_date.unwrap_or_default())
+                .updated_date(updated_date.unwrap_or_default())
+                .pdf_url(format!("{}/{}.pdf", ARXIV_PDF_URL, paper_id))
+                .categories(categories)
+                .build(),
         )
-        .authors(authors)
-        .abstract_text(abstract_text)
-        .published_date(published_date.unwrap_or_default())
-        .updated_date(updated_date.unwrap_or_default())
-        .pdf_url(format!("{}/{}.pdf", ARXIV_PDF_URL, paper_id))
-        .categories(categories)
-        .build())
     }
 }
 
@@ -266,7 +262,9 @@ impl Source for ArxivSource {
                     .header("Accept", "application/atom+xml")
                     .send()
                     .await
-                    .map_err(|e| SourceError::Network(format!("Failed to fetch arXiv results: {}", e)))?;
+                    .map_err(|e| {
+                        SourceError::Network(format!("Failed to fetch arXiv results: {}", e))
+                    })?;
 
                 if !response.status().is_success() {
                     return Err(SourceError::Api(format!(
@@ -288,11 +286,8 @@ impl Source for ArxivSource {
         })
         .await?;
 
-        let papers: Result<Vec<Paper>, SourceError> = feed
-            .entries
-            .iter()
-            .map(Self::parse_entry)
-            .collect();
+        let papers: Result<Vec<Paper>, SourceError> =
+            feed.entries.iter().map(Self::parse_entry).collect();
 
         let papers = papers?;
 
@@ -315,9 +310,10 @@ impl Source for ArxivSource {
                 let pages = (text.len() / 3000).max(1);
                 Ok(ReadResult::success(text).pages(pages))
             }
-            Err(e) => {
-                Ok(ReadResult::error(format!("PDF downloaded but text extraction failed: {}", e)))
-            }
+            Err(e) => Ok(ReadResult::error(format!(
+                "PDF downloaded but text extraction failed: {}",
+                e
+            ))),
         }
     }
 
@@ -335,7 +331,10 @@ mod tests {
     fn test_parse_id() {
         // Basic formats
         assert_eq!(ArxivSource::parse_id("2301.12345").unwrap(), "2301.12345");
-        assert_eq!(ArxivSource::parse_id("arxiv:2301.12345").unwrap(), "2301.12345");
+        assert_eq!(
+            ArxivSource::parse_id("arxiv:2301.12345").unwrap(),
+            "2301.12345"
+        );
         assert_eq!(
             ArxivSource::parse_id("https://arxiv.org/abs/2301.12345v1").unwrap(),
             "2301.12345"
@@ -345,7 +344,10 @@ mod tests {
         assert_eq!(ArxivSource::parse_id("2301.12345v2").unwrap(), "2301.12345");
 
         // Case insensitive
-        assert_eq!(ArxivSource::parse_id("ARXIV:2301.12345").unwrap(), "2301.12345");
+        assert_eq!(
+            ArxivSource::parse_id("ARXIV:2301.12345").unwrap(),
+            "2301.12345"
+        );
         assert_eq!(
             ArxivSource::parse_id("HTTPS://ARXIV.ORG/ABS/2301.12345").unwrap(),
             "2301.12345"

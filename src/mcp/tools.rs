@@ -8,9 +8,9 @@ use serde_json::Value;
 use crate::sources::SourceRegistry;
 
 pub use super::unified_tools::{
-    SearchByAuthorHandler, SearchPapersHandler, GetPaperHandler, DownloadPaperHandler,
-    ReadPaperHandler, GetCitationsHandler, GetReferencesHandler, LookupByDoiHandler,
-    DeduplicatePapersHandler,
+    DeduplicatePapersHandler, DownloadPaperHandler, GetCitationsHandler, GetPaperHandler,
+    GetReferencesHandler, LookupByDoiHandler, ReadPaperHandler, SearchByAuthorHandler,
+    SearchPapersHandler,
 };
 
 /// An MCP tool that can be called by the client
@@ -60,8 +60,7 @@ impl ToolRegistry {
         };
 
         // Convert sources to a shared Arc<Vec>
-        let sources_vec: Vec<Arc<dyn crate::sources::Source>> =
-            sources.all().cloned().collect();
+        let sources_vec: Vec<Arc<dyn crate::sources::Source>> = sources.all().cloned().collect();
         let sources_arc = Arc::new(sources_vec);
 
         // Register unified tools
@@ -226,7 +225,9 @@ impl ToolRegistry {
         // 6. get_citations - Get papers that cite a given paper
         self.register(Tool {
             name: "get_citations".to_string(),
-            description: "Get papers that cite a specific paper. Prefers Semantic Scholar for best results.".to_string(),
+            description:
+                "Get papers that cite a specific paper. Prefers Semantic Scholar for best results."
+                    .to_string(),
             input_schema: serde_json::json!({
                 "type": "object",
                 "properties": {

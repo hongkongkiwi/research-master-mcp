@@ -98,10 +98,9 @@ impl Source for JstorSource {
                     )));
                 }
 
-                let json: JstorResponse = response
-                    .json()
-                    .await
-                    .map_err(|e| SourceError::Parse(format!("Failed to parse JSTOR response: {}", e)))?;
+                let json: JstorResponse = response.json().await.map_err(|e| {
+                    SourceError::Parse(format!("Failed to parse JSTOR response: {}", e))
+                })?;
 
                 Ok(json)
             }
@@ -128,7 +127,11 @@ impl Source for JstorSource {
             .trim()
             .to_string();
 
-        let url = format!("{}/metadata/doi/{}", JSTOR_API_BASE, urlencoding::encode(&clean_doi));
+        let url = format!(
+            "{}/metadata/doi/{}",
+            JSTOR_API_BASE,
+            urlencoding::encode(&clean_doi)
+        );
 
         let client = Arc::clone(&self.client);
         let url_for_retry = url.clone();
@@ -145,13 +148,15 @@ impl Source for JstorSource {
                     request = request.header("Authorization", format!("Bearer {}", key));
                 }
 
-                let response = request
-                    .send()
-                    .await
-                    .map_err(|e| SourceError::Network(format!("Failed to lookup DOI in JSTOR: {}", e)))?;
+                let response = request.send().await.map_err(|e| {
+                    SourceError::Network(format!("Failed to lookup DOI in JSTOR: {}", e))
+                })?;
 
                 if response.status() == 404 {
-                    return Err(SourceError::NotFound(format!("Paper not found in JSTOR: {}", doi)));
+                    return Err(SourceError::NotFound(format!(
+                        "Paper not found in JSTOR: {}",
+                        doi
+                    )));
                 }
 
                 if !response.status().is_success() {
@@ -161,10 +166,9 @@ impl Source for JstorSource {
                     )));
                 }
 
-                let json: JstorItem = response
-                    .json()
-                    .await
-                    .map_err(|e| SourceError::Parse(format!("Failed to parse JSTOR response: {}", e)))?;
+                let json: JstorItem = response.json().await.map_err(|e| {
+                    SourceError::Parse(format!("Failed to parse JSTOR response: {}", e))
+                })?;
 
                 Ok(json)
             }
@@ -190,7 +194,10 @@ impl JstorSource {
             .collect::<Vec<_>>()
             .join("; ");
 
-        let year = item.publication_year.map(|y| y.to_string()).unwrap_or_default();
+        let year = item
+            .publication_year
+            .map(|y| y.to_string())
+            .unwrap_or_default();
         let url = if !doi.is_empty() {
             format!("https://doi.org/{}", doi)
         } else {

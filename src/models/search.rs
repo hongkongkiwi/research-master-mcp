@@ -234,7 +234,11 @@ pub struct SearchResponse {
 
 impl SearchResponse {
     /// Create a new search response
-    pub fn new(papers: Vec<crate::models::Paper>, source: impl Into<String>, query: impl Into<String>) -> Self {
+    pub fn new(
+        papers: Vec<crate::models::Paper>,
+        source: impl Into<String>,
+        query: impl Into<String>,
+    ) -> Self {
         Self {
             papers,
             total_results: None,

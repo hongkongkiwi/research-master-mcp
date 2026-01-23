@@ -85,10 +85,9 @@ impl Source for OsfSource {
                     )));
                 }
 
-                let json: OsfResponse = response
-                    .json()
-                    .await
-                    .map_err(|e| SourceError::Parse(format!("Failed to parse OSF response: {}", e)))?;
+                let json: OsfResponse = response.json().await.map_err(|e| {
+                    SourceError::Parse(format!("Failed to parse OSF response: {}", e))
+                })?;
 
                 Ok(json)
             }
@@ -115,7 +114,11 @@ impl Source for OsfSource {
             .trim()
             .to_string();
 
-        let url = format!("{}/preprints/{}", OSF_API_BASE, urlencoding::encode(&clean_doi));
+        let url = format!(
+            "{}/preprints/{}",
+            OSF_API_BASE,
+            urlencoding::encode(&clean_doi)
+        );
 
         let client = Arc::clone(&self.client);
         let url_for_retry = url.clone();
@@ -126,13 +129,15 @@ impl Source for OsfSource {
             async move {
                 let request = client.get(&url);
 
-                let response = request
-                    .send()
-                    .await
-                    .map_err(|e| SourceError::Network(format!("Failed to lookup DOI in OSF: {}", e)))?;
+                let response = request.send().await.map_err(|e| {
+                    SourceError::Network(format!("Failed to lookup DOI in OSF: {}", e))
+                })?;
 
                 if response.status() == 404 {
-                    return Err(SourceError::NotFound(format!("Paper not found in OSF: {}", doi)));
+                    return Err(SourceError::NotFound(format!(
+                        "Paper not found in OSF: {}",
+                        doi
+                    )));
                 }
 
                 if !response.status().is_success() {
@@ -142,10 +147,9 @@ impl Source for OsfSource {
                     )));
                 }
 
-                let json: OsfPreprint = response
-                    .json()
-                    .await
-                    .map_err(|e| SourceError::Parse(format!("Failed to parse OSF response: {}", e)))?;
+                let json: OsfPreprint = response.json().await.map_err(|e| {
+                    SourceError::Parse(format!("Failed to parse OSF response: {}", e))
+                })?;
 
                 Ok(json)
             }
@@ -155,23 +159,34 @@ impl Source for OsfSource {
         self.parse_result(&response)
     }
 
-    async fn download(&self, request: &crate::models::DownloadRequest) -> Result<crate::models::DownloadResult, SourceError> {
+    async fn download(
+        &self,
+        request: &crate::models::DownloadRequest,
+    ) -> Result<crate::models::DownloadResult, SourceError> {
         // Use PDF URL from paper_id or DOI
         let _paper_id = request.paper_id.clone();
-        let pdf_url = request.doi.clone()
+        let pdf_url = request
+            .doi
+            .clone()
             .map(|doi| format!("https://doi.org/{}", doi))
-            .ok_or_else(|| SourceError::InvalidRequest("DOI required for OSF download".to_string()))?;
+            .ok_or_else(|| {
+                SourceError::InvalidRequest("DOI required for OSF download".to_string())
+            })?;
         let save_path = request.save_path.clone();
 
         let client = Arc::clone(&self.client);
 
-        let response = client.get(&pdf_url)
+        let response = client
+            .get(&pdf_url)
             .send()
             .await
             .map_err(|e| SourceError::Network(format!("Failed to download from OSF: {}", e)))?;
 
         if !response.status().is_success() {
-            return Err(SourceError::Api(format!("Download failed with status: {}", response.status())));
+            return Err(SourceError::Api(format!(
+                "Download failed with status: {}",
+                response.status()
+            )));
         }
 
         let bytes_vec = response
@@ -210,7 +225,11 @@ impl OsfSource {
             .join("; ");
 
         let date_created = preprint.attributes.date_created.clone().unwrap_or_default();
-        let year = date_created.split('-').next().unwrap_or(&date_created).to_string();
+        let year = date_created
+            .split('-')
+            .next()
+            .unwrap_or(&date_created)
+            .to_string();
         let url = preprint.links.html.clone().unwrap_or_default();
         let pdf_url = preprint.links.download.clone();
 

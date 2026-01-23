@@ -62,7 +62,10 @@ impl Source for IeeeXploreSource {
             self.api_key.as_deref().unwrap_or_default()
         );
 
-        url.push_str(&format!("&article_number={}", urlencoding::encode(&query.query)));
+        url.push_str(&format!(
+            "&article_number={}",
+            urlencoding::encode(&query.query)
+        ));
 
         if let Some(year_filter) = &query.year {
             url.push_str(&format!("&publication_year={}", year_filter));
@@ -77,10 +80,9 @@ impl Source for IeeeXploreSource {
             async move {
                 let request = client.get(&url);
 
-                let response = request
-                    .send()
-                    .await
-                    .map_err(|e| SourceError::Network(format!("Failed to search IEEE Xplore: {}", e)))?;
+                let response = request.send().await.map_err(|e| {
+                    SourceError::Network(format!("Failed to search IEEE Xplore: {}", e))
+                })?;
 
                 if !response.status().is_success() {
                     let status = response.status();
@@ -91,10 +93,9 @@ impl Source for IeeeXploreSource {
                     )));
                 }
 
-                let json: IeeeXploreResponse = response
-                    .json()
-                    .await
-                    .map_err(|e| SourceError::Parse(format!("Failed to parse IEEE Xplore response: {}", e)))?;
+                let json: IeeeXploreResponse = response.json().await.map_err(|e| {
+                    SourceError::Parse(format!("Failed to parse IEEE Xplore response: {}", e))
+                })?;
 
                 Ok(json)
             }
@@ -137,10 +138,9 @@ impl Source for IeeeXploreSource {
             async move {
                 let request = client.get(&url);
 
-                let response = request
-                    .send()
-                    .await
-                    .map_err(|e| SourceError::Network(format!("Failed to lookup DOI in IEEE Xplore: {}", e)))?;
+                let response = request.send().await.map_err(|e| {
+                    SourceError::Network(format!("Failed to lookup DOI in IEEE Xplore: {}", e))
+                })?;
 
                 if !response.status().is_success() {
                     let status = response.status();
@@ -151,10 +151,9 @@ impl Source for IeeeXploreSource {
                     )));
                 }
 
-                response
-                    .json()
-                    .await
-                    .map_err(|e| SourceError::Parse(format!("Failed to parse IEEE Xplore response: {}", e)))
+                response.json().await.map_err(|e| {
+                    SourceError::Parse(format!("Failed to parse IEEE Xplore response: {}", e))
+                })
             }
         })
         .await?;
@@ -162,7 +161,10 @@ impl Source for IeeeXploreSource {
         if let Some(article) = response.articles.into_iter().next() {
             self.parse_result(&article)
         } else {
-            Err(SourceError::NotFound(format!("Paper not found in IEEE Xplore: {}", doi)))
+            Err(SourceError::NotFound(format!(
+                "Paper not found in IEEE Xplore: {}",
+                doi
+            )))
         }
     }
 }

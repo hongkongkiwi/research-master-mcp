@@ -150,7 +150,10 @@ impl HttpClient {
     }
 
     /// Create a new HTTP client with a custom rate limit
-    pub fn with_rate_limit(user_agent: &str, requests_per_second: u32) -> Result<Self, SourceError> {
+    pub fn with_rate_limit(
+        user_agent: &str,
+        requests_per_second: u32,
+    ) -> Result<Self, SourceError> {
         let rate_limiter = if requests_per_second == 0 {
             None
         } else {
@@ -187,11 +190,15 @@ impl HttpClient {
             return None;
         }
 
-        let nonzero = NonZeroU32::new(requests_per_second).expect("requests_per_second should not be zero");
+        let nonzero =
+            NonZeroU32::new(requests_per_second).expect("requests_per_second should not be zero");
         let quota = Quota::per_second(nonzero);
         let limiter = RateLimiter::direct(quota);
 
-        tracing::info!("Rate limiting enabled: {} requests per second", requests_per_second);
+        tracing::info!(
+            "Rate limiting enabled: {} requests per second",
+            requests_per_second
+        );
 
         Some(Arc::new(limiter))
     }
@@ -265,8 +272,7 @@ impl HttpClient {
 
         let path = Path::new(&request.save_path).join(filename);
 
-        std::fs::write(&path, bytes.as_ref())
-            .map_err(|e| SourceError::Io(e.into()))?;
+        std::fs::write(&path, bytes.as_ref()).map_err(|e| SourceError::Io(e.into()))?;
 
         Ok(DownloadResult::success(
             path.to_string_lossy().to_string(),
@@ -325,7 +331,10 @@ mod tests {
         std::env::set_var(RATE_LIMIT_ENV_VAR, "0");
 
         let limiter = HttpClient::create_rate_limiter();
-        assert!(limiter.is_none(), "Rate limiter should be disabled when set to 0");
+        assert!(
+            limiter.is_none(),
+            "Rate limiter should be disabled when set to 0"
+        );
 
         std::env::remove_var(RATE_LIMIT_ENV_VAR);
     }
@@ -346,7 +355,10 @@ mod tests {
 
         let limiter = HttpClient::create_rate_limiter();
         // Should fall back to default when invalid value is provided
-        assert!(limiter.is_some(), "Should fall back to default rate limiter");
+        assert!(
+            limiter.is_some(),
+            "Should fall back to default rate limiter"
+        );
 
         std::env::remove_var(RATE_LIMIT_ENV_VAR);
     }

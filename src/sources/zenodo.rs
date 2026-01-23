@@ -83,10 +83,9 @@ impl Source for ZenodoSource {
                     )));
                 }
 
-                let json: ZenodoResponse = response
-                    .json()
-                    .await
-                    .map_err(|e| SourceError::Parse(format!("Failed to parse Zenodo response: {}", e)))?;
+                let json: ZenodoResponse = response.json().await.map_err(|e| {
+                    SourceError::Parse(format!("Failed to parse Zenodo response: {}", e))
+                })?;
 
                 Ok(json)
             }
@@ -114,7 +113,11 @@ impl Source for ZenodoSource {
             .trim()
             .to_string();
 
-        let url = format!("{}?q=doi:\"{}\"", ZENODO_API_BASE, urlencoding::encode(&clean_doi));
+        let url = format!(
+            "{}?q=doi:\"{}\"",
+            ZENODO_API_BASE,
+            urlencoding::encode(&clean_doi)
+        );
 
         let client = Arc::clone(&self.client);
         let url_for_retry = url.clone();
@@ -125,19 +128,20 @@ impl Source for ZenodoSource {
             async move {
                 let request = client.get(&url);
 
-                let response = request
-                    .send()
-                    .await
-                    .map_err(|e| SourceError::Network(format!("Failed to lookup DOI in Zenodo: {}", e)))?;
+                let response = request.send().await.map_err(|e| {
+                    SourceError::Network(format!("Failed to lookup DOI in Zenodo: {}", e))
+                })?;
 
                 if !response.status().is_success() {
-                    return Err(SourceError::NotFound(format!("Paper not found in Zenodo: {}", doi)));
+                    return Err(SourceError::NotFound(format!(
+                        "Paper not found in Zenodo: {}",
+                        doi
+                    )));
                 }
 
-                response
-                    .json()
-                    .await
-                    .map_err(|e| SourceError::Parse(format!("Failed to parse Zenodo response: {}", e)))
+                response.json().await.map_err(|e| {
+                    SourceError::Parse(format!("Failed to parse Zenodo response: {}", e))
+                })
             }
         })
         .await?;
@@ -145,7 +149,10 @@ impl Source for ZenodoSource {
         if let Some(hit) = response.hits.hits.into_iter().next() {
             self.parse_result(&hit)
         } else {
-            Err(SourceError::NotFound(format!("Paper not found in Zenodo: {}", doi)))
+            Err(SourceError::NotFound(format!(
+                "Paper not found in Zenodo: {}",
+                doi
+            )))
         }
     }
 }
@@ -175,12 +182,14 @@ impl ZenodoSource {
             }
         });
 
-        Ok(PaperBuilder::new(id, title, url, SourceType::Other("zenodo".to_string()))
-            .authors(&authors)
-            .published_date(&year)
-            .abstract_text(&abstract_text)
-            .doi(&doi)
-            .build())
+        Ok(
+            PaperBuilder::new(id, title, url, SourceType::Other("zenodo".to_string()))
+                .authors(&authors)
+                .published_date(&year)
+                .abstract_text(&abstract_text)
+                .doi(&doi)
+                .build(),
+        )
     }
 }
 

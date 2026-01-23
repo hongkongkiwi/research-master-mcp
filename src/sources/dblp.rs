@@ -3,7 +3,7 @@
 //! Uses DBLP XML API for computer science bibliography.
 
 use async_trait::async_trait;
-use quick_xml::events::{Event, BytesStart};
+use quick_xml::events::{BytesStart, Event};
 use quick_xml::reader::Reader;
 use std::sync::Arc;
 
@@ -171,10 +171,16 @@ impl DblpSource {
     /// Parse a single DBLP hit element (fallback using simple text extraction)
     fn parse_hit_fallback(&self, hit_xml: &str) -> Option<Paper> {
         // Extract key attribute
-        let key = extract_attribute(hit_xml, "key").ok().flatten().unwrap_or_default();
+        let key = extract_attribute(hit_xml, "key")
+            .ok()
+            .flatten()
+            .unwrap_or_default();
 
         // Extract title
-        let title = extract_element_text(hit_xml, "title").ok().flatten().unwrap_or_default();
+        let title = extract_element_text(hit_xml, "title")
+            .ok()
+            .flatten()
+            .unwrap_or_default();
 
         if title.is_empty() {
             return None;
@@ -197,8 +203,18 @@ impl DblpSource {
             .ok()
             .flatten()
             .map(|j| (j, "journal"))
-            .or_else(|| extract_element_text(hit_xml, "booktitle").ok().flatten().map(|b| (b, "conference")))
-            .or_else(|| extract_element_text(hit_xml, "school").ok().flatten().map(|s| (s, "thesis")))
+            .or_else(|| {
+                extract_element_text(hit_xml, "booktitle")
+                    .ok()
+                    .flatten()
+                    .map(|b| (b, "conference"))
+            })
+            .or_else(|| {
+                extract_element_text(hit_xml, "school")
+                    .ok()
+                    .flatten()
+                    .map(|s| (s, "thesis"))
+            })
             .unwrap_or_else(|| (String::new(), "article"));
 
         // Extract DOI from ee element
@@ -225,13 +241,15 @@ impl DblpSource {
             .take(2000)
             .collect();
 
-        Some(PaperBuilder::new(key.clone(), title, url, SourceType::DBLP)
-            .authors(authors_str)
-            .abstract_text(abstract_text)
-            .doi(doi)
-            .published_date(published_date)
-            .categories(venue.clone())
-            .build())
+        Some(
+            PaperBuilder::new(key.clone(), title, url, SourceType::DBLP)
+                .authors(authors_str)
+                .abstract_text(abstract_text)
+                .doi(doi)
+                .published_date(published_date)
+                .categories(venue.clone())
+                .build(),
+        )
     }
 }
 
@@ -267,7 +285,12 @@ impl Source for DblpSource {
             if year.contains('-') {
                 let parts: Vec<&str> = year.split('-').collect();
                 if parts.len() == 2 {
-                    url = format!("{}&yearMin={}&yearMax={}", url, parts[0].trim(), parts[1].trim());
+                    url = format!(
+                        "{}&yearMin={}&yearMax={}",
+                        url,
+                        parts[0].trim(),
+                        parts[1].trim()
+                    );
                 }
             } else {
                 url = format!("{}&yearMin={}&yearMax={}", url, year, year);
@@ -350,7 +373,11 @@ fn get_attr<'a>(e: &BytesStart<'a>, attr_name: &str) -> Option<String> {
     e.attributes()
         .filter_map(|a| a.ok())
         .find(|a| a.key.as_ref() == attr_name.as_bytes())
-        .and_then(|a| std::str::from_utf8(a.value.as_ref()).ok().map(|s| s.to_string()))
+        .and_then(|a| {
+            std::str::from_utf8(a.value.as_ref())
+                .ok()
+                .map(|s| s.to_string())
+        })
 }
 
 /// Find all elements with given tag name, returns their content
@@ -501,7 +528,11 @@ mod tests {
         assert!(paper.authors.contains("John Doe"));
         assert!(paper.authors.contains("Jane Smith"));
         assert_eq!(paper.published_date, Some("2024".to_string()));
-        assert!(paper.categories.as_ref().map(|c| c.contains("CHI 2024")).unwrap_or(false));
+        assert!(paper
+            .categories
+            .as_ref()
+            .map(|c| c.contains("CHI 2024"))
+            .unwrap_or(false));
         assert_eq!(paper.doi, Some("10.1145/1234567.1234568".to_string()));
     }
 

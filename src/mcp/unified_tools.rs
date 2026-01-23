@@ -25,7 +25,10 @@ impl ToolHandler for SearchPapersHandler {
             .and_then(|v| v.as_u64())
             .unwrap_or(10) as usize;
 
-        let year = args.get("year").and_then(|v| v.as_str()).map(|s| s.to_string());
+        let year = args
+            .get("year")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string());
 
         let category = args
             .get("category")
@@ -144,7 +147,10 @@ impl ToolHandler for GetPaperHandler {
         // For now, we'll do a search with the paper ID as the query
         let search_query = crate::models::SearchQuery::new(paper_id).max_results(1);
 
-        let response = source.search(&search_query).await.map_err(|e| e.to_string())?;
+        let response = source
+            .search(&search_query)
+            .await
+            .map_err(|e| e.to_string())?;
 
         if response.papers.is_empty() {
             return Err(format!("Paper '{}' not found in {}", paper_id, source.id()));
@@ -249,7 +255,10 @@ impl ToolHandler for GetCitationsHandler {
 
         let request = crate::models::CitationRequest::new(paper_id).max_results(max_results);
 
-        let response = source.get_citations(&request).await.map_err(|e| e.to_string())?;
+        let response = source
+            .get_citations(&request)
+            .await
+            .map_err(|e| e.to_string())?;
 
         serde_json::to_value(response).map_err(|e| e.to_string())
     }
@@ -286,12 +295,18 @@ impl ToolHandler for GetReferencesHandler {
             .ok_or_else(|| format!("Source '{}' not found", source_id))?;
 
         if !source.supports_citations() {
-            return Err(format!("Source '{}' does not support references", source_id));
+            return Err(format!(
+                "Source '{}' does not support references",
+                source_id
+            ));
         }
 
         let request = crate::models::CitationRequest::new(paper_id).max_results(max_results);
 
-        let response = source.get_references(&request).await.map_err(|e| e.to_string())?;
+        let response = source
+            .get_references(&request)
+            .await
+            .map_err(|e| e.to_string())?;
 
         serde_json::to_value(response).map_err(|e| e.to_string())
     }
@@ -393,8 +408,7 @@ impl GetPaperHandler {
 
         // arXiv: arXiv:1234.5678 or numeric format like 1234.5678
         if paper_id_lower.starts_with("arxiv:")
-            || (paper_id.len() > 4
-                && paper_id.chars().take(9).all(|c| c.is_numeric() || c == '.'))
+            || (paper_id.len() > 4 && paper_id.chars().take(9).all(|c| c.is_numeric() || c == '.'))
         {
             return self
                 .sources
@@ -479,8 +493,7 @@ impl DownloadPaperHandler {
         let paper_id_lower = paper_id.to_lowercase();
 
         if paper_id_lower.starts_with("arxiv:")
-            || (paper_id.len() > 4
-                && paper_id.chars().take(9).all(|c| c.is_numeric() || c == '.'))
+            || (paper_id.len() > 4 && paper_id.chars().take(9).all(|c| c.is_numeric() || c == '.'))
         {
             return self
                 .sources
@@ -543,8 +556,7 @@ impl ReadPaperHandler {
         let paper_id_lower = paper_id.to_lowercase();
 
         if paper_id_lower.starts_with("arxiv:")
-            || (paper_id.len() > 4
-                && paper_id.chars().take(9).all(|c| c.is_numeric() || c == '.'))
+            || (paper_id.len() > 4 && paper_id.chars().take(9).all(|c| c.is_numeric() || c == '.'))
         {
             return self
                 .sources

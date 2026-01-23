@@ -4,7 +4,9 @@ use async_trait::async_trait;
 use scraper::{ElementRef, Html, Selector};
 use std::sync::Arc;
 
-use crate::models::{Paper, PaperBuilder, ReadRequest, ReadResult, SearchQuery, SearchResponse, SourceType};
+use crate::models::{
+    Paper, PaperBuilder, ReadRequest, ReadResult, SearchQuery, SearchResponse, SourceType,
+};
 use crate::sources::{DownloadRequest, DownloadResult, Source, SourceCapabilities, SourceError};
 use crate::utils::{api_retry_config, with_retry, HttpClient};
 
@@ -186,8 +188,13 @@ impl Source for SsrnSource {
                             if !title.is_empty() {
                                 let url = format!("{}/{}.html", SSRN_ABSTRACT_URL, paper_id);
                                 papers.push(
-                                    PaperBuilder::new(paper_id.clone(), title, url, SourceType::SSRN)
-                                        .build(),
+                                    PaperBuilder::new(
+                                        paper_id.clone(),
+                                        title,
+                                        url,
+                                        SourceType::SSRN,
+                                    )
+                                    .build(),
                                 );
                             }
                         }
@@ -269,10 +276,12 @@ impl Source for SsrnSource {
         let filename = format!("ssrn_{}.pdf", request.paper_id);
         let path = std::path::Path::new(&request.save_path).join(&filename);
 
-        std::fs::write(&path, bytes.as_ref())
-            .map_err(|e| SourceError::Io(e.into()))?;
+        std::fs::write(&path, bytes.as_ref()).map_err(|e| SourceError::Io(e.into()))?;
 
-        Ok(DownloadResult::success(path.to_string_lossy().to_string(), bytes.len() as u64))
+        Ok(DownloadResult::success(
+            path.to_string_lossy().to_string(),
+            bytes.len() as u64,
+        ))
     }
 
     async fn read(&self, request: &ReadRequest) -> Result<ReadResult, SourceError> {
@@ -285,9 +294,10 @@ impl Source for SsrnSource {
                 let pages = (text.len() / 3000).max(1);
                 Ok(ReadResult::success(text).pages(pages))
             }
-            Err(e) => {
-                Ok(ReadResult::error(format!("PDF downloaded but text extraction failed: {}", e)))
-            }
+            Err(e) => Ok(ReadResult::error(format!(
+                "PDF downloaded but text extraction failed: {}",
+                e
+            ))),
         }
     }
 }

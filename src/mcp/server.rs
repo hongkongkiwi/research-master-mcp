@@ -7,8 +7,8 @@ use crate::mcp::tools::ToolRegistry;
 use crate::sources::SourceRegistry;
 use async_trait::async_trait;
 use pmcp::{
-    Error, RequestHandlerExtra, Server, ServerCapabilities, ToolHandler, ToolInfo,
     server::streamable_http_server::{StreamableHttpServer, StreamableHttpServerConfig},
+    Error, RequestHandlerExtra, Server, ServerCapabilities, ToolHandler, ToolInfo,
 };
 use serde_json::Value;
 use std::net::SocketAddr;
@@ -89,7 +89,8 @@ impl McpServer {
     pub async fn run_http(&self, addr: &str) -> Result<(SocketAddr, JoinHandle<()>), pmcp::Error> {
         tracing::info!("Starting MCP server in HTTP/SSE mode on {}", addr);
 
-        let socket_addr: SocketAddr = addr.parse()
+        let socket_addr: SocketAddr = addr
+            .parse()
             .map_err(|e| Error::invalid_params(&format!("Invalid address: {}", e)))?;
 
         // Create the HTTP server with default config
@@ -105,13 +106,18 @@ impl McpServer {
         addr: &str,
         config: StreamableHttpServerConfig,
     ) -> Result<(SocketAddr, JoinHandle<()>), pmcp::Error> {
-        tracing::info!("Starting MCP server in HTTP/SSE mode on {} (with custom config)", addr);
+        tracing::info!(
+            "Starting MCP server in HTTP/SSE mode on {} (with custom config)",
+            addr
+        );
 
-        let socket_addr: SocketAddr = addr.parse()
+        let socket_addr: SocketAddr = addr
+            .parse()
             .map_err(|e| Error::invalid_params(&format!("Invalid address: {}", e)))?;
 
         // Create the HTTP server with custom config
-        let http_server = StreamableHttpServer::with_config(socket_addr, self.server.clone(), config);
+        let http_server =
+            StreamableHttpServer::with_config(socket_addr, self.server.clone(), config);
 
         // Start the server
         http_server.start().await
@@ -129,12 +135,10 @@ struct ToolWrapper {
 
 #[async_trait]
 impl ToolHandler for ToolWrapper {
-    async fn handle(
-        &self,
-        args: Value,
-        _extra: RequestHandlerExtra,
-    ) -> Result<Value, Error> {
-        self.handler.execute(args).await
+    async fn handle(&self, args: Value, _extra: RequestHandlerExtra) -> Result<Value, Error> {
+        self.handler
+            .execute(args)
+            .await
             .map_err(|e| Error::internal(&e))
     }
 

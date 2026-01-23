@@ -117,7 +117,8 @@ fn authors_match(a: &Paper, b: &Paper) -> bool {
 
 /// Normalize a title for comparison
 fn normalize_title(title: &str) -> String {
-    title.chars()
+    title
+        .chars()
         .filter(|c| c.is_alphanumeric() || c.is_whitespace())
         .collect::<String>()
         .split_whitespace()
@@ -357,13 +358,11 @@ mod tests {
 
     #[test]
     fn test_deduplicate_single_paper() {
-        let papers = vec![PaperBuilder::new(
-            "1",
-            "Test Paper",
-            "https://arxiv.org/1",
-            SourceType::Arxiv,
-        )
-        .build()];
+        let papers =
+            vec![
+                PaperBuilder::new("1", "Test Paper", "https://arxiv.org/1", SourceType::Arxiv)
+                    .build(),
+            ];
 
         let deduped = deduplicate_papers(papers, DuplicateStrategy::First);
         assert_eq!(deduped.len(), 1);

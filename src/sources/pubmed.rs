@@ -288,10 +288,24 @@ impl PubMedSource {
                             if let Some(collective) = &author.CollectiveName {
                                 collective.name.clone()
                             } else {
-                                let first = author.ForeName.as_ref().map(|f| f.name.as_str()).unwrap_or("");
-                                let last = author.LastName.as_ref().map(|l| l.name.as_str()).unwrap_or("");
-                                let initials = author.Initials.as_ref().map(|i| i.initials.as_str()).unwrap_or("");
-                                format!("{} {} {}", first, last, initials).trim().to_string()
+                                let first = author
+                                    .ForeName
+                                    .as_ref()
+                                    .map(|f| f.name.as_str())
+                                    .unwrap_or("");
+                                let last = author
+                                    .LastName
+                                    .as_ref()
+                                    .map(|l| l.name.as_str())
+                                    .unwrap_or("");
+                                let initials = author
+                                    .Initials
+                                    .as_ref()
+                                    .map(|i| i.initials.as_str())
+                                    .unwrap_or("");
+                                format!("{} {} {}", first, last, initials)
+                                    .trim()
+                                    .to_string()
                             }
                         })
                         .collect::<Vec<_>>()
@@ -322,9 +336,7 @@ impl PubMedSource {
                 .PubmedData
                 .as_ref()
                 .and_then(|pd| pd.ArticleIdList.as_ref())
-                .and_then(|ail| {
-                    ail.ids.iter().find(|id| id.id_type == "doi")
-                })
+                .and_then(|ail| ail.ids.iter().find(|id| id.id_type == "doi"))
                 .map(|id| id.value.clone());
 
             let url = format!("https://pubmed.ncbi.nlm.nih.gov/{}/", pmid);
@@ -370,30 +382,28 @@ impl Source for PubMedSource {
         let client = Arc::clone(&self.client);
         let search_url_for_retry = search_url.clone();
 
-        let xml = with_retry(api_retry_config(), || {
-            let client = Arc::clone(&client);
-            let url = search_url_for_retry.clone();
-            async move {
-                let response = client
-                    .get(&url)
-                    .send()
-                    .await
-                    .map_err(|e| SourceError::Network(format!("Failed to search PubMed: {}", e)))?;
+        let xml =
+            with_retry(api_retry_config(), || {
+                let client = Arc::clone(&client);
+                let url = search_url_for_retry.clone();
+                async move {
+                    let response = client.get(&url).send().await.map_err(|e| {
+                        SourceError::Network(format!("Failed to search PubMed: {}", e))
+                    })?;
 
-                if !response.status().is_success() {
-                    return Err(SourceError::Api(format!(
-                        "PubMed API returned status: {}",
-                        response.status()
-                    )));
+                    if !response.status().is_success() {
+                        return Err(SourceError::Api(format!(
+                            "PubMed API returned status: {}",
+                            response.status()
+                        )));
+                    }
+
+                    response.text().await.map_err(|e| {
+                        SourceError::Network(format!("Failed to read response: {}", e))
+                    })
                 }
-
-                response
-                    .text()
-                    .await
-                    .map_err(|e| SourceError::Network(format!("Failed to read response: {}", e)))
-            }
-        })
-        .await?;
+            })
+            .await?;
 
         let ids = Self::parse_search_response(&xml)?;
 
@@ -411,11 +421,9 @@ impl Source for PubMedSource {
             let client = Arc::clone(&client);
             let url = fetch_url_for_retry.clone();
             async move {
-                let response = client
-                    .get(&url)
-                    .send()
-                    .await
-                    .map_err(|e| SourceError::Network(format!("Failed to fetch PubMed details: {}", e)))?;
+                let response = client.get(&url).send().await.map_err(|e| {
+                    SourceError::Network(format!("Failed to fetch PubMed details: {}", e))
+                })?;
 
                 if !response.status().is_success() {
                     return Err(SourceError::Api(format!(

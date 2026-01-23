@@ -56,16 +56,11 @@ impl Source for DoajSource {
         let max_results = query.max_results.min(100);
 
         // DOAJ uses Elasticsearch query syntax
-        let search_query = format!(
-            "query={}",
-            urlencoding::encode(&query.query)
-        );
+        let search_query = format!("query={}", urlencoding::encode(&query.query));
 
         let url = format!(
             "{}?{}&pageSize={}",
-            DOAJ_API_BASE,
-            search_query,
-            max_results
+            DOAJ_API_BASE, search_query, max_results
         );
 
         let client = Arc::clone(&self.client);
@@ -75,8 +70,7 @@ impl Source for DoajSource {
             let client = Arc::clone(&client);
             let url = url_for_retry.clone();
             async move {
-                let request = client.get(&url)
-                    .header("Accept", "application/json");
+                let request = client.get(&url).header("Accept", "application/json");
 
                 let response = request
                     .send()
@@ -92,10 +86,9 @@ impl Source for DoajSource {
                     )));
                 }
 
-                let json: DoajResponse = response
-                    .json()
-                    .await
-                    .map_err(|e| SourceError::Parse(format!("Failed to parse DOAJ response: {}", e)))?;
+                let json: DoajResponse = response.json().await.map_err(|e| {
+                    SourceError::Parse(format!("Failed to parse DOAJ response: {}", e))
+                })?;
 
                 Ok(json)
             }
@@ -131,16 +124,17 @@ impl Source for DoajSource {
             let client = Arc::clone(&client);
             let url = url_for_retry.clone();
             async move {
-                let request = client.get(&url)
-                    .header("Accept", "application/json");
+                let request = client.get(&url).header("Accept", "application/json");
 
-                let response = request
-                    .send()
-                    .await
-                    .map_err(|e| SourceError::Network(format!("Failed to lookup DOI in DOAJ: {}", e)))?;
+                let response = request.send().await.map_err(|e| {
+                    SourceError::Network(format!("Failed to lookup DOI in DOAJ: {}", e))
+                })?;
 
                 if response.status() == 404 {
-                    return Err(SourceError::NotFound(format!("Paper not found in DOAJ: {}", doi)));
+                    return Err(SourceError::NotFound(format!(
+                        "Paper not found in DOAJ: {}",
+                        doi
+                    )));
                 }
 
                 if !response.status().is_success() {
@@ -150,10 +144,9 @@ impl Source for DoajSource {
                     )));
                 }
 
-                let json: DoajArticle = response
-                    .json()
-                    .await
-                    .map_err(|e| SourceError::Parse(format!("Failed to parse DOAJ response: {}", e)))?;
+                let json: DoajArticle = response.json().await.map_err(|e| {
+                    SourceError::Parse(format!("Failed to parse DOAJ response: {}", e))
+                })?;
 
                 Ok(json)
             }

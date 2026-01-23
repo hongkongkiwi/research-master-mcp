@@ -7,60 +7,60 @@ use super::{Source, SourceError};
 use crate::config::SourceConfig;
 
 // Conditionally import source types based on feature flags
+#[cfg(feature = "source-acm")]
+use super::acm::AcmSource;
 #[cfg(feature = "source-arxiv")]
 use super::arxiv::ArxivSource;
+#[cfg(feature = "source-base")]
+use super::base::BaseSource;
 #[cfg(feature = "source-biorxiv")]
 use super::biorxiv::BiorxivSource;
+#[cfg(feature = "source-connected_papers")]
+use super::connected_papers::ConnectedPapersSource;
+#[cfg(feature = "source-core-repo")]
+use super::core::CoreSource;
 #[cfg(feature = "source-crossref")]
 use super::crossref::CrossRefSource;
 #[cfg(feature = "source-dblp")]
 use super::dblp::DblpSource;
 #[cfg(feature = "source-dimensions")]
 use super::dimensions::DimensionsSource;
+#[cfg(feature = "source-doaj")]
+use super::doaj::DoajSource;
+#[cfg(feature = "source-google_scholar")]
+use super::google_scholar::GoogleScholarSource;
 #[cfg(feature = "source-hal")]
 use super::hal::HalSource;
 #[cfg(feature = "source-iacr")]
 use super::iacr::IacrSource;
+#[cfg(feature = "source-ieee_xplore")]
+use super::ieee_xplore::IeeeXploreSource;
+#[cfg(feature = "source-jstor")]
+use super::jstor::JstorSource;
+#[cfg(feature = "source-mdpi")]
+use super::mdpi::MdpiSource;
 #[cfg(feature = "source-openalex")]
 use super::openalex::OpenAlexSource;
+#[cfg(feature = "source-osf")]
+use super::osf::OsfSource;
 #[cfg(feature = "source-pmc")]
 use super::pmc::PmcSource;
 #[cfg(feature = "source-pubmed")]
 use super::pubmed::PubMedSource;
-#[cfg(feature = "source-semantic")]
-use super::semantic::SemanticScholarSource;
-#[cfg(feature = "source-ssrn")]
-use super::ssrn::SsrnSource;
-#[cfg(feature = "source-ieee_xplore")]
-use super::ieee_xplore::IeeeXploreSource;
-#[cfg(feature = "source-core-repo")]
-use super::core::CoreSource;
-#[cfg(feature = "source-zenodo")]
-use super::zenodo::ZenodoSource;
-#[cfg(feature = "source-unpaywall")]
-use super::unpaywall::UnpaywallSource;
-#[cfg(feature = "source-mdpi")]
-use super::mdpi::MdpiSource;
-#[cfg(feature = "source-jstor")]
-use super::jstor::JstorSource;
 #[cfg(feature = "source-scispace")]
 use super::scispace::ScispaceSource;
-#[cfg(feature = "source-acm")]
-use super::acm::AcmSource;
-#[cfg(feature = "source-connected_papers")]
-use super::connected_papers::ConnectedPapersSource;
-#[cfg(feature = "source-doaj")]
-use super::doaj::DoajSource;
-#[cfg(feature = "source-worldwidescience")]
-use super::worldwidescience::WorldWideScienceSource;
-#[cfg(feature = "source-osf")]
-use super::osf::OsfSource;
-#[cfg(feature = "source-base")]
-use super::base::BaseSource;
+#[cfg(feature = "source-semantic")]
+use super::semantic::SemanticScholarSource;
 #[cfg(feature = "source-springer")]
 use super::springer::SpringerSource;
-#[cfg(feature = "source-google_scholar")]
-use super::google_scholar::GoogleScholarSource;
+#[cfg(feature = "source-ssrn")]
+use super::ssrn::SsrnSource;
+#[cfg(feature = "source-unpaywall")]
+use super::unpaywall::UnpaywallSource;
+#[cfg(feature = "source-worldwidescience")]
+use super::worldwidescience::WorldWideScienceSource;
+#[cfg(feature = "source-zenodo")]
+use super::zenodo::ZenodoSource;
 
 /// Result of source filtering from config/environment
 #[derive(Debug, Clone, Default)]
@@ -74,7 +74,9 @@ struct SourceFilter {
 impl SourceFilter {
     /// Create a new filter from config (which may include env vars)
     fn from_config(config: &SourceConfig) -> Self {
-        let enabled = config.enabled_sources.as_ref()
+        let enabled = config
+            .enabled_sources
+            .as_ref()
             .filter(|s| !s.is_empty())
             .map(|value| {
                 value
@@ -85,7 +87,9 @@ impl SourceFilter {
             })
             .filter(|set| !set.is_empty());
 
-        let disabled = config.disabled_sources.as_ref()
+        let disabled = config
+            .disabled_sources
+            .as_ref()
             .filter(|s| !s.is_empty())
             .map(|value| {
                 value
@@ -409,7 +413,10 @@ mod tests {
     #[test]
     fn test_source_filter_both_enabled_and_disabled() {
         // Test: Both ENABLE and DISABLE - enabled minus disabled
-        std::env::set_var("RESEARCH_MASTER_ENABLED_SOURCES", "arxiv,pubmed,semantic,dblp");
+        std::env::set_var(
+            "RESEARCH_MASTER_ENABLED_SOURCES",
+            "arxiv,pubmed,semantic,dblp",
+        );
         std::env::set_var("RESEARCH_MASTER_DISABLED_SOURCES", "dblp");
 
         let config = crate::config::get_config().sources;
@@ -475,8 +482,12 @@ mod tests {
 
         // Semantic Scholar should support citations (if available)
         if let Some(semantic) = registry.get("semantic") {
-            assert!(semantic.capabilities().contains(SourceCapabilities::CITATIONS));
-            assert!(semantic.capabilities().contains(SourceCapabilities::AUTHOR_SEARCH));
+            assert!(semantic
+                .capabilities()
+                .contains(SourceCapabilities::CITATIONS));
+            assert!(semantic
+                .capabilities()
+                .contains(SourceCapabilities::AUTHOR_SEARCH));
         }
 
         // DBLP should only support search (if available)

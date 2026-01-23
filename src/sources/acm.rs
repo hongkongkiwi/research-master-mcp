@@ -98,10 +98,9 @@ impl Source for AcmSource {
                     )));
                 }
 
-                let json: AcmResponse = response
-                    .json()
-                    .await
-                    .map_err(|e| SourceError::Parse(format!("Failed to parse ACM response: {}", e)))?;
+                let json: AcmResponse = response.json().await.map_err(|e| {
+                    SourceError::Parse(format!("Failed to parse ACM response: {}", e))
+                })?;
 
                 Ok(json)
             }
@@ -145,13 +144,15 @@ impl Source for AcmSource {
                     request = request.header("Authorization", format!("Bearer {}", key));
                 }
 
-                let response = request
-                    .send()
-                    .await
-                    .map_err(|e| SourceError::Network(format!("Failed to lookup DOI in ACM: {}", e)))?;
+                let response = request.send().await.map_err(|e| {
+                    SourceError::Network(format!("Failed to lookup DOI in ACM: {}", e))
+                })?;
 
                 if response.status() == 404 {
-                    return Err(SourceError::NotFound(format!("Paper not found in ACM: {}", doi)));
+                    return Err(SourceError::NotFound(format!(
+                        "Paper not found in ACM: {}",
+                        doi
+                    )));
                 }
 
                 if !response.status().is_success() {
@@ -161,10 +162,9 @@ impl Source for AcmSource {
                     )));
                 }
 
-                let json: AcmRecord = response
-                    .json()
-                    .await
-                    .map_err(|e| SourceError::Parse(format!("Failed to parse ACM response: {}", e)))?;
+                let json: AcmRecord = response.json().await.map_err(|e| {
+                    SourceError::Parse(format!("Failed to parse ACM response: {}", e))
+                })?;
 
                 Ok(json)
             }
@@ -190,7 +190,10 @@ impl AcmSource {
             .collect::<Vec<_>>()
             .join("; ");
 
-        let year = record.publication_year.map(|y| y.to_string()).unwrap_or_default();
+        let year = record
+            .publication_year
+            .map(|y| y.to_string())
+            .unwrap_or_default();
         let url = format!("https://dl.acm.org/doi/{}", doi);
 
         let pdf_url = record.pdf_url.clone();

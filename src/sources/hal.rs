@@ -4,7 +4,9 @@ use async_trait::async_trait;
 use serde::Deserialize;
 use std::sync::Arc;
 
-use crate::models::{Paper, PaperBuilder, ReadRequest, ReadResult, SearchQuery, SearchResponse, SourceType};
+use crate::models::{
+    Paper, PaperBuilder, ReadRequest, ReadResult, SearchQuery, SearchResponse, SourceType,
+};
 use crate::sources::{DownloadRequest, DownloadResult, Source, SourceCapabilities, SourceError};
 use crate::utils::{api_retry_config, with_retry, HttpClient};
 
@@ -94,14 +96,16 @@ impl HalSource {
         // Document type
         let _doc_type = doc.doc_type_s.clone().unwrap_or_default();
 
-        Ok(PaperBuilder::new(doc_id.clone(), title, url, SourceType::HAL)
-            .authors(authors)
-            .abstract_text(abstract_text)
-            .doi(doi)
-            .published_date(published_date)
-            .categories(categories)
-            .pdf_url(pdf_url)
-            .build())
+        Ok(
+            PaperBuilder::new(doc_id.clone(), title, url, SourceType::HAL)
+                .authors(authors)
+                .abstract_text(abstract_text)
+                .doi(doi)
+                .published_date(published_date)
+                .categories(categories)
+                .pdf_url(pdf_url)
+                .build(),
+        )
     }
 }
 
@@ -253,10 +257,12 @@ impl Source for HalSource {
         let filename = format!("hal_{}.pdf", request.paper_id);
         let path = std::path::Path::new(&request.save_path).join(&filename);
 
-        std::fs::write(&path, bytes.as_ref())
-            .map_err(|e| SourceError::Io(e.into()))?;
+        std::fs::write(&path, bytes.as_ref()).map_err(|e| SourceError::Io(e.into()))?;
 
-        Ok(DownloadResult::success(path.to_string_lossy().to_string(), bytes.len() as u64))
+        Ok(DownloadResult::success(
+            path.to_string_lossy().to_string(),
+            bytes.len() as u64,
+        ))
     }
 
     async fn read(&self, request: &ReadRequest) -> Result<ReadResult, SourceError> {
@@ -269,9 +275,10 @@ impl Source for HalSource {
                 let pages = (text.len() / 3000).max(1);
                 Ok(ReadResult::success(text).pages(pages))
             }
-            Err(e) => {
-                Ok(ReadResult::error(format!("PDF downloaded but text extraction failed: {}", e)))
-            }
+            Err(e) => Ok(ReadResult::error(format!(
+                "PDF downloaded but text extraction failed: {}",
+                e
+            ))),
         }
     }
 

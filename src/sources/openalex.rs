@@ -81,7 +81,10 @@ impl OpenAlexSource {
             .clone()
             .unwrap_or_else(|| format!("OpenAlex:{}", doi));
 
-        let pdf_url = data.best_open_access_pdf.as_ref().and_then(|p| p.url.clone());
+        let pdf_url = data
+            .best_open_access_pdf
+            .as_ref()
+            .and_then(|p| p.url.clone());
 
         PaperBuilder::new(paper_id, data.title.clone(), url, SourceType::OpenAlex)
             .authors(authors)
@@ -157,7 +160,9 @@ impl Source for OpenAlexSource {
                     .get(&format!("{}{}", OPENALEX_API_BASE, url))
                     .send()
                     .await
-                    .map_err(|e| SourceError::Network(format!("Failed to search OpenAlex: {}", e)))?;
+                    .map_err(|e| {
+                        SourceError::Network(format!("Failed to search OpenAlex: {}", e))
+                    })?;
 
                 if !response.status().is_success() {
                     return Err(SourceError::Api(format!(
@@ -191,10 +196,7 @@ impl Source for OpenAlexSource {
         author: &str,
         max_results: usize,
     ) -> Result<SearchResponse, SourceError> {
-        let url = format!(
-            "/authors?search={}&per-page=1",
-            urlencoding::encode(author)
-        );
+        let url = format!("/authors?search={}&per-page=1", urlencoding::encode(author));
 
         let response = self
             .client
@@ -215,10 +217,7 @@ impl Source for OpenAlexSource {
             .ok_or_else(|| SourceError::NotFound("Author not found".to_string()))?;
 
         // Get papers by author
-        let papers_url = format!(
-            "/authors/{}/works?per-page={}",
-            author_id, max_results
-        );
+        let papers_url = format!("/authors/{}/works?per-page={}", author_id, max_results);
 
         let papers_response = self
             .client
@@ -295,10 +294,12 @@ impl Source for OpenAlexSource {
         let filename = format!("{}.pdf", request.paper_id.replace('/', "_"));
         let path = std::path::Path::new(&request.save_path).join(&filename);
 
-        std::fs::write(&path, bytes.as_ref())
-            .map_err(|e| SourceError::Io(e.into()))?;
+        std::fs::write(&path, bytes.as_ref()).map_err(|e| SourceError::Io(e.into()))?;
 
-        Ok(DownloadResult::success(path.to_string_lossy().to_string(), bytes.len() as u64))
+        Ok(DownloadResult::success(
+            path.to_string_lossy().to_string(),
+            bytes.len() as u64,
+        ))
     }
 
     async fn read(&self, request: &ReadRequest) -> Result<ReadResult, SourceError> {
@@ -311,9 +312,10 @@ impl Source for OpenAlexSource {
                 let pages = (text.len() / 3000).max(1);
                 Ok(ReadResult::success(text).pages(pages))
             }
-            Err(e) => {
-                Ok(ReadResult::error(format!("PDF downloaded but text extraction failed: {}", e)))
-            }
+            Err(e) => Ok(ReadResult::error(format!(
+                "PDF downloaded but text extraction failed: {}",
+                e
+            ))),
         }
     }
 
@@ -379,10 +381,7 @@ impl Source for OpenAlexSource {
         Ok(SearchResponse::new(papers?, "OpenAlex", &request.paper_id))
     }
 
-    async fn get_related(
-        &self,
-        request: &CitationRequest,
-    ) -> Result<SearchResponse, SourceError> {
+    async fn get_related(&self, request: &CitationRequest) -> Result<SearchResponse, SourceError> {
         let url = format!(
             "/works?filter=related:{}&per-page={}",
             urlencoding::encode(&request.paper_id),
@@ -441,17 +440,26 @@ impl Source for OpenAlexSource {
         let published_date = data.publication_year.as_ref().map(|y| y.to_string());
         let doi_value = data.doi.clone().unwrap_or_default();
         let url = data.id.clone().unwrap_or_default();
-        let paper_id = data.id.clone().unwrap_or_else(|| format!("OpenAlex:{}", doi_value));
-        let pdf_url = data.best_open_access_pdf.as_ref().and_then(|p| p.url.clone()).unwrap_or_default();
+        let paper_id = data
+            .id
+            .clone()
+            .unwrap_or_else(|| format!("OpenAlex:{}", doi_value));
+        let pdf_url = data
+            .best_open_access_pdf
+            .as_ref()
+            .and_then(|p| p.url.clone())
+            .unwrap_or_default();
 
-        Ok(PaperBuilder::new(paper_id, data.title.clone(), url, SourceType::OpenAlex)
-            .authors(authors)
-            .abstract_text(data.r#abstract.clone().unwrap_or_default())
-            .doi(doi_value)
-            .published_date(published_date.unwrap_or_default())
-            .pdf_url(pdf_url)
-            .citations(data.cited_by_count.unwrap_or(0) as u32)
-            .build())
+        Ok(
+            PaperBuilder::new(paper_id, data.title.clone(), url, SourceType::OpenAlex)
+                .authors(authors)
+                .abstract_text(data.r#abstract.clone().unwrap_or_default())
+                .doi(doi_value)
+                .published_date(published_date.unwrap_or_default())
+                .pdf_url(pdf_url)
+                .citations(data.cited_by_count.unwrap_or(0) as u32)
+                .build(),
+        )
     }
 }
 

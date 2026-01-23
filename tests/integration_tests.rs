@@ -4,7 +4,7 @@
 
 use research_master_mcp::mcp::server::McpServer;
 use research_master_mcp::models::{SearchQuery, SourceType};
-use research_master_mcp::sources::{SourceRegistry, SourceCapabilities};
+use research_master_mcp::sources::{SourceCapabilities, SourceRegistry};
 use std::sync::Arc;
 
 /// Test that the server can be created successfully
@@ -170,12 +170,12 @@ fn test_paper_model() {
         "https://example.com",
         SourceType::Arxiv,
     )
-        .authors("John Doe; Jane Smith")
-        .abstract_text("This is a test abstract.")
-        .doi("10.1234/test")
-        .published_date("2024")
-        .citations(42)
-        .build();
+    .authors("John Doe; Jane Smith")
+    .abstract_text("This is a test abstract.")
+    .doi("10.1234/test")
+    .published_date("2024")
+    .citations(42)
+    .build();
 
     assert_eq!(paper.paper_id, "1234.5678");
     assert_eq!(paper.title, "Test Paper");
@@ -195,17 +195,15 @@ fn test_paper_model() {
 fn test_paper_with_pdf() {
     use research_master_mcp::models::PaperBuilder;
 
-    let paper = PaperBuilder::new(
-        "1234",
-        "Test",
-        "https://example.com",
-        SourceType::Arxiv,
-    )
+    let paper = PaperBuilder::new("1234", "Test", "https://example.com", SourceType::Arxiv)
         .pdf_url("https://example.com/paper.pdf")
         .build();
 
     assert!(paper.has_pdf());
-    assert_eq!(paper.pdf_url, Some("https://example.com/paper.pdf".to_string()));
+    assert_eq!(
+        paper.pdf_url,
+        Some("https://example.com/paper.pdf".to_string())
+    );
 }
 
 /// Test Paper categories and keywords
@@ -213,18 +211,16 @@ fn test_paper_with_pdf() {
 fn test_paper_categories_keywords() {
     use research_master_mcp::models::PaperBuilder;
 
-    let paper = PaperBuilder::new(
-        "1234",
-        "Test",
-        "https://example.com",
-        SourceType::Arxiv,
-    )
+    let paper = PaperBuilder::new("1234", "Test", "https://example.com", SourceType::Arxiv)
         .categories("Machine Learning; AI")
         .keywords("deep learning; neural networks")
         .build();
 
     assert_eq!(paper.category_list(), vec!["Machine Learning", "AI"]);
-    assert_eq!(paper.keyword_list(), vec!["deep learning", "neural networks"]);
+    assert_eq!(
+        paper.keyword_list(),
+        vec!["deep learning", "neural networks"]
+    );
 }
 
 /// Test registry ids() iterator

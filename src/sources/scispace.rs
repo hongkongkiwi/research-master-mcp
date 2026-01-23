@@ -71,10 +71,9 @@ impl Source for ScispaceSource {
             async move {
                 let request = client.get(&url);
 
-                let response = request
-                    .send()
-                    .await
-                    .map_err(|e| SourceError::Network(format!("Failed to search SciSpace: {}", e)))?;
+                let response = request.send().await.map_err(|e| {
+                    SourceError::Network(format!("Failed to search SciSpace: {}", e))
+                })?;
 
                 if !response.status().is_success() {
                     let status = response.status();
@@ -85,10 +84,9 @@ impl Source for ScispaceSource {
                     )));
                 }
 
-                let json: ScispaceResponse = response
-                    .json()
-                    .await
-                    .map_err(|e| SourceError::Parse(format!("Failed to parse SciSpace response: {}", e)))?;
+                let json: ScispaceResponse = response.json().await.map_err(|e| {
+                    SourceError::Parse(format!("Failed to parse SciSpace response: {}", e))
+                })?;
 
                 Ok(json)
             }
@@ -115,7 +113,11 @@ impl Source for ScispaceSource {
             .trim()
             .to_string();
 
-        let url = format!("{}/papers/doi/{}", SCISPACE_API_BASE, urlencoding::encode(&clean_doi));
+        let url = format!(
+            "{}/papers/doi/{}",
+            SCISPACE_API_BASE,
+            urlencoding::encode(&clean_doi)
+        );
 
         let client = Arc::clone(&self.client);
         let url_for_retry = url.clone();
@@ -126,13 +128,15 @@ impl Source for ScispaceSource {
             async move {
                 let request = client.get(&url);
 
-                let response = request
-                    .send()
-                    .await
-                    .map_err(|e| SourceError::Network(format!("Failed to lookup DOI in SciSpace: {}", e)))?;
+                let response = request.send().await.map_err(|e| {
+                    SourceError::Network(format!("Failed to lookup DOI in SciSpace: {}", e))
+                })?;
 
                 if response.status() == 404 {
-                    return Err(SourceError::NotFound(format!("Paper not found in SciSpace: {}", doi)));
+                    return Err(SourceError::NotFound(format!(
+                        "Paper not found in SciSpace: {}",
+                        doi
+                    )));
                 }
 
                 if !response.status().is_success() {
@@ -142,10 +146,9 @@ impl Source for ScispaceSource {
                     )));
                 }
 
-                let json: ScispacePaper = response
-                    .json()
-                    .await
-                    .map_err(|e| SourceError::Parse(format!("Failed to parse SciSpace response: {}", e)))?;
+                let json: ScispacePaper = response.json().await.map_err(|e| {
+                    SourceError::Parse(format!("Failed to parse SciSpace response: {}", e))
+                })?;
 
                 Ok(json)
             }

@@ -91,10 +91,9 @@ impl Source for CoreSource {
                     )));
                 }
 
-                let json: CoreResponse = response
-                    .json()
-                    .await
-                    .map_err(|e| SourceError::Parse(format!("Failed to parse CORE response: {}", e)))?;
+                let json: CoreResponse = response.json().await.map_err(|e| {
+                    SourceError::Parse(format!("Failed to parse CORE response: {}", e))
+                })?;
 
                 Ok(json)
             }
@@ -121,7 +120,11 @@ impl Source for CoreSource {
             .trim()
             .to_string();
 
-        let url = format!("{}/works/{}", CORE_API_BASE, urlencoding::encode(&clean_doi));
+        let url = format!(
+            "{}/works/{}",
+            CORE_API_BASE,
+            urlencoding::encode(&clean_doi)
+        );
 
         let client = Arc::clone(&self.client);
         let url_for_retry = url.clone();
@@ -137,19 +140,20 @@ impl Source for CoreSource {
                     request = request.header("Authorization", format!("Bearer {}", key));
                 }
 
-                let response = request
-                    .send()
-                    .await
-                    .map_err(|e| SourceError::Network(format!("Failed to lookup DOI in CORE: {}", e)))?;
+                let response = request.send().await.map_err(|e| {
+                    SourceError::Network(format!("Failed to lookup DOI in CORE: {}", e))
+                })?;
 
                 if !response.status().is_success() {
-                    return Err(SourceError::NotFound(format!("Paper not found in CORE: {}", doi)));
+                    return Err(SourceError::NotFound(format!(
+                        "Paper not found in CORE: {}",
+                        doi
+                    )));
                 }
 
-                response
-                    .json()
-                    .await
-                    .map_err(|e| SourceError::Parse(format!("Failed to parse CORE response: {}", e)))
+                response.json().await.map_err(|e| {
+                    SourceError::Parse(format!("Failed to parse CORE response: {}", e))
+                })
             }
         })
         .await?;

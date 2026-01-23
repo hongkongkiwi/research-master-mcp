@@ -102,10 +102,9 @@ impl Source for DimensionsSource {
                     request = request.header("Authorization", format!("JWT {}", key));
                 }
 
-                let response = request
-                    .send()
-                    .await
-                    .map_err(|e| SourceError::Network(format!("Failed to search Dimensions: {}", e)))?;
+                let response = request.send().await.map_err(|e| {
+                    SourceError::Network(format!("Failed to search Dimensions: {}", e))
+                })?;
 
                 let status = response.status();
                 if !status.is_success() {
@@ -116,10 +115,9 @@ impl Source for DimensionsSource {
                     )));
                 }
 
-                let json: DimensionsResponse = response
-                    .json()
-                    .await
-                    .map_err(|e| SourceError::Parse(format!("Failed to parse Dimensions response: {}", e)))?;
+                let json: DimensionsResponse = response.json().await.map_err(|e| {
+                    SourceError::Parse(format!("Failed to parse Dimensions response: {}", e))
+                })?;
 
                 Ok(json)
             }
@@ -189,10 +187,9 @@ impl Source for DimensionsSource {
                     request = request.header("Authorization", format!("JWT {}", key));
                 }
 
-                let response = request
-                    .send()
-                    .await
-                    .map_err(|e| SourceError::Network(format!("Failed to lookup DOI in Dimensions: {}", e)))?;
+                let response = request.send().await.map_err(|e| {
+                    SourceError::Network(format!("Failed to lookup DOI in Dimensions: {}", e))
+                })?;
 
                 let status = response.status();
                 if !status.is_success() {
@@ -203,10 +200,9 @@ impl Source for DimensionsSource {
                     )));
                 }
 
-                response
-                    .json()
-                    .await
-                    .map_err(|e| SourceError::Parse(format!("Failed to parse Dimensions response: {}", e)))
+                response.json().await.map_err(|e| {
+                    SourceError::Parse(format!("Failed to parse Dimensions response: {}", e))
+                })
             }
         })
         .await?;
@@ -214,13 +210,19 @@ impl Source for DimensionsSource {
         if let Some(paper) = response.data.papers.into_iter().next() {
             self.parse_result(&paper)
         } else {
-            Err(SourceError::NotFound(format!("Paper not found in Dimensions: {}", doi)))
+            Err(SourceError::NotFound(format!(
+                "Paper not found in Dimensions: {}",
+                doi
+            )))
         }
     }
 
-    async fn get_citations(&self, _request: &CitationRequest) -> Result<SearchResponse, SourceError> {
+    async fn get_citations(
+        &self,
+        _request: &CitationRequest,
+    ) -> Result<SearchResponse, SourceError> {
         Err(SourceError::Other(
-            "Citations via Dimensions require DOI lookup. Use get_by_doi first.".to_string()
+            "Citations via Dimensions require DOI lookup. Use get_by_doi first.".to_string(),
         ))
     }
 }
@@ -243,7 +245,10 @@ impl DimensionsSource {
         let title = item.title.clone().unwrap_or_default();
         let abstract_text = item.abstract_text.clone().unwrap_or_default();
         let doi = item.doi.clone().unwrap_or_default();
-        let year = item.publication_year.map(|y| y.to_string()).unwrap_or_default();
+        let year = item
+            .publication_year
+            .map(|y| y.to_string())
+            .unwrap_or_default();
 
         let url = if !doi.is_empty() {
             format!("https://doi.org/{}", doi)
@@ -251,12 +256,14 @@ impl DimensionsSource {
             format!("https://app.dimensions.ai/details/{}", item.id)
         };
 
-        Ok(PaperBuilder::new(item.id.clone(), title, url, SourceType::Dimensions)
-            .authors(&authors)
-            .published_date(&year)
-            .abstract_text(&abstract_text)
-            .doi(&doi)
-            .build())
+        Ok(
+            PaperBuilder::new(item.id.clone(), title, url, SourceType::Dimensions)
+                .authors(&authors)
+                .published_date(&year)
+                .abstract_text(&abstract_text)
+                .doi(&doi)
+                .build(),
+        )
     }
 }
 
