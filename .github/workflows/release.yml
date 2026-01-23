@@ -34,12 +34,12 @@ jobs:
 
       - name: Install cargo-dist
         run: |
-          cargo install cargo-dist
-          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+          cargo install cargo-dist --locked
+          echo "/home/runner/.cargo/bin" >> $GITHUB_PATH
 
       - name: Plan release
         run: |
-          export PATH="$HOME/.cargo/bin:$PATH"
+          export PATH="/home/runner/.cargo/bin:$PATH"
           cargo dist plan
 
   # Build binary releases using cargo-dist
@@ -94,12 +94,12 @@ jobs:
 
       - name: Install cargo-dist
         run: |
-          cargo install cargo-dist
-          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+          cargo install cargo-dist --locked
+          echo "/home/runner/.cargo/bin" >> $GITHUB_PATH
 
       - name: Build
         run: |
-          export PATH="$HOME/.cargo/bin:$PATH"
+          export PATH="/home/runner/.cargo/bin:$PATH"
           cargo dist build ${{ matrix.target }} --artifacts
 
       - name: Upload artifacts
