@@ -5,6 +5,20 @@ A Model Context Protocol (MCP) server for searching and downloading academic pap
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Rust](https://img.shields.io/badge/rust-1.80%2B-orange.svg)](https://www.rust-lang.org/)
 [![Crates.io](https://img.shields.io/crates/v/research-master-mcp)](https://crates.io/crates/research-master-mcp)
+[![GitHub Release](https://img.shields.io/github/v/release/hongkongkiwi/research-master-mcp)](https://github.com/hongkongkiwi/research-master-mcp/releases)
+
+## Table of Contents
+
+- [Overview](#overview)
+- [Features](#features)
+- [Quick Start](#quick-start)
+- [Installation](#installation)
+- [Usage](#usage)
+- [Claude Desktop Integration](#claude-desktop-integration)
+- [Development](#development)
+- [Configuration](#configuration)
+- [Contributing](#contributing)
+- [License](#license)
 
 ## Overview
 
@@ -88,6 +102,52 @@ Intelligent duplicate detection across sources:
 - Graceful degradation when some sources are unavailable
 - **Google Scholar** is disabled by default and requires `GOOGLE_SCHOLAR_ENABLED=true` to activate
 
+## Quick Start
+
+### Using Homebrew (macOS)
+
+```bash
+# Add the custom tap
+brew tap hongkongkiwi/research-master-mcp
+
+# Install research-master-mcp
+brew install research-master-mcp
+
+# Start the MCP server
+research-master-mcp serve --stdio
+```
+
+### Using Claude Desktop
+
+Add to your Claude Desktop configuration (`~/Library/Application Support/Claude/claude_desktop_config.json`):
+
+```json
+{
+  "mcpServers": {
+    "research-master": {
+      "command": "research-master-mcp",
+      "args": ["serve"]
+    }
+  }
+}
+```
+
+### Using the CLI
+
+```bash
+# Search for papers
+research-master-mcp search "transformer architecture" --year 2020-
+
+# Search by author
+research-master-mcp author "Geoffrey Hinton"
+
+# Download a paper
+research-master-mcp download 2301.12345 --source arxiv
+
+# Look up by DOI
+research-master-mcp lookup 10.48550/arXiv.2301.12345
+```
+
 ## Installation
 
 ### Homebrew (macOS)
@@ -104,10 +164,10 @@ brew install research-master-mcp
 
 ```bash
 # Download .deb package from GitHub Releases
-wget https://github.com/hongkongkiwi/research-master-mcp/releases/download/v0.1.0/research-master-mcp_0.1.0_amd64.deb
+wget https://github.com/hongkongkiwi/research-master-mcp/releases/download/v0.1.1/research-master-mcp_0.1.1_amd64.deb
 
 # Install the package
-sudo dpkg -i research-master-mcp_0.1.0_amd64.deb
+sudo dpkg -i research-master-mcp_0.1.1_amd64.deb
 
 # Install dependencies if needed
 sudo apt-get install -f
@@ -117,20 +177,20 @@ sudo apt-get install -f
 
 ```bash
 # Download .apk package from GitHub Releases
-wget https://github.com/hongkongkiwi/research-master-mcp/releases/download/v0.1.0/research-master-mcp-0.1.0-x86_64.apk
+wget https://github.com/hongkongkiwi/research-master-mcp/releases/download/v0.1.1/research-master-mcp-0.1.1-x86_64.apk
 
 # Install the package
-sudo apk add --allow-untrusted research-master-mcp-0.1.0-x86_64.apk
+sudo apk add --allow-untrusted research-master-mcp-0.1.1-x86_64.apk
 ```
 
 ### Linux (RedHat/Fedora) - RPM Package
 
 ```bash
 # Download .rpm package from GitHub Releases
-wget https://github.com/hongkongkiwi/research-master-mcp/releases/download/v0.1.0/research-master-mcp-0.1.0-1.x86_64.rpm
+wget https://github.com/hongkongkiwi/research-master-mcp/releases/download/v0.1.1/research-master-mcp-0.1.1-1.x86_64.rpm
 
 # Install the package
-sudo dnf install research-master-mcp-0.1.0-1.x86_64.rpm
+sudo dnf install research-master-mcp-0.1.1-1.x86_64.rpm
 ```
 
 ### Crates.io
@@ -237,156 +297,6 @@ sudo pacman -S poppler
 **Windows:**
 Download and install from [poppler-windows](https://github.com/oschwartz10612/poppler-windows)
 
-## Configuration
-
-Research Master MCP supports configuration via environment variables and/or a configuration file. Environment variables take precedence over file-based settings.
-
-### Configuration File
-
-The application searches for a configuration file in the following locations (in order):
-
-| Priority | Location | Platform |
-|----------|----------|----------|
-| 1 | `./research-master.toml` | All |
-| 2 | `./.research-master.toml` | All |
-| 3 | `$XDG_CONFIG_HOME/research-master/config.toml` | Linux/BSD (if XDG_CONFIG_HOME set) |
-| 4 | `~/Library/Application Support/research-master/config.toml` | macOS |
-| 5 | `~/.config/research-master/config.toml` | Linux/BSD |
-| 6 | `%APPDATA%\research-master\config.toml` | Windows |
-
-You can also specify a custom config file path using the `--config` CLI option:
-
-```bash
-research-master-mcp --config /path/to/config.toml search "machine learning"
-```
-
-#### Configuration File Format (TOML)
-
-```toml
-# Download settings
-[downloads]
-default_path = "./downloads"
-organize_by_source = true
-max_file_size_mb = 100
-
-# Rate limiting settings
-[rate_limits]
-default_requests_per_second = 5
-max_concurrent_requests = 10
-
-# API Keys
-[api_keys]
-semantic_scholar = "your-semantic-scholar-api-key"
-core = "your-core-api-key"
-openalex_email = "your@email.com"
-
-# Source filtering (same as environment variables)
-[sources]
-enabled_sources = "arxiv,pubmed,semantic"
-disabled_sources = "dblp,jstor"
-```
-
-### Environment Variables
-
-All settings can be overridden using environment variables with the `RESEARCH_MASTER_` prefix.
-
-#### Source Filtering
-
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `RESEARCH_MASTER_ENABLED_SOURCES` | Comma-separated list of sources to enable | (all enabled) |
-| `RESEARCH_MASTER_DISABLED_SOURCES` | Comma-separated list of sources to disable | (none disabled) |
-
-**Logic:**
-- If only `ENABLED` is set: only those sources are enabled
-- If only `DISABLED` is set: all sources except those are enabled
-- If both are set: enabled sources **minus** disabled sources (authoritative list)
-- If neither is set: all sources enabled
-
-**Example:**
-```bash
-# Only enable arXiv, PubMed, and Semantic Scholar
-export RESEARCH_MASTER_ENABLED_SOURCES="arxiv,pubmed,semantic"
-
-# Enable all sources except DBLP and JSTOR
-export RESEARCH_MASTER_DISABLED_SOURCES="dblp,jstor"
-
-# Enable only arxiv and semantic, but disable semantic (result: only arxiv)
-export RESEARCH_MASTER_ENABLED_SOURCES="arxiv,semantic"
-export RESEARCH_MASTER_DISABLED_SOURCES="semantic"
-```
-
-**Available source IDs:**
-`arxiv`, `pubmed`, `biorxiv`, `semantic`, `openalex`, `crossref`, `iacr`, `pmc`, `hal`, `dblp`, `ssrn`, `core`, `europe_pmc`, `dimensions`, `ieee_xplore`, `zenodo`, `unpaywall`, `mdpi`, `jstor`, `scispace`, `acm`, `connected_papers`, `doaj`, `worldwidescience`, `osf`, `base`, `springer`, `google_scholar`
-
-#### API Keys (Optional)
-
-| Variable | Description |
-|----------|-------------|
-| `SEMANTIC_SCHOLAR_API_KEY` | API key for Semantic Scholar (higher rate limits) |
-| `CORE_API_KEY` | API key for CORE service |
-| `OPENALEX_EMAIL` | Email for OpenAlex "polite pool" access |
-| `IEEEXPLORE_API_KEY` | API key for IEEE Xplore |
-| `JSTOR_API_KEY` | API key for JSTOR |
-| `ACM_API_KEY` | API key for ACM Digital Library |
-| `SPRINGER_API_KEY` | API key for Springer |
-
-**Note:** Sources work without API keys but may have lower rate limits. If a source requires an API key that isn't provided, it will be automatically disabled during initialization.
-
-#### Source-Specific Settings
-
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `GOOGLE_SCHOLAR_ENABLED` | Enable Google Scholar (requires compile-time feature) | `false` |
-
-**Note:** Google Scholar is disabled by default both at compile-time and runtime. To enable it:
-1. Build with `--features google_scholar`
-2. Set `GOOGLE_SCHOLAR_ENABLED=true` at runtime
-
-#### Source-Specific Rate Limits
-
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `SEMANTIC_SCHOLAR_RATE_LIMIT` | Semantic Scholar requests per second | `1` |
-| `IEEEXPLORE_RATE_LIMIT` | IEEE Xplore requests per second | `3` |
-| `ACMRATE_LIMIT` | ACM Digital Library requests per second | `3` |
-
-**Note:** Without an API key, Semantic Scholar limits you to 1 request per second. Set to a higher value if you have an API key.
-
-#### Global Rate Limiting
-
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `RESEARCH_MASTER_RATE_LIMITS_DEFAULT_REQUESTS_PER_SECOND` | Global requests per second for all HTTP requests | `5` |
-| `RESEARCH_MASTER_RATE_LIMITS_MAX_CONCURRENT_REQUESTS` | Maximum concurrent requests | `10` |
-
-**Disable rate limiting entirely:**
-```bash
-export RESEARCH_MASTER_RATE_LIMITS_DEFAULT_REQUESTS_PER_SECOND=0
-```
-
-#### Download Settings
-
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `RESEARCH_MASTER_DOWNLOADS_DEFAULT_PATH` | Default directory for PDF downloads | `./downloads` |
-| `RESEARCH_MASTER_DOWNLOADS_ORGANIZE_BY_SOURCE` | Create subdirectories per source | `true` |
-| `RESEARCH_MASTER_DOWNLOADS_MAX_FILE_SIZE_MB` | Maximum file size for downloads (MB) | `100` |
-
-#### Logging
-
-| Variable | Description |
-|----------|-------------|
-| `RUST_LOG` | Logging level (e.g., `debug`, `info`, `warn`, `error`) |
-
-### Configuration Precedence
-
-Configuration values are loaded in this order (later values override earlier ones):
-
-1. Configuration file in default search locations
-2. Configuration file specified via `--config` option
-3. Environment variables (always take final precedence)
-
 ## Usage
 
 ### MCP Server Mode (stdio)
@@ -394,7 +304,7 @@ Configuration values are loaded in this order (later values override earlier one
 For integration with Claude Desktop or other MCP clients:
 
 ```bash
-research-master-mcp serve
+research-master-mcp serve --stdio
 ```
 
 ### CLI Usage
@@ -505,6 +415,8 @@ Add to your Claude Desktop MCP configuration:
 **macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`
 
 **Windows**: `%APPDATA%/Claude/claude_desktop_config.json`
+
+**Linux**: `~/.config/Claude/claude_desktop_config.json`
 
 ```json
 {
@@ -737,57 +649,111 @@ The unified tools automatically detect the appropriate source, so you don't need
 
 ## Development
 
+### Quick Commands (using just)
+
+This project uses a `justfile` for common development tasks:
+
+```bash
+# Build
+just build              # Debug build
+just build-release      # Release build
+just build-features     # Build with specific features
+
+# Development
+just dev                # Start MCP server in stdio mode
+just watch              # Watch and rebuild (requires cargo-watch)
+
+# Testing
+just test               # Run all tests
+just test-verbose       # Run tests with output
+just test-name <name>   # Run specific test
+
+# Code Quality
+just fmt                # Format code
+just fmt-check          # Check formatting
+just clippy             # Run clippy lints
+just clippy-fix         # Auto-fix clippy issues
+just doc                # Generate documentation
+just check              # Run all checks (fmt, clippy, doc, test)
+
+# Security
+just audit              # Check for vulnerabilities
+
+# Release
+just version            # Show current version
+just release patch      # Create patch release
+just release minor      # Create minor release
+just release major      # Create major release
+
+# Cleanup
+just clean              # Clean build artifacts
+just clean-all          # Clean everything
+
+# Show all commands
+just help
+```
+
 ### Project Structure
 
 ```
-src/
-├── main.rs                    # CLI entry point
-├── lib.rs                     # Library exports
-├── mcp/                       # MCP protocol implementation
-│   ├── server.rs              # MCP server (stdio/SSE)
-│   ├── tools.rs               # Tool registry
-│   ├── unified_tools.rs       # Unified tool handlers with smart source selection
-│   └── mod.rs
-├── sources/                   # Research source implementations
-│   ├── mod.rs                 # Source trait definition
-│   ├── registry.rs            # Source registry with filtering
-│   ├── arxiv.rs               # arXiv
-│   ├── pubmed.rs              # PubMed
-│   ├── biorxiv.rs             # bioRxiv/medRxiv
-│   ├── semantic.rs            # Semantic Scholar
-│   ├── openalex.rs            # OpenAlex
-│   ├── crossref.rs            # CrossRef
-│   ├── iacr.rs                # IACR
-│   ├── pmc.rs                 # PMC
-│   ├── hal.rs                 # HAL
-│   ├── dblp.rs                # DBLP
-│   ├── ssrn.rs                # SSRN
-│   ├── core.rs                # CORE
-│   ├── europepmc.rs           # EuropePMC
-│   ├── dimensions.rs          # Dimensions
-│   ├── ieee_xplore.rs         # IEEE Xplore
-│   ├── zenodo.rs              # Zenodo
-│   ├── unpaywall.rs           # Unpaywall
-│   ├── mdpi.rs                # MDPI
-│   ├── jstor.rs               # JSTOR
-│   ├── scispace.rs            # SciSpace
-│   ├── acm.rs                 # ACM Digital Library
-│   ├── connected_papers.rs    # Connected Papers
-│   ├── doaj.rs                # DOAJ
-│   ├── worldwidescience.rs    # WorldWideScience
-│   ├── osf.rs                 # OSF Preprints
-│   ├── base.rs                # BASE
-│   ├── springer.rs            # Springer
-│   └── google_scholar.rs      # Google Scholar
-├── models/                    # Data models
-│   ├── paper.rs               # Paper model
-│   ├── search.rs              # Search request/response
-│   └── mod.rs
-└── utils/                     # Utilities
-    ├── http.rs                # HTTP client with rate limiting
-    ├── dedup.rs               # Deduplication logic
-    ├── pdf.rs                 # PDF text extraction
-    └── mod.rs
+research-master-mcp/
+├── Cargo.toml
+├── justfile                     # Development commands
+├── README.md
+├── LICENSE
+├── src/
+│   ├── main.rs                  # CLI entry point
+│   ├── lib.rs                   # Library exports
+│   ├── mcp/                     # MCP protocol implementation
+│   │   ├── server.rs            # MCP server (stdio/SSE)
+│   │   ├── tools.rs             # Tool registry
+│   │   ├── unified_tools.rs     # Unified tool handlers with smart source selection
+│   │   └── mod.rs
+│   ├── sources/                 # Research source implementations
+│   │   ├── mod.rs               # Source trait definition
+│   │   ├── registry.rs          # Source registry with filtering
+│   │   ├── arxiv.rs             # arXiv
+│   │   ├── pubmed.rs            # PubMed
+│   │   ├── biorxiv.rs           # bioRxiv/medRxiv
+│   │   ├── semantic.rs          # Semantic Scholar
+│   │   ├── openalex.rs          # OpenAlex
+│   │   ├── crossref.rs          # CrossRef
+│   │   ├── iacr.rs              # IACR
+│   │   ├── pmc.rs               # PMC
+│   │   ├── hal.rs               # HAL
+│   │   ├── dblp.rs              # DBLP
+│   │   ├── ssrn.rs              # SSRN
+│   │   ├── core.rs              # CORE
+│   │   ├── europepmc.rs         # EuropePMC
+│   │   ├── dimensions.rs        # Dimensions
+│   │   ├── ieee_xplore.rs       # IEEE Xplore
+│   │   ├── zenodo.rs            # Zenodo
+│   │   ├── unpaywall.rs         # Unpaywall
+│   │   ├── mdpi.rs              # MDPI
+│   │   ├── jstor.rs             # JSTOR
+│   │   ├── scispace.rs          # SciSpace
+│   │   ├── acm.rs               # ACM Digital Library
+│   │   ├── connected_papers.rs  # Connected Papers
+│   │   ├── doaj.rs              # DOAJ
+│   │   ├── worldwidescience.rs  # WorldWideScience
+│   │   ├── osf.rs               # OSF Preprints
+│   │   ├── base.rs              # BASE
+│   │   ├── springer.rs          # Springer
+│   │   └── google_scholar.rs    # Google Scholar
+│   ├── models/                  # Data models
+│   │   ├── paper.rs             # Paper model
+│   │   ├── search.rs            # Search request/response
+│   │   └── mod.rs
+│   └── utils/                   # Utilities
+│       ├── http.rs              # HTTP client with rate limiting
+│       ├── dedup.rs             # Deduplication logic
+│       ├── pdf.rs               # PDF text extraction
+│       └── mod.rs
+└── .github/
+    └── workflows/
+        ├── ci.yml               # CI pipeline
+        ├── release.yml          # Release automation
+        └── update-homebrew.yml  # Homebrew formula update
 ```
 
 ### Adding a New Source
@@ -807,7 +773,7 @@ impl Source for MySource {
         "mysource"
     }
 
-    fn name(&self) -> str {
+    fn name(&self) -> &str {
         "My Research Source"
     }
 
@@ -859,17 +825,177 @@ pub enum SourceType {
 
 6. Rebuild - the unified MCP tools will automatically include your new source
 
-### Running Tests
+### Building and Testing
 
 ```bash
-cargo test
-```
-
-### Building
-
-```bash
+# Build
 cargo build --release
+
+# Run tests
+cargo test
+
+# Run tests with output
+cargo test -- --nocapture
+
+# Check formatting
+cargo fmt --all -- --check
+
+# Run clippy
+cargo clippy --all-targets -- -D warnings
+
+# Generate documentation
+cargo doc --no-deps --all-features
 ```
+
+## Configuration
+
+Research Master MCP supports configuration via environment variables and/or a configuration file. Environment variables take precedence over file-based settings.
+
+### Configuration File
+
+The application searches for a configuration file in the following locations (in order):
+
+| Priority | Location | Platform |
+|----------|----------|----------|
+| 1 | `./research-master.toml` | All |
+| 2 | `./.research-master.toml` | All |
+| 3 | `$XDG_CONFIG_HOME/research-master/config.toml` | Linux/BSD (if XDG_CONFIG_HOME set) |
+| 4 | `~/Library/Application Support/research-master/config.toml` | macOS |
+| 5 | `~/.config/research-master/config.toml` | Linux/BSD |
+| 6 | `%APPDATA%\research-master\config.toml` | Windows |
+
+You can also specify a custom config file path using the `--config` CLI option:
+
+```bash
+research-master-mcp --config /path/to/config.toml search "machine learning"
+```
+
+#### Configuration File Format (TOML)
+
+```toml
+# Download settings
+[downloads]
+default_path = "./downloads"
+organize_by_source = true
+max_file_size_mb = 100
+
+# Rate limiting settings
+[rate_limits]
+default_requests_per_second = 5
+max_concurrent_requests = 10
+
+# API Keys
+[api_keys]
+semantic_scholar = "your-semantic-scholar-api-key"
+core = "your-core-api-key"
+openalex_email = "your@email.com"
+
+# Source filtering (same as environment variables)
+[sources]
+enabled_sources = "arxiv,pubmed,semantic"
+disabled_sources = "dblp,jstor"
+```
+
+### Environment Variables
+
+All settings can be overridden using environment variables with the `RESEARCH_MASTER_` prefix.
+
+#### Source Filtering
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `RESEARCH_MASTER_ENABLED_SOURCES` | Comma-separated list of sources to enable | (all enabled) |
+| `RESEARCH_MASTER_DISABLED_SOURCES` | Comma-separated list of sources to disable | (none disabled) |
+
+**Logic:**
+- If only `ENABLED` is set: only those sources are enabled
+- If only `DISABLED` is set: all sources except those are enabled
+- If both are set: enabled sources **minus** disabled sources (authoritative list)
+- If neither is set: all sources enabled
+
+**Example:**
+```bash
+# Only enable arXiv, PubMed, and Semantic Scholar
+export RESEARCH_MASTER_ENABLED_SOURCES="arxiv,pubmed,semantic"
+
+# Enable all sources except DBLP and JSTOR
+export RESEARCH_MASTER_DISABLED_SOURCES="dblp,jstor"
+
+# Enable only arxiv and semantic, but disable semantic (result: only arxiv)
+export RESEARCH_MASTER_ENABLED_SOURCES="arxiv,semantic"
+export RESEARCH_MASTER_DISABLED_SOURCES="semantic"
+```
+
+**Available source IDs:**
+`arxiv`, `pubmed`, `biorxiv`, `semantic`, `openalex`, `crossref`, `iacr`, `pmc`, `hal`, `dblp`, `ssrn`, `core`, `europe_pmc`, `dimensions`, `ieee_xplore`, `zenodo`, `unpaywall`, `mdpi`, `jstor`, `scispace`, `acm`, `connected_papers`, `doaj`, `worldwidescience`, `osf`, `base`, `springer`, `google_scholar`
+
+#### API Keys (Optional)
+
+| Variable | Description |
+|----------|-------------|
+| `SEMANTIC_SCHOLAR_API_KEY` | API key for Semantic Scholar (higher rate limits) |
+| `CORE_API_KEY` | API key for CORE service |
+| `OPENALEX_EMAIL` | Email for OpenAlex "polite pool" access |
+| `IEEEXPLORE_API_KEY` | API key for IEEE Xplore |
+| `JSTOR_API_KEY` | API key for JSTOR |
+| `ACM_API_KEY` | API key for ACM Digital Library |
+| `SPRINGER_API_KEY` | API key for Springer |
+
+**Note:** Sources work without API keys but may have lower rate limits. If a source requires an API key that isn't provided, it will be automatically disabled during initialization.
+
+#### Source-Specific Settings
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `GOOGLE_SCHOLAR_ENABLED` | Enable Google Scholar (requires compile-time feature) | `false` |
+
+**Note:** Google Scholar is disabled by default both at compile-time and runtime. To enable it:
+1. Build with `--features google_scholar`
+2. Set `GOOGLE_SCHOLAR_ENABLED=true` at runtime
+
+#### Source-Specific Rate Limits
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `SEMANTIC_SCHOLAR_RATE_LIMIT` | Semantic Scholar requests per second | `1` |
+| `IEEEXPLORE_RATE_LIMIT` | IEEE Xplore requests per second | `3` |
+| `ACMRATE_LIMIT` | ACM Digital Library requests per second | `3` |
+
+**Note:** Without an API key, Semantic Scholar limits you to 1 request per second. Set to a higher value if you have an API key.
+
+#### Global Rate Limiting
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `RESEARCH_MASTER_RATE_LIMITS_DEFAULT_REQUESTS_PER_SECOND` | Global requests per second for all HTTP requests | `5` |
+| `RESEARCH_MASTER_RATE_LIMITS_MAX_CONCURRENT_REQUESTS` | Maximum concurrent requests | `10` |
+
+**Disable rate limiting entirely:**
+```bash
+export RESEARCH_MASTER_RATE_LIMITS_DEFAULT_REQUESTS_PER_SECOND=0
+```
+
+#### Download Settings
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `RESEARCH_MASTER_DOWNLOADS_DEFAULT_PATH` | Default directory for PDF downloads | `./downloads` |
+| `RESEARCH_MASTER_DOWNLOADS_ORGANIZE_BY_SOURCE` | Create subdirectories per source | `true` |
+| `RESEARCH_MASTER_DOWNLOADS_MAX_FILE_SIZE_MB` | Maximum file size for downloads (MB) | `100` |
+
+#### Logging
+
+| Variable | Description |
+|----------|-------------|
+| `RUST_LOG` | Logging level (e.g., `debug`, `info`, `warn`, `error`) |
+
+### Configuration Precedence
+
+Configuration values are loaded in this order (later values override earlier ones):
+
+1. Configuration file in default search locations
+2. Configuration file specified via `--config` option
+3. Environment variables (always take final precedence)
 
 ## Dependencies
 
@@ -889,13 +1015,21 @@ cargo build --release
 - **CLI**: clap
 - **MCP Protocol**: pmcp (Model Context Protocol SDK)
 
-## License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
 ## Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.
+
+### Ways to Contribute
+
+- Report bugs and issues
+- Suggest new features
+- Add new research sources
+- Improve documentation
+- Submit pull requests
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 ## Acknowledgments
 
