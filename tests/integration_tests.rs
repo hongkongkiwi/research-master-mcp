@@ -130,7 +130,11 @@ async fn test_all_sources_registered() {
     assert!(source_ids.contains(&"ssrn"));
     assert!(source_ids.contains(&"dimensions"));
     assert!(source_ids.contains(&"ieee_xplore"));
-    assert!(source_ids.contains(&"europe_pmc"));
+    if cfg!(feature = "source-europe_pmc") {
+        assert!(source_ids.contains(&"europe_pmc"));
+    } else {
+        assert!(!source_ids.contains(&"europe_pmc"));
+    }
     assert!(source_ids.contains(&"core"));
     assert!(source_ids.contains(&"zenodo"));
     assert!(source_ids.contains(&"unpaywall"));
