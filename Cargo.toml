@@ -210,7 +210,7 @@ pre-push = ["cargo clippy", "taplo fmt --check", "cargo audit"]
 # RPM package configuration
 [package.metadata.rpm]
 package = "research-master-mcp"
-targets = ["x86_64-unknown-linux-gnu"]
+target = "x86_64-unknown-linux-gnu"
 assets = [
   { path = "target/x86_64-unknown-linux-gnu/release/research-master-mcp", dest = "usr/bin/research-master-mcp" },
 ]

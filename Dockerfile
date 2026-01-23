@@ -6,8 +6,8 @@ FROM --platform=$BUILDPLATFORM rust:1-alpine AS builder-amd64
 
 WORKDIR /build
 
-# Install dependencies for building (perl needed for OpenSSL)
-RUN apk add --no-cache musl-dev openssl-dev clang perl
+# Install dependencies for building (perl and make needed for OpenSSL)
+RUN apk add --no-cache musl-dev openssl-dev clang perl make
 
 # Add cross-compilation target
 RUN rustup target add x86_64-unknown-linux-musl
@@ -21,11 +21,12 @@ FROM --platform=$BUILDPLATFORM rust:1-alpine AS builder-arm64
 
 WORKDIR /build
 
-# Install dependencies for building (perl needed for OpenSSL)
-RUN apk add --no-cache musl-dev openssl-dev clang perl
+# Install dependencies for building (perl and make needed for OpenSSL)
+RUN apk add --no-cache musl-dev openssl-dev clang perl make
 
-# Add cross-compilation target
-RUN rustup target add aarch64-unknown-linux-musl
+# Add cross-compilation target and install cross-compiler
+RUN rustup target add aarch64-unknown-linux-musl && \
+    apk add --no-cache gcc-cross-embedded
 
 # Copy source and build
 COPY . .
