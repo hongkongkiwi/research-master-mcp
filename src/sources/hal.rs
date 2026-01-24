@@ -31,9 +31,10 @@ impl HalSource {
     fn parse_doc(&self, doc: &HALDoc) -> Result<Paper, SourceError> {
         let doc_id = doc.doc_id.clone().unwrap_or_default();
 
-        // Extract title
+        // Extract title - handle missing/empty titles gracefully
         let title = if let Some(ref titles) = doc.title_s {
             if titles.is_empty() {
+                tracing::debug!("HAL document {} has empty title - skipping", doc_id);
                 return Err(SourceError::Parse("Empty title".to_string()));
             }
             // Prefer English title if available
@@ -44,8 +45,14 @@ impl HalSource {
                     break;
                 }
             }
+            // Ensure title is not empty
+            if title.is_empty() {
+                tracing::debug!("HAL document {} has empty title - skipping", doc_id);
+                return Err(SourceError::Parse("Empty title".to_string()));
+            }
             title.clone()
         } else {
+            tracing::debug!("HAL document {} has no title field - skipping", doc_id);
             return Err(SourceError::Parse("No title".to_string()));
         };
 
@@ -170,30 +177,73 @@ impl Source for HalSource {
                     .map_err(|e| SourceError::Network(format!("Failed to search HAL: {}", e)))?;
 
                 if !response.status().is_success() {
+                    let status = response.status();
+                    // Handle rate limiting
+                    if status == reqwest::StatusCode::TOO_MANY_REQUESTS {
+                        tracing::debug!("HAL API rate-limited - returning empty results");
+                        return Err(SourceError::Api("HAL rate-limited".to_string()));
+                    }
+                    // Check for redirects or errors
+                    if status == reqwest::StatusCode::INTERNAL_SERVER_ERROR {
+                        tracing::debug!("HAL API server error - returning empty results");
+                        return Err(SourceError::Api("HAL server error".to_string()));
+                    }
                     return Err(SourceError::Api(format!(
                         "HAL API returned status: {}",
                         response.status()
                     )));
                 }
 
+                // Check content-type to ensure we got JSON
+                let content_type = response
+                    .headers()
+                    .get(reqwest::header::CONTENT_TYPE)
+                    .and_then(|v| v.to_str().ok())
+                    .unwrap_or_default();
+                if !content_type.contains("application/json") {
+                    tracing::debug!(
+                        "HAL returned non-JSON content-type: {} - rate-limited?",
+                        content_type
+                    );
+                    return Err(SourceError::Api("HAL rate-limited".to_string()));
+                }
+
                 Ok(response)
             }
         })
-        .await?;
+        .await;
+
+        // Handle rate limiting gracefully
+        let response = match response {
+            Ok(r) => r,
+            Err(SourceError::Api(msg)) if msg.contains("rate-limited") => {
+                tracing::debug!("HAL rate-limited - returning empty results");
+                return Ok(SearchResponse::new(vec![], "HAL", &query.query));
+            }
+            Err(SourceError::Api(msg)) if msg.contains("server error") => {
+                tracing::debug!("HAL server error - returning empty results");
+                return Ok(SearchResponse::new(vec![], "HAL", &query.query));
+            }
+            Err(e) => return Err(e),
+        };
 
         let data: HALResponse = response
             .json()
             .await
             .map_err(|e| SourceError::Parse(format!("Failed to parse JSON: {}", e)))?;
 
-        let papers: Result<Vec<Paper>, SourceError> = data
-            .response
-            .docs
-            .iter()
-            .map(|doc| self.parse_doc(doc))
-            .collect();
+        let mut papers = Vec::new();
+        for doc in data.response.docs {
+            match self.parse_doc(&doc) {
+                Ok(paper) => papers.push(paper),
+                Err(SourceError::Parse(msg)) => {
+                    tracing::debug!("Skipping HAL document: {}", msg);
+                    continue;
+                }
+                Err(e) => return Err(e),
+            }
+        }
 
-        let papers = papers?;
         Ok(SearchResponse::new(papers, "HAL", &query.query))
     }
 

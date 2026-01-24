@@ -106,6 +106,11 @@ impl BiorxivMedrxivSource {
                 })?;
 
                 if !response.status().is_success() {
+                    // Handle rate limiting
+                    if response.status() == reqwest::StatusCode::TOO_MANY_REQUESTS {
+                        tracing::debug!("{} rate-limited - returning empty results", display_name);
+                        return Err(SourceError::Api("BioRxiv rate-limited".to_string()));
+                    }
                     return Err(SourceError::Api(format!(
                         "{} API returned status: {}",
                         display_name,
@@ -113,10 +118,35 @@ impl BiorxivMedrxivSource {
                     )));
                 }
 
+                // Check content-type to ensure we got JSON
+                let content_type = response
+                    .headers()
+                    .get(reqwest::header::CONTENT_TYPE)
+                    .and_then(|v| v.to_str().ok())
+                    .unwrap_or_default();
+                if !content_type.contains("application/json") {
+                    tracing::debug!(
+                        "{} returned non-JSON content-type: {} - rate-limited?",
+                        display_name,
+                        content_type
+                    );
+                    return Err(SourceError::Api("BioRxiv rate-limited".to_string()));
+                }
+
                 Ok(response)
             }
         })
-        .await?;
+        .await;
+
+        // Handle rate limiting gracefully
+        let response = match response {
+            Ok(r) => r,
+            Err(SourceError::Api(msg)) if msg.contains("rate-limited") => {
+                tracing::debug!("BioRxiv/MedRxiv rate-limited - returning empty results");
+                return Ok(vec![]);
+            }
+            Err(e) => return Err(e),
+        };
 
         let json: ApiResponse = response
             .json()

@@ -77,16 +77,45 @@ impl Source for CrossRefSource {
                 })?;
 
                 if !response.status().is_success() {
+                    // Handle rate limiting
+                    if response.status() == reqwest::StatusCode::TOO_MANY_REQUESTS {
+                        tracing::debug!("CrossRef API rate-limited - returning empty results");
+                        return Err(SourceError::Api("CrossRef rate-limited".to_string()));
+                    }
                     return Err(SourceError::Api(format!(
                         "CrossRef API returned status: {}",
                         response.status()
                     )));
                 }
 
+                // Check content-type to ensure we got JSON
+                let content_type = response
+                    .headers()
+                    .get(reqwest::header::CONTENT_TYPE)
+                    .and_then(|v| v.to_str().ok())
+                    .unwrap_or_default();
+                if !content_type.contains("application/json") {
+                    tracing::debug!(
+                        "CrossRef returned non-JSON content-type: {} - rate-limited?",
+                        content_type
+                    );
+                    return Err(SourceError::Api("CrossRef rate-limited".to_string()));
+                }
+
                 Ok(response)
             }
         })
-        .await?;
+        .await;
+
+        // Handle rate limiting gracefully
+        let response = match response {
+            Ok(r) => r,
+            Err(SourceError::Api(msg)) if msg.contains("rate-limited") => {
+                tracing::debug!("CrossRef rate-limited - returning empty results");
+                return Ok(SearchResponse::new(vec![], "CrossRef", &query.query));
+            }
+            Err(e) => return Err(e),
+        };
 
         let data: CRResponse = response
             .json()

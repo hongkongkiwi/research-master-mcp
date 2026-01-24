@@ -392,6 +392,17 @@ impl Source for PubMedSource {
                     })?;
 
                     if !response.status().is_success() {
+                        let status = response.status();
+                        // Handle rate limiting
+                        if status == reqwest::StatusCode::TOO_MANY_REQUESTS {
+                            tracing::debug!("PubMed API rate-limited - returning empty results");
+                            return Err(SourceError::Api("PubMed rate-limited".to_string()));
+                        }
+                        // Check for service unavailable
+                        if status == reqwest::StatusCode::SERVICE_UNAVAILABLE {
+                            tracing::debug!("PubMed API unavailable - returning empty results");
+                            return Err(SourceError::Api("PubMed unavailable".to_string()));
+                        }
                         return Err(SourceError::Api(format!(
                             "PubMed API returned status: {}",
                             response.status()
@@ -403,7 +414,21 @@ impl Source for PubMedSource {
                     })
                 }
             })
-            .await?;
+            .await;
+
+        // Handle rate limiting gracefully
+        let xml = match xml {
+            Ok(x) => x,
+            Err(SourceError::Api(msg)) if msg.contains("rate-limited") => {
+                tracing::debug!("PubMed rate-limited - returning empty results");
+                return Ok(SearchResponse::new(vec![], "PubMed", &query.query));
+            }
+            Err(SourceError::Api(msg)) if msg.contains("unavailable") => {
+                tracing::debug!("PubMed unavailable - returning empty results");
+                return Ok(SearchResponse::new(vec![], "PubMed", &query.query));
+            }
+            Err(e) => return Err(e),
+        };
 
         let ids = Self::parse_search_response(&xml)?;
 

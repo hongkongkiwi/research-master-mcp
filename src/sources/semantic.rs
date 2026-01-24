@@ -163,7 +163,7 @@ impl Source for SemanticScholarSource {
         let api_key = self.api_key.clone();
         let url_for_retry = url.clone();
 
-        let data: S2SearchResponse = with_retry(api_retry_config(), || {
+        let result: Result<S2SearchResponse, SourceError> = with_retry(api_retry_config(), || {
             let client = Arc::clone(&client);
             let api_key = api_key.clone();
             let url = url_for_retry.clone();
@@ -177,6 +177,23 @@ impl Source for SemanticScholarSource {
                 })?;
 
                 if !response.status().is_success() {
+                    let status = response.status();
+                    // Handle rate limiting
+                    if status == reqwest::StatusCode::TOO_MANY_REQUESTS {
+                        tracing::debug!(
+                            "Semantic Scholar API rate-limited - returning empty results"
+                        );
+                        return Err(SourceError::Api(
+                            "Semantic Scholar rate-limited".to_string(),
+                        ));
+                    }
+                    // Check for service unavailable
+                    if status == reqwest::StatusCode::SERVICE_UNAVAILABLE {
+                        tracing::debug!(
+                            "Semantic Scholar API unavailable - returning empty results"
+                        );
+                        return Err(SourceError::Api("Semantic Scholar unavailable".to_string()));
+                    }
                     return Err(SourceError::Api(format!(
                         "Semantic Scholar API returned status: {}",
                         response.status()
@@ -189,7 +206,29 @@ impl Source for SemanticScholarSource {
                     .map_err(|e| SourceError::Parse(format!("Failed to parse JSON: {}", e)))
             }
         })
-        .await?;
+        .await;
+
+        // Handle rate limiting gracefully
+        let data = match result {
+            Ok(d) => d,
+            Err(SourceError::Api(msg)) if msg.contains("rate-limited") => {
+                tracing::debug!("Semantic Scholar rate-limited - returning empty results");
+                return Ok(SearchResponse::new(
+                    vec![],
+                    "Semantic Scholar",
+                    &query.query,
+                ));
+            }
+            Err(SourceError::Api(msg)) if msg.contains("unavailable") => {
+                tracing::debug!("Semantic Scholar unavailable - returning empty results");
+                return Ok(SearchResponse::new(
+                    vec![],
+                    "Semantic Scholar",
+                    &query.query,
+                ));
+            }
+            Err(e) => return Err(e),
+        };
 
         let papers: Result<Vec<Paper>, SourceError> = data
             .data

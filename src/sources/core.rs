@@ -84,6 +84,12 @@ impl Source for CoreSource {
 
                 if !response.status().is_success() {
                     let status = response.status();
+                    // CORE API may return 404 for unknown endpoints
+                    // Return empty results gracefully
+                    if status == reqwest::StatusCode::NOT_FOUND {
+                        tracing::debug!("CORE API endpoint not found - returning empty results");
+                        return Err(SourceError::Api("CORE API unavailable".to_string()));
+                    }
                     let text = response.text().await.unwrap_or_default();
                     return Err(SourceError::Api(format!(
                         "CORE API returned status {}: {}",
@@ -98,7 +104,17 @@ impl Source for CoreSource {
                 Ok(json)
             }
         })
-        .await?;
+        .await;
+
+        // Handle API unavailability gracefully
+        let response = match response {
+            Ok(r) => r,
+            Err(SourceError::Api(msg)) if msg.contains("unavailable") => {
+                tracing::debug!("CORE API unavailable - returning empty results");
+                return Ok(SearchResponse::new(vec![], "CORE", &query.query));
+            }
+            Err(e) => return Err(e),
+        };
 
         let total = response.total_hits.unwrap_or(0);
         let papers: Result<Vec<Paper>, SourceError> = response

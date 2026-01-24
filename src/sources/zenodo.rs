@@ -76,11 +76,30 @@ impl Source for ZenodoSource {
 
                 if !response.status().is_success() {
                     let status = response.status();
+                    // Check if we got rate limited (often returns HTML)
+                    if status == reqwest::StatusCode::TOO_MANY_REQUESTS {
+                        tracing::debug!("Zenodo API rate-limited - returning empty results");
+                        return Err(SourceError::Api("Zenodo rate-limited".to_string()));
+                    }
                     let text = response.text().await.unwrap_or_default();
                     return Err(SourceError::Api(format!(
                         "Zenodo API returned status {}: {}",
                         status, text
                     )));
+                }
+
+                // Check content-type to ensure we got JSON
+                let content_type = response
+                    .headers()
+                    .get(reqwest::header::CONTENT_TYPE)
+                    .and_then(|v| v.to_str().ok())
+                    .unwrap_or_default();
+                if !content_type.contains("application/json") {
+                    tracing::debug!(
+                        "Zenodo returned non-JSON content-type: {} - rate-limited?",
+                        content_type
+                    );
+                    return Err(SourceError::Api("Zenodo rate-limited".to_string()));
                 }
 
                 let json: ZenodoResponse = response.json().await.map_err(|e| {
@@ -90,7 +109,17 @@ impl Source for ZenodoSource {
                 Ok(json)
             }
         })
-        .await?;
+        .await;
+
+        // Handle rate limiting gracefully
+        let response = match response {
+            Ok(r) => r,
+            Err(SourceError::Api(msg)) if msg.contains("rate-limited") => {
+                tracing::debug!("Zenodo rate-limited - returning empty results");
+                return Ok(SearchResponse::new(vec![], "Zenodo", &query.query));
+            }
+            Err(e) => return Err(e),
+        };
 
         let total = response.hits.total.value;
         let papers: Result<Vec<Paper>, SourceError> = response
