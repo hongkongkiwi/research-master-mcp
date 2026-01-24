@@ -350,32 +350,59 @@ jobs:
           name: binary-${{ matrix.target }}
           path: target/${{ matrix.target }}/release
 
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: ${{ matrix.target }}
-
-      - name: Cache Rust build artifacts
-        uses: Swatinem/rust-cache@v2
-        with:
-          shared-key: ${{ runner.os }}-${{ hashFiles('**/Cargo.lock') }}-${{ hashFiles('rust-toolchain*') }}
-
-      - name: Install cargo-rpm
-        uses: taiki-e/install-action@v2
-        with:
-          tool: cargo-rpm
-
       - name: Install rpm build tools
-        run: sudo apt-get update && sudo apt-get install -y rpm
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y rpm
+
+      - name: Create RPM structure
+        run: |
+          VERSION="${{ github.event.inputs.version || github.ref_name }}"
+          VERSION="${VERSION#v}"
+
+          mkdir -p rpmbuild/{BUILD,BUILDROOT,RPMS,SOURCES,SPECS,SRPMS}
+          mkdir -p rpmbuild/BUILDROOT/usr/bin
+
+          # Copy binary
+          cp target/${{ matrix.target }}/release/research-master-mcp rpmbuild/BUILDROOT/usr/bin/
+
+          # Create spec file
+          cat > rpmbuild/SPECS/research-master-mcp.spec << EOF
+          Name:           research-master-mcp
+          Version:        ${VERSION}
+          Release:        0%{?dist}
+          Summary:        Model Context Protocol server for academic research sources
+          License:        MIT
+          URL:            https://github.com/hongkongkiwi/research-master-mcp
+          BuildArch:      ${{ matrix.rpm_arch }}
+          %description
+          Model Context Protocol server that provides unified access to 26+ academic
+          research sources (arXiv, Semantic Scholar, PubMed, OpenAlex, etc.) for
+          searching, downloading, and analyzing academic papers.
+
+          %install
+          mkdir -p %{buildroot}/usr/bin
+          install -m 755 %{_builddir}/usr/bin/research-master-mcp %{buildroot}/usr/bin/research-master-mcp
+
+          %files
+          /usr/bin/research-master-mcp
+          %changelog
+          * Sat Jan 24 2026 Research Master MCP <research-master-mcp@users.noreply.github.com> - ${VERSION}-0
+          - Initial RPM package
+          EOF
 
       - name: Build .rpm package
-        run: cargo rpm build --target ${{ matrix.target }}
+        run: |
+          cp target/${{ matrix.target }}/release/research-master-mcp rpmbuild/BUILDROOT/usr/bin/
+          rpmbuild --define "_topdir $PWD/rpmbuild" \
+            -bb rpmbuild/SPECS/research-master-mcp.spec \
+            --target ${{ matrix.rpm_arch }}
 
       - name: Upload .rpm package
         uses: actions/upload-artifact@v4
         with:
           name: research-master-mcp.rpm-${{ matrix.arch }}
-          path: target/${{ matrix.target }}/rpm/RPMS/${{ matrix.rpm_arch }}/*.rpm
+          path: rpmbuild/RPMS/${{ matrix.rpm_arch }}/*.rpm
 
   build-apk:
     name: Build Alpine Package (${{ matrix.arch }})
@@ -470,7 +497,10 @@ jobs:
             sh -c 'apk add --no-cache alpine-sdk && \
               adduser -D builder && addgroup builder abuild && \
               chown -R builder:builder /work/apk-build /work/apk-packages && \
-              su builder -c "export REPODEST=/work/apk-packages PACKAGER= && abuild-keygen -a -n && abuild -r"'
+              su builder -c "export REPODEST=/work/apk-packages PACKAGER= && \
+                abuild-keygen -a -n && \
+                cp /home/builder/.abuild/*.rsa.pub /etc/apk/keys/ && \
+                abuild -r"'
 
       - name: Upload Alpine package
         uses: actions/upload-artifact@v4
