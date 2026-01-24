@@ -359,21 +359,19 @@ jobs:
         run: |
           VERSION="${{ github.event.inputs.version || github.ref_name }}"
           VERSION="${VERSION#v}"
+          pkgname="research-master-mcp"
 
           mkdir -p rpmbuild/BUILD rpmbuild/BUILDROOT rpmbuild/RPMS rpmbuild/SOURCES rpmbuild/SPECS rpmbuild/SRPMS
 
-          # Create tarball directory structure (rpmbuild extracts to VERSION directory)
-          mkdir -p "rpmbuild/SOURCES/research-master-mcp-${VERSION}"
-          cp target/${{ matrix.target }}/release/research-master-mcp "rpmbuild/SOURCES/research-master-mcp-${VERSION}/"
-
-          # Create tarball for SOURCES
-          cd rpmbuild/SOURCES
-          tar czf "research-master-mcp-${VERSION}.tar.gz" "research-master-mcp-${VERSION}"
-          cd ../..
+          # Create tarball with binary at root level
+          mkdir -p "tmp-pkg-dir"
+          cp target/${{ matrix.target }}/release/research-master-mcp "tmp-pkg-dir/"
+          tar -C tmp-pkg-dir -czf "rpmbuild/SOURCES/${pkgname}-${VERSION}.tar.gz" .
+          rm -rf tmp-pkg-dir
 
           # Create spec file
           cat > rpmbuild/SPECS/research-master-mcp.spec << EOF
-          Name:           research-master-mcp
+          Name:           ${pkgname}
           Version:        ${VERSION}
           Release:        0%{?dist}
           Summary:        Model Context Protocol server for academic research sources
@@ -386,12 +384,15 @@ jobs:
           research sources (arXiv, Semantic Scholar, PubMed, OpenAlex, etc.) for
           searching, downloading, and analyzing academic papers.
 
+          %prep
+          %setup -q
+
           %install
           mkdir -p %{buildroot}/usr/bin
-          install -m 755 %{_builddir}/%{name}-%{version}/research-master-mcp %{buildroot}/usr/bin/research-master-mcp
+          install -m 755 %{_builddir}/%{name} %{buildroot}/usr/bin/%{name}
 
           %files
-          /usr/bin/research-master-mcp
+          /usr/bin/%{name}
           %changelog
           * Sat Jan 24 2026 Research Master MCP <research-master-mcp@users.noreply.github.com> - ${VERSION}-0
           - Initial RPM package
