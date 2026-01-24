@@ -363,10 +363,10 @@ jobs:
 
           mkdir -p rpmbuild/BUILD rpmbuild/BUILDROOT rpmbuild/RPMS rpmbuild/SOURCES rpmbuild/SPECS rpmbuild/SRPMS
 
-          # Create tarball with binary at root level
-          mkdir -p "tmp-pkg-dir"
-          cp target/${{ matrix.target }}/release/research-master-mcp "tmp-pkg-dir/"
-          tar -C tmp-pkg-dir -czf "rpmbuild/SOURCES/${pkgname}-${VERSION}.tar.gz" .
+          # Create tarball with proper directory structure (tarball name without .tar.gz must match extracted dir)
+          mkdir -p "tmp-pkg-dir/${pkgname}-${VERSION}"
+          cp target/${{ matrix.target }}/release/research-master-mcp "tmp-pkg-dir/${pkgname}-${VERSION}/"
+          tar -C tmp-pkg-dir -czf "rpmbuild/SOURCES/${pkgname}-${VERSION}.tar.gz" "${pkgname}-${VERSION}"
           rm -rf tmp-pkg-dir
 
           # Create spec file
