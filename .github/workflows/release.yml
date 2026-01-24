@@ -636,11 +636,11 @@ jobs:
       - name: Extract SHA256 checksums for all platforms
         id: sha256
         run: |
-          # Extract SHA256 for each platform
-          SHA256_X86_64_DARWIN=$(grep 'research-master-mcp-x86_64-apple-darwin' homebrew-tmp/SHA256SUMS.txt | awk '{print $1}')
-          SHA256_AARCH64_DARWIN=$(grep 'research-master-mcp-aarch64-apple-darwin' homebrew-tmp/SHA256SUMS.txt | awk '{print $1}')
-          SHA256_X86_64_LINUX=$(grep 'research-master-mcp-x86_64-unknown-linux-gnu' homebrew-tmp/SHA256SUMS.txt | awk '{print $1}')
-          SHA256_AARCH64_LINUX=$(grep 'research-master-mcp-aarch64-unknown-linux-gnu' homebrew-tmp/SHA256SUMS.txt | awk '{print $1}')
+          # Extract SHA256 for each platform (files include version prefix like v0.1.32)
+          SHA256_X86_64_DARWIN=$(grep 'research-master-mcp-.*-x86_64-apple-darwin.gz' homebrew-tmp/SHA256SUMS.txt | awk '{print $1}')
+          SHA256_AARCH64_DARWIN=$(grep 'research-master-mcp-.*-aarch64-apple-darwin.gz' homebrew-tmp/SHA256SUMS.txt | awk '{print $1}')
+          SHA256_X86_64_LINUX=$(grep 'research-master-mcp-.*-x86_64-unknown-linux-gnu.gz' homebrew-tmp/SHA256SUMS.txt | awk '{print $1}')
+          SHA256_AARCH64_LINUX=$(grep 'research-master-mcp-.*-aarch64-unknown-linux-gnu.gz' homebrew-tmp/SHA256SUMS.txt | awk '{print $1}')
 
           {
             echo "sha256_x86_64_darwin=${SHA256_X86_64_DARWIN}"
