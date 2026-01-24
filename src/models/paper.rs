@@ -400,4 +400,114 @@ mod tests {
 
         assert_eq!(without_doi.primary_id(), "1234");
     }
+
+    #[test]
+    fn test_paper_builder_all_fields() {
+        let paper = PaperBuilder::new(
+            "PMC12345",
+            "Medical Research Paper",
+            "https://pubmed.ncbi.nlm.nih.gov/12345/",
+            SourceType::PubMed,
+        )
+        .authors("Alice Johnson; Bob Williams")
+        .abstract_text("This is a medical abstract.")
+        .doi("10.1000/abc123")
+        .pdf_url("https://example.com/fulltext.pdf")
+        .published_date("2023-05-15")
+        .categories("Medicine;Biology")
+        .keywords("gene therapy;CRISPR")
+        .citations(100)
+        .references("ref1;ref2")
+        .build();
+
+        assert_eq!(paper.paper_id, "PMC12345");
+        assert_eq!(paper.title, "Medical Research Paper");
+        assert_eq!(paper.source, SourceType::PubMed);
+        assert_eq!(paper.authors, "Alice Johnson; Bob Williams");
+        assert_eq!(paper.doi, Some("10.1000/abc123".to_string()));
+        assert_eq!(paper.published_date, Some("2023-05-15".to_string()));
+        assert_eq!(paper.categories, Some("Medicine;Biology".to_string()));
+        assert_eq!(paper.keywords, Some("gene therapy;CRISPR".to_string()));
+        assert_eq!(paper.citations, Some(100));
+        assert_eq!(paper.references, Some("ref1;ref2".to_string()));
+    }
+
+    #[test]
+    fn test_paper_builder_empty_authors() {
+        let paper = PaperBuilder::new(
+            "1234",
+            "Anonymous Paper",
+            "https://example.com",
+            SourceType::Arxiv,
+        )
+        .authors("")
+        .build();
+
+        let authors = paper.author_list();
+        assert!(authors.is_empty());
+    }
+
+    #[test]
+    fn test_paper_builder_minimal() {
+        let paper = PaperBuilder::new(
+            "minimal",
+            "Minimal Paper",
+            "https://example.com",
+            SourceType::SemanticScholar,
+        )
+        .build();
+
+        assert_eq!(paper.paper_id, "minimal");
+        assert_eq!(paper.title, "Minimal Paper");
+        assert!(paper.authors.is_empty());
+        assert!(paper.doi.is_none());
+        assert!(paper.r#abstract.is_empty());
+    }
+
+    #[test]
+    fn test_paper_with_pdf() {
+        let paper = PaperBuilder::new(
+            "1234",
+            "Paper with PDF",
+            "https://example.com",
+            SourceType::Arxiv,
+        )
+        .pdf_url("https://arxiv.org/pdf/1234.pdf")
+        .build();
+
+        assert!(paper.has_pdf());
+        assert!(paper.pdf_url.is_some());
+    }
+
+    #[test]
+    fn test_paper_without_pdf() {
+        let paper = Paper::new(
+            "1234".to_string(),
+            "Paper without PDF".to_string(),
+            "https://example.com".to_string(),
+            SourceType::Arxiv,
+        );
+
+        assert!(!paper.has_pdf());
+    }
+
+    #[test]
+    fn test_category_list() {
+        let paper = PaperBuilder::new("1234", "Test", "https://example.com", SourceType::Arxiv)
+            .categories("cs.AI;cs.LG")
+            .build();
+
+        let categories = paper.category_list();
+        assert_eq!(categories, vec!["cs.AI", "cs.LG"]);
+    }
+
+    #[test]
+    fn test_keyword_list() {
+        let paper = PaperBuilder::new("1234", "Test", "https://example.com", SourceType::Arxiv)
+            .keywords("neural networks;deep learning")
+            .build();
+
+        let keywords = paper.keyword_list();
+        assert_eq!(keywords, vec!["neural networks", "deep learning"]);
+    }
 }

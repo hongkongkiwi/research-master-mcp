@@ -280,7 +280,7 @@ enum Commands {
         source: Source,
 
         /// Path where PDF is saved (or will be downloaded)
-        #[arg(long, short)]
+        #[arg(long, short = 'p')]
         path: PathBuf,
 
         /// Download PDF if not found locally
@@ -292,8 +292,8 @@ enum Commands {
         pages: Option<usize>,
 
         /// Extract text to file instead of stdout
-        #[arg(long, short)]
-        output: Option<PathBuf>,
+        #[arg(long, short = 'O')]
+        output_file: Option<PathBuf>,
     },
 
     /// Get papers that cite a given paper
@@ -394,15 +394,15 @@ enum Commands {
         input: PathBuf,
 
         /// Output file (default: overwrite input)
-        #[arg(long, short)]
-        output: Option<PathBuf>,
+        #[arg(long, short = 'O')]
+        output_file: Option<PathBuf>,
 
         /// Deduplication strategy
-        #[arg(long, short, value_enum, default_value_t = DedupStrategy::First)]
+        #[arg(long, value_enum, default_value_t = DedupStrategy::First)]
         strategy: DedupStrategy,
 
         /// Show duplicate groups without removing
-        #[arg(long, short)]
+        #[arg(long, short = 'v')]
         show: bool,
     },
 
@@ -827,7 +827,7 @@ async fn main() -> Result<()> {
             path,
             download_if_missing,
             pages: _,
-            output: output_file,
+            output_file,
         }) => {
             let src = get_source(&registry, source)?;
             let request = ReadRequest::new(&paper_id, path.to_string_lossy())
@@ -969,7 +969,7 @@ async fn main() -> Result<()> {
 
         Some(Commands::Dedupe {
             input,
-            output,
+            output_file,
             strategy,
             show,
         }) => {
@@ -998,7 +998,7 @@ async fn main() -> Result<()> {
             } else {
                 let deduped = deduplicate_papers(papers, dup_strategy);
                 let output_json = serde_json::to_string_pretty(&deduped)?;
-                let output_path = output.as_ref().unwrap_or(&input);
+                let output_path = output_file.as_ref().unwrap_or(&input);
                 std::fs::write(output_path, output_json)?;
                 if !cli.quiet {
                     eprintln!(
@@ -1776,5 +1776,651 @@ mod tests {
         // Just verify the command parses - stdio defaults to true so http doesn't override it
         let cli = Cli::parse_from(["research-master-mcp", "serve", "--http"]);
         assert!(matches!(cli.command, Some(Commands::Serve { .. })));
+    }
+
+    // Author command tests
+    #[test]
+    fn test_cli_author_command() {
+        let cli = Cli::parse_from(["research-master-mcp", "author", "Geoffrey Hinton"]);
+        match &cli.command {
+            Some(Commands::Author { author, .. }) => {
+                assert_eq!(author, "Geoffrey Hinton");
+            }
+            _ => panic!("Expected Author command"),
+        }
+    }
+
+    #[test]
+    fn test_cli_author_with_source() {
+        let cli = Cli::parse_from([
+            "research-master-mcp",
+            "author",
+            "Geoffrey Hinton",
+            "--source",
+            "semantic",
+        ]);
+        match &cli.command {
+            Some(Commands::Author { author, source, .. }) => {
+                assert_eq!(author, "Geoffrey Hinton");
+                assert_eq!(*source, Source::Semantic);
+            }
+            _ => panic!("Expected Author command"),
+        }
+    }
+
+    // Read command tests
+    #[test]
+    fn test_cli_read_command() {
+        let cli = Cli::parse_from([
+            "research-master-mcp",
+            "read",
+            "2301.12345",
+            "--source",
+            "arxiv",
+            "--path",
+            "/path/to/paper.pdf",
+        ]);
+        match &cli.command {
+            Some(Commands::Read { paper_id, .. }) => {
+                assert_eq!(paper_id, "2301.12345");
+            }
+            _ => panic!("Expected Read command"),
+        }
+    }
+
+    #[test]
+    fn test_cli_read_with_options() {
+        let cli = Cli::parse_from([
+            "research-master-mcp",
+            "read",
+            "2301.12345",
+            "--source",
+            "arxiv",
+            "--path",
+            "/path/to/paper.pdf",
+            "--output-file",
+            "output.txt",
+            "--pages",
+            "5",
+        ]);
+        match &cli.command {
+            Some(Commands::Read {
+                paper_id,
+                source,
+                pages,
+                output_file,
+                path: _,
+                ..
+            }) => {
+                assert_eq!(paper_id, "2301.12345");
+                assert_eq!(*source, Source::Arxiv);
+                assert_eq!(*pages, Some(5));
+                assert_eq!(
+                    output_file.clone().map(|p| p.to_string_lossy().to_string()),
+                    Some("output.txt".to_string())
+                );
+            }
+            _ => panic!("Expected Read command"),
+        }
+    }
+
+    // Citations command tests
+    #[test]
+    fn test_cli_citations_command() {
+        let cli = Cli::parse_from([
+            "research-master-mcp",
+            "citations",
+            "2301.12345",
+            "--source",
+            "arxiv",
+        ]);
+        match &cli.command {
+            Some(Commands::Citations { paper_id, .. }) => {
+                assert_eq!(paper_id, "2301.12345");
+            }
+            _ => panic!("Expected Citations command"),
+        }
+    }
+
+    #[test]
+    fn test_cli_citations_with_options() {
+        let cli = Cli::parse_from([
+            "research-master-mcp",
+            "citations",
+            "2301.12345",
+            "--source",
+            "semantic",
+            "--max-results",
+            "50",
+        ]);
+        match &cli.command {
+            Some(Commands::Citations {
+                paper_id,
+                source,
+                max_results,
+            }) => {
+                assert_eq!(paper_id, "2301.12345");
+                assert_eq!(*source, Source::Semantic);
+                assert_eq!(*max_results, 50);
+            }
+            _ => panic!("Expected Citations command"),
+        }
+    }
+
+    // References command tests
+    #[test]
+    fn test_cli_references_command() {
+        let cli = Cli::parse_from([
+            "research-master-mcp",
+            "references",
+            "1706.03762",
+            "--source",
+            "semantic",
+        ]);
+        match &cli.command {
+            Some(Commands::References { paper_id, .. }) => {
+                assert_eq!(paper_id, "1706.03762");
+            }
+            _ => panic!("Expected References command"),
+        }
+    }
+
+    #[test]
+    fn test_cli_references_alias() {
+        let cli = Cli::parse_from([
+            "research-master-mcp",
+            "ref",
+            "1706.03762",
+            "--source",
+            "semantic",
+        ]);
+        assert!(matches!(cli.command, Some(Commands::References { .. })));
+    }
+
+    // Related command tests
+    #[test]
+    fn test_cli_related_command() {
+        let cli = Cli::parse_from([
+            "research-master-mcp",
+            "related",
+            "1706.03762",
+            "--source",
+            "connected_papers",
+        ]);
+        match &cli.command {
+            Some(Commands::Related { paper_id, .. }) => {
+                assert_eq!(paper_id, "1706.03762");
+            }
+            _ => panic!("Expected Related command"),
+        }
+    }
+
+    #[test]
+    fn test_cli_related_alias() {
+        let cli = Cli::parse_from([
+            "research-master-mcp",
+            "rel",
+            "1706.03762",
+            "--source",
+            "connected_papers",
+        ]);
+        assert!(matches!(cli.command, Some(Commands::Related { .. })));
+    }
+
+    // Lookup command tests
+    #[test]
+    fn test_cli_lookup_command() {
+        let cli = Cli::parse_from(["research-master-mcp", "doi", "10.1234/test"]);
+        match &cli.command {
+            Some(Commands::LookupByDoi { doi, .. }) => {
+                assert_eq!(doi, "10.1234/test");
+            }
+            _ => panic!("Expected LookupByDoi command"),
+        }
+    }
+
+    #[test]
+    fn test_cli_lookup_with_source() {
+        let cli = Cli::parse_from([
+            "research-master-mcp",
+            "doi",
+            "10.1234/test",
+            "--source",
+            "crossref",
+        ]);
+        match &cli.command {
+            Some(Commands::LookupByDoi { doi, source, .. }) => {
+                assert_eq!(doi, "10.1234/test");
+                assert_eq!(*source, Source::CrossRef);
+            }
+            _ => panic!("Expected LookupByDoi command"),
+        }
+    }
+
+    // Cache command tests
+    #[test]
+    fn test_cli_cache_status() {
+        let cli = Cli::parse_from(["research-master-mcp", "cache", "status"]);
+        assert!(matches!(
+            cli.command,
+            Some(Commands::Cache {
+                command: CacheCommands::Status
+            })
+        ));
+    }
+
+    #[test]
+    fn test_cli_cache_clear() {
+        let cli = Cli::parse_from(["research-master-mcp", "cache", "clear"]);
+        assert!(matches!(
+            cli.command,
+            Some(Commands::Cache {
+                command: CacheCommands::Clear
+            })
+        ));
+    }
+
+    #[test]
+    fn test_cli_cache_clear_searches() {
+        let cli = Cli::parse_from(["research-master-mcp", "cache", "clear-searches"]);
+        assert!(matches!(
+            cli.command,
+            Some(Commands::Cache {
+                command: CacheCommands::ClearSearches
+            })
+        ));
+    }
+
+    #[test]
+    fn test_cli_cache_clear_citations() {
+        let cli = Cli::parse_from(["research-master-mcp", "cache", "clear-citations"]);
+        assert!(matches!(
+            cli.command,
+            Some(Commands::Cache {
+                command: CacheCommands::ClearCitations
+            })
+        ));
+    }
+
+    // Doctor command tests
+    #[test]
+    fn test_cli_doctor_command() {
+        let cli = Cli::parse_from(["research-master-mcp", "doctor"]);
+        match &cli.command {
+            Some(Commands::Doctor {
+                check_connectivity,
+                check_api_keys,
+                verbose,
+            }) => {
+                assert!(!*check_connectivity);
+                assert!(!*check_api_keys);
+                assert!(!*verbose);
+            }
+            _ => panic!("Expected Doctor command"),
+        }
+    }
+
+    #[test]
+    fn test_cli_doctor_with_options() {
+        let cli = Cli::parse_from([
+            "research-master-mcp",
+            "doctor",
+            "--check-connectivity",
+            "--check-api-keys",
+            "--verbose",
+        ]);
+        match &cli.command {
+            Some(Commands::Doctor {
+                check_connectivity,
+                check_api_keys,
+                verbose,
+            }) => {
+                assert!(*check_connectivity);
+                assert!(*check_api_keys);
+                assert!(*verbose);
+            }
+            _ => panic!("Expected Doctor command"),
+        }
+    }
+
+    #[test]
+    fn test_cli_doctor_alias() {
+        let cli = Cli::parse_from(["research-master-mcp", "diag"]);
+        assert!(matches!(cli.command, Some(Commands::Doctor { .. })));
+    }
+
+    // Update command tests
+    #[test]
+    fn test_cli_update_command() {
+        let cli = Cli::parse_from(["research-master-mcp", "update"]);
+        match &cli.command {
+            Some(Commands::Update { force, dry_run }) => {
+                assert!(!*force);
+                assert!(!*dry_run);
+            }
+            _ => panic!("Expected Update command"),
+        }
+    }
+
+    #[test]
+    fn test_cli_update_with_options() {
+        let cli = Cli::parse_from(["research-master-mcp", "update", "--force", "--dry-run"]);
+        match &cli.command {
+            Some(Commands::Update { force, dry_run }) => {
+                assert!(*force);
+                assert!(*dry_run);
+            }
+            _ => panic!("Expected Update command"),
+        }
+    }
+
+    // Dedupe command tests
+    #[test]
+    fn test_cli_dedupe_command() {
+        let cli = Cli::parse_from(["research-master-mcp", "dedupe", "papers.json"]);
+        match &cli.command {
+            Some(Commands::Dedupe { input, .. }) => {
+                assert_eq!(input.to_string_lossy(), "papers.json");
+            }
+            _ => panic!("Expected Dedupe command"),
+        }
+    }
+
+    #[test]
+    fn test_cli_dedupe_with_options() {
+        let cli = Cli::parse_from([
+            "research-master-mcp",
+            "dedupe",
+            "papers.json",
+            "-O",
+            "deduped.json",
+            "--strategy",
+            "last",
+            "--show",
+        ]);
+        match &cli.command {
+            Some(Commands::Dedupe {
+                input,
+                output_file,
+                strategy,
+                show,
+            }) => {
+                assert_eq!(input.to_string_lossy(), "papers.json");
+                assert_eq!(
+                    output_file.clone().map(|p| p.to_string_lossy().to_string()),
+                    Some("deduped.json".to_string())
+                );
+                assert_eq!(*strategy, DedupStrategy::Last);
+                assert!(*show);
+            }
+            _ => panic!("Expected Dedupe command"),
+        }
+    }
+
+    #[test]
+    fn test_cli_dedupe_alias() {
+        let cli = Cli::parse_from(["research-master-mcp", "dedup", "papers.json"]);
+        assert!(matches!(cli.command, Some(Commands::Dedupe { .. })));
+    }
+
+    // Search with all options
+    #[test]
+    fn test_cli_search_all_options() {
+        let cli = Cli::parse_from([
+            "research-master-mcp",
+            "search",
+            "transformer",
+            "--source",
+            "arxiv",
+            "--max-results",
+            "25",
+            "--year",
+            "2020-2023",
+            "--sort-by",
+            "citations",
+            "--order",
+            "desc",
+            "--category",
+            "cs.CL",
+            "--author",
+            "Vaswani",
+            "--dedup",
+            "--dedup-strategy",
+            "mark",
+        ]);
+        match &cli.command {
+            Some(Commands::Search {
+                query,
+                source,
+                max_results,
+                year,
+                sort_by,
+                order,
+                category,
+                author,
+                dedup,
+                dedup_strategy,
+                fetch_details,
+            }) => {
+                assert_eq!(query, "transformer");
+                assert_eq!(*source, Source::Arxiv);
+                assert_eq!(*max_results, 25);
+                assert_eq!(year.clone(), Some("2020-2023".to_string()));
+                assert_eq!(*sort_by, Some(SortField::Citations));
+                assert_eq!(*order, Some(Order::Desc));
+                assert_eq!(category.clone(), Some("cs.CL".to_string()));
+                assert_eq!(author.clone(), Some("Vaswani".to_string()));
+                assert!(*dedup);
+                assert_eq!(*dedup_strategy, Some(DedupStrategy::Mark));
+                assert!(*fetch_details); // Default is true
+            }
+            _ => panic!("Expected Search command"),
+        }
+    }
+
+    // Source enum variant tests
+    #[test]
+    fn test_source_enum_all_variants() {
+        let variants = [
+            Source::Arxiv,
+            Source::Pubmed,
+            Source::Biorxiv,
+            Source::Semantic,
+            Source::OpenAlex,
+            Source::CrossRef,
+            Source::Iacr,
+            Source::Pmc,
+            Source::Hal,
+            Source::Dblp,
+            Source::Ssrn,
+            Source::Dimensions,
+            Source::IeeeXplore,
+            Source::EuropePmc,
+            Source::Core,
+            Source::Zenodo,
+            Source::Unpaywall,
+            Source::Mdpi,
+            Source::Jstor,
+            Source::Scispace,
+            Source::Acm,
+            Source::ConnectedPapers,
+            Source::Doaj,
+            Source::WorldWideScience,
+            Source::Osf,
+            Source::Base,
+            Source::Springer,
+            Source::GoogleScholar,
+            Source::All,
+        ];
+        assert_eq!(variants.len(), 29);
+    }
+
+    #[test]
+    fn test_source_to_id_all_variants() {
+        let tests = [
+            (Source::Arxiv, "arxiv"),
+            (Source::Pubmed, "pubmed"),
+            (Source::Biorxiv, "biorxiv"),
+            (Source::Semantic, "semantic"),
+            (Source::OpenAlex, "openalex"),
+            (Source::CrossRef, "crossref"),
+            (Source::Iacr, "iacr"),
+            (Source::Pmc, "pmc"),
+            (Source::Hal, "hal"),
+            (Source::Dblp, "dblp"),
+            (Source::Ssrn, "ssrn"),
+            (Source::Dimensions, "dimensions"),
+            (Source::IeeeXplore, "ieee_xplore"),
+            (Source::EuropePmc, "europe_pmc"),
+            (Source::Core, "core"),
+            (Source::Zenodo, "zenodo"),
+            (Source::Unpaywall, "unpaywall"),
+            (Source::Mdpi, "mdpi"),
+            (Source::Jstor, "jstor"),
+            (Source::Scispace, "scispace"),
+            (Source::Acm, "acm"),
+            (Source::ConnectedPapers, "connected_papers"),
+            (Source::Doaj, "doaj"),
+            (Source::WorldWideScience, "worldwidescience"),
+            (Source::Osf, "osf"),
+            (Source::Base, "base"),
+            (Source::Springer, "springer"),
+            (Source::GoogleScholar, "google_scholar"),
+        ];
+        for (source, expected_id) in tests {
+            assert_eq!(source_to_id(source), expected_id, "Failed for {:?}", source);
+        }
+    }
+
+    // Sort field tests
+    #[test]
+    fn test_sort_field_enum() {
+        assert_eq!(SortField::Relevance as i32, 0);
+        assert_eq!(SortField::Date as i32, 1);
+        assert_eq!(SortField::Citations as i32, 2);
+        assert_eq!(SortField::Title as i32, 3);
+        assert_eq!(SortField::Author as i32, 4);
+    }
+
+    #[test]
+    fn test_order_enum() {
+        assert_eq!(Order::Asc as i32, 0);
+        assert_eq!(Order::Desc as i32, 1);
+    }
+
+    #[test]
+    fn test_dedup_strategy_enum() {
+        assert_eq!(DedupStrategy::First as i32, 0);
+        assert_eq!(DedupStrategy::Last as i32, 1);
+        assert_eq!(DedupStrategy::Mark as i32, 2);
+    }
+
+    // Capability filter tests
+    #[test]
+    fn test_capability_filter_enum() {
+        assert_eq!(CapabilityFilter::Search as i32, 0);
+        assert_eq!(CapabilityFilter::Download as i32, 1);
+        assert_eq!(CapabilityFilter::Read as i32, 2);
+        assert_eq!(CapabilityFilter::Citations as i32, 3);
+        assert_eq!(CapabilityFilter::DoiLookup as i32, 4);
+        assert_eq!(CapabilityFilter::AuthorSearch as i32, 5);
+    }
+
+    // Download with all options
+    #[test]
+    fn test_cli_download_all_options() {
+        let cli = Cli::parse_from([
+            "research-master-mcp",
+            "download",
+            "2301.12345",
+            "--source",
+            "arxiv",
+            "--output-path",
+            "/path/to/file.pdf",
+            "--auto-filename",
+            "--create-dir",
+            "--doi",
+            "10.1234/test",
+        ]);
+        match &cli.command {
+            Some(Commands::Download {
+                paper_id,
+                source,
+                output_path,
+                auto_filename,
+                create_dir,
+                doi,
+            }) => {
+                assert_eq!(paper_id, "2301.12345");
+                assert_eq!(*source, Source::Arxiv);
+                assert_eq!(
+                    output_path.clone().map(|p| p.to_string_lossy().to_string()),
+                    Some("/path/to/file.pdf".to_string())
+                );
+                assert!(*auto_filename);
+                assert!(*create_dir);
+                assert_eq!(
+                    doi.clone().map(|d| d.to_string()),
+                    Some("10.1234/test".to_string())
+                );
+            }
+            _ => panic!("Expected Download command"),
+        }
+    }
+
+    // Sources with capability filter
+    #[test]
+    fn test_cli_sources_with_capability() {
+        let cli = Cli::parse_from([
+            "research-master-mcp",
+            "sources",
+            "--with-capability",
+            "download",
+        ]);
+        match &cli.command {
+            Some(Commands::Sources {
+                with_capability, ..
+            }) => {
+                assert_eq!(*with_capability, Some(CapabilityFilter::Download));
+            }
+            _ => panic!("Expected Sources command"),
+        }
+    }
+
+    // Author with all options
+    #[test]
+    fn test_cli_author_all_options() {
+        let cli = Cli::parse_from([
+            "research-master-mcp",
+            "author",
+            "Geoffrey Hinton",
+            "--source",
+            "all",
+            "--max-results",
+            "20",
+            "--year",
+            "2010-",
+            "--dedup",
+            "--dedup-strategy",
+            "first",
+        ]);
+        match &cli.command {
+            Some(Commands::Author {
+                author,
+                source,
+                max_results,
+                year,
+                dedup,
+                dedup_strategy,
+            }) => {
+                assert_eq!(author, "Geoffrey Hinton");
+                assert_eq!(*source, Source::All);
+                assert_eq!(*max_results, 20);
+                assert_eq!(year.clone(), Some("2010-".to_string()));
+                assert!(*dedup);
+                assert_eq!(*dedup_strategy, Some(DedupStrategy::First));
+            }
+            _ => panic!("Expected Author command"),
+        }
     }
 }

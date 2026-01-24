@@ -421,6 +421,7 @@ impl ReadResult {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::models::{Paper, SourceType};
 
     #[test]
     fn test_batch_download_request_new() {
@@ -483,5 +484,190 @@ mod tests {
         assert_eq!(batch.total_bytes, 0);
         assert_eq!(batch.success_rate(), 0.0);
         assert!(!batch.is_all_success());
+    }
+
+    #[test]
+    fn test_search_query_new() {
+        let query = SearchQuery::new("machine learning");
+        assert_eq!(query.query, "machine learning");
+        assert_eq!(query.max_results, 10); // default
+        assert!(query.year.is_none());
+        assert!(query.sort_by.is_none());
+        assert!(query.sort_order.is_none());
+    }
+
+    #[test]
+    fn test_search_query_with_options() {
+        let query = SearchQuery::new("neural networks")
+            .max_results(50)
+            .year("2020-2023")
+            .sort_by(SortBy::Relevance)
+            .sort_order(SortOrder::Descending);
+
+        assert_eq!(query.query, "neural networks");
+        assert_eq!(query.max_results, 50);
+        assert_eq!(query.year, Some("2020-2023".to_string()));
+        assert_eq!(query.sort_by, Some(SortBy::Relevance));
+        assert_eq!(query.sort_order, Some(SortOrder::Descending));
+    }
+
+    #[test]
+    fn test_search_query_builder_pattern() {
+        let query = SearchQuery::new("deep learning")
+            .max_results(100)
+            .author("John Doe")
+            .category("cs.AI")
+            .year("2022");
+
+        assert_eq!(query.query, "deep learning");
+        assert_eq!(query.max_results, 100);
+        assert_eq!(query.author, Some("John Doe".to_string()));
+        assert_eq!(query.category, Some("cs.AI".to_string()));
+        assert_eq!(query.year, Some("2022".to_string()));
+    }
+
+    #[test]
+    fn test_search_query_year_formats() {
+        let single_year = SearchQuery::new("test").year("2020");
+        assert_eq!(single_year.year, Some("2020".to_string()));
+
+        let year_range = SearchQuery::new("test").year("2019-2023");
+        assert_eq!(year_range.year, Some("2019-2023".to_string()));
+
+        let from_year = SearchQuery::new("test").year("2020-");
+        assert_eq!(from_year.year, Some("2020-".to_string()));
+    }
+
+    #[test]
+    fn test_search_response_new() {
+        let papers = vec![
+            Paper::new(
+                "1".to_string(),
+                "Paper 1".to_string(),
+                "url1".to_string(),
+                SourceType::Arxiv,
+            ),
+            Paper::new(
+                "2".to_string(),
+                "Paper 2".to_string(),
+                "url2".to_string(),
+                SourceType::Arxiv,
+            ),
+        ];
+        let response = SearchResponse::new(papers, "test source", "search term");
+
+        assert_eq!(response.papers.len(), 2);
+        assert_eq!(response.source, "test source");
+        assert_eq!(response.query, "search term");
+        // total_results is None by default, set via builder method
+        assert!(response.total_results.is_none());
+    }
+
+    #[test]
+    fn test_search_response_with_total() {
+        let papers = vec![Paper::new(
+            "1".to_string(),
+            "Paper 1".to_string(),
+            "url1".to_string(),
+            SourceType::Arxiv,
+        )];
+        let response = SearchResponse::new(papers, "test source", "search term").total_results(100);
+
+        assert_eq!(response.total_results, Some(100));
+    }
+
+    #[test]
+    fn test_search_response_empty() {
+        let response = SearchResponse::new(vec![], "test source", "search term");
+        assert!(response.papers.is_empty());
+        // total_results is None by default
+        assert!(response.total_results.is_none());
+    }
+
+    #[test]
+    fn test_citation_request_new() {
+        let request = CitationRequest::new("paper123");
+        assert_eq!(request.paper_id, "paper123");
+        assert_eq!(request.max_results, 20); // default
+    }
+
+    #[test]
+    fn test_citation_request_with_options() {
+        let request = CitationRequest::new("paper456").max_results(50);
+
+        assert_eq!(request.paper_id, "paper456");
+        assert_eq!(request.max_results, 50);
+    }
+
+    #[test]
+    fn test_download_request_new() {
+        let request = DownloadRequest::new("paper123", "/downloads");
+        assert_eq!(request.paper_id, "paper123");
+        assert_eq!(request.save_path, "/downloads");
+    }
+
+    #[test]
+    fn test_download_result_success() {
+        let result = DownloadResult::success("/path/to/file.pdf", 1024);
+        assert!(result.success);
+        assert_eq!(result.path, "/path/to/file.pdf");
+        assert_eq!(result.bytes, 1024);
+        assert!(result.error.is_none());
+    }
+
+    #[test]
+    fn test_download_result_error() {
+        let result = DownloadResult::error("Network timeout");
+        assert!(!result.success);
+        assert!(result.path.is_empty());
+        assert_eq!(result.bytes, 0);
+        assert_eq!(result.error, Some("Network timeout".to_string()));
+    }
+
+    #[test]
+    fn test_read_request_new() {
+        let request = ReadRequest::new("123", "/papers");
+
+        assert_eq!(request.paper_id, "123");
+        assert_eq!(request.save_path, "/papers");
+        assert!(request.download_if_missing);
+    }
+
+    #[test]
+    fn test_read_request_with_download_option() {
+        let request = ReadRequest::new("123", "/papers").download_if_missing(false);
+
+        assert!(!request.download_if_missing);
+    }
+
+    #[test]
+    fn test_read_result_new() {
+        let result = ReadResult::success("Extracted text content");
+        assert_eq!(result.text, "Extracted text content");
+        assert!(result.success);
+        assert!(result.error.is_none());
+    }
+
+    #[test]
+    fn test_read_result_with_pages() {
+        let result = ReadResult::success("Text".to_string()).pages(5);
+        assert_eq!(result.pages, Some(5));
+    }
+
+    #[test]
+    fn test_sort_by_variants() {
+        // SortBy uses Debug formatting via derive
+        assert_eq!(format!("{:?}", SortBy::Relevance), "Relevance");
+        assert_eq!(format!("{:?}", SortBy::Date), "Date");
+        assert_eq!(format!("{:?}", SortBy::CitationCount), "CitationCount");
+        assert_eq!(format!("{:?}", SortBy::Title), "Title");
+        assert_eq!(format!("{:?}", SortBy::Author), "Author");
+    }
+
+    #[test]
+    fn test_sort_order_variants() {
+        // SortOrder uses Debug formatting via derive
+        assert_eq!(format!("{:?}", SortOrder::Descending), "Descending");
+        assert_eq!(format!("{:?}", SortOrder::Ascending), "Ascending");
     }
 }

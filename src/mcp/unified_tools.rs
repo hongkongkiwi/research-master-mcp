@@ -537,6 +537,195 @@ impl ReadPaperHandler {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::models::{CitationRequest, DownloadRequest, ReadRequest};
+    use crate::sources::{Source, SourceCapabilities};
+    use std::sync::Arc;
+
+    // Mock source for testing
+    #[derive(Debug)]
+    struct MockSource {
+        id: String,
+        capabilities: SourceCapabilities,
+    }
+
+    impl MockSource {
+        fn new(id: &str, capabilities: SourceCapabilities) -> Self {
+            Self {
+                id: id.to_string(),
+                capabilities,
+            }
+        }
+    }
+
+    #[async_trait::async_trait]
+    impl Source for MockSource {
+        fn id(&self) -> &str {
+            &self.id
+        }
+
+        fn name(&self) -> &str {
+            &self.id
+        }
+
+        fn capabilities(&self) -> SourceCapabilities {
+            self.capabilities
+        }
+
+        async fn search(
+            &self,
+            _query: &crate::models::SearchQuery,
+        ) -> Result<crate::models::SearchResponse, crate::sources::SourceError> {
+            unimplemented!()
+        }
+
+        async fn download(
+            &self,
+            _request: &DownloadRequest,
+        ) -> Result<crate::models::DownloadResult, crate::sources::SourceError> {
+            unimplemented!()
+        }
+
+        async fn read(
+            &self,
+            _request: &ReadRequest,
+        ) -> Result<crate::models::ReadResult, crate::sources::SourceError> {
+            unimplemented!()
+        }
+
+        async fn get_citations(
+            &self,
+            _request: &CitationRequest,
+        ) -> Result<crate::models::SearchResponse, crate::sources::SourceError> {
+            unimplemented!()
+        }
+
+        async fn get_references(
+            &self,
+            _request: &CitationRequest,
+        ) -> Result<crate::models::SearchResponse, crate::sources::SourceError> {
+            unimplemented!()
+        }
+
+        fn supports_doi_lookup(&self) -> bool {
+            self.capabilities.contains(SourceCapabilities::DOI_LOOKUP)
+        }
+
+        async fn get_by_doi(
+            &self,
+            _doi: &str,
+        ) -> Result<crate::models::Paper, crate::sources::SourceError> {
+            unimplemented!()
+        }
+
+        async fn get_related(
+            &self,
+            _request: &CitationRequest,
+        ) -> Result<crate::models::SearchResponse, crate::sources::SourceError> {
+            unimplemented!()
+        }
+
+        fn validate_id(&self, _id: &str) -> Result<(), crate::sources::SourceError> {
+            Ok(())
+        }
+    }
+
+    fn make_test_sources() -> Vec<Arc<dyn Source>> {
+        vec![
+            Arc::new(MockSource::new("arxiv", SourceCapabilities::all())),
+            Arc::new(MockSource::new("semantic", SourceCapabilities::all())),
+            Arc::new(MockSource::new("pmc", SourceCapabilities::all())),
+            Arc::new(MockSource::new("hal", SourceCapabilities::all())),
+            Arc::new(MockSource::new("iacr", SourceCapabilities::all())),
+        ]
+    }
+
+    #[test]
+    fn test_auto_detect_arxiv_numeric() {
+        let sources = make_test_sources();
+        let result = auto_detect_source(&Arc::new(sources), "2301.12345");
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap().id(), "arxiv");
+    }
+
+    #[test]
+    fn test_auto_detect_arxiv_prefix() {
+        let sources = make_test_sources();
+        let result = auto_detect_source(&Arc::new(sources), "arxiv:2301.12345");
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap().id(), "arxiv");
+    }
+
+    #[test]
+    fn test_auto_detect_pmc() {
+        let sources = make_test_sources();
+        let result = auto_detect_source(&Arc::new(sources), "PMC12345");
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap().id(), "pmc");
+    }
+
+    #[test]
+    fn test_auto_detect_pmc_lowercase() {
+        let sources = make_test_sources();
+        let result = auto_detect_source(&Arc::new(sources), "pmc12345");
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap().id(), "pmc");
+    }
+
+    #[test]
+    fn test_auto_detect_hal() {
+        let sources = make_test_sources();
+        let result = auto_detect_source(&Arc::new(sources), "hal-12345");
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap().id(), "hal");
+    }
+
+    #[test]
+    fn test_auto_detect_iacr() {
+        let sources = make_test_sources();
+        let result = auto_detect_source(&Arc::new(sources), "2023/1234");
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap().id(), "iacr");
+    }
+
+    #[test]
+    fn test_auto_detect_doi() {
+        // DOI format without slash-like pattern would go to semantic
+        // 10.xxxx/xxxxx has a slash, so it matches iacr pattern first
+        let sources = make_test_sources();
+        let result = auto_detect_source(&Arc::new(sources), "10.12345/testpaper");
+        assert!(result.is_ok());
+        // Due to slash detection, iacr matches first (single slash pattern)
+        assert_eq!(result.unwrap().id(), "iacr");
+    }
+
+    #[test]
+    fn test_auto_detect_doi_no_slash() {
+        // DOI without slash - arxiv is checked first in fallback
+        let sources = make_test_sources();
+        let result = auto_detect_source(&Arc::new(sources), "10.12345.67890");
+        assert!(result.is_ok());
+        // Fallback order is arxiv first, then semantic
+        assert_eq!(result.unwrap().id(), "arxiv");
+    }
+
+    #[test]
+    fn test_auto_detect_fallback() {
+        let sources = make_test_sources();
+        // Unknown format should fall back to arxiv
+        let result = auto_detect_source(&Arc::new(sources), "unknown-id-123");
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap().id(), "arxiv");
+    }
+
+    #[test]
+    fn test_auto_detect_source_not_available() {
+        // Create sources without arxiv, and without semantic
+        let sources: Vec<Arc<dyn Source>> =
+            vec![Arc::new(MockSource::new("pmc", SourceCapabilities::SEARCH))];
+        // PMC ID should work, but unknown ID should fail since no fallback
+        let result = auto_detect_source(&Arc::new(sources), "unknown-id");
+        assert!(result.is_err());
+    }
 
     #[test]
     fn test_paper_id_upper_start_basic() {
