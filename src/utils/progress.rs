@@ -77,7 +77,7 @@ impl ProgressReporter {
     pub fn inc_by(&self, delta: usize) {
         let new_value = self.current.fetch_add(delta, Ordering::SeqCst) + delta;
 
-        if !self.quiet && new_value % 10 == 0 {
+        if !self.quiet && new_value.is_multiple_of(10) {
             self.print_progress(new_value);
         }
     }

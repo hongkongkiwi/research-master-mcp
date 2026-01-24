@@ -53,7 +53,8 @@ mod update;
 mod validate;
 
 pub use streaming::{
-    ConcurrentPaperStream, FilterByYearStream, PaperStream, SkipStream, TakeStream,
+    collect_papers, filter_by_year, paper_stream, ConcurrentPaperStream, FilterByYearStream,
+    SkipStream, TakeStream,
 };
 
 pub use cache::{CacheResult, CacheService, CacheStats};
