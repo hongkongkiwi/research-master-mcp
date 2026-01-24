@@ -21,9 +21,9 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  # Build binaries for all platforms
-  build:
-    name: Build (${{ matrix.target }})
+  # Build Linux binaries (needed by .deb/.rpm packages)
+  build-linux:
+    name: Build Linux (${{ matrix.target }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -35,6 +35,38 @@ jobs:
           # Linux arm64 (glibc)
           - os: ubuntu-24.04-arm
             target: aarch64-unknown-linux-gnu
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Cache Rust build artifacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: ${{ runner.os }}-${{ hashFiles('**/Cargo.lock') }}-${{ hashFiles('rust-toolchain*') }}
+
+      - name: Build release binary
+        run: cargo build --release --target ${{ matrix.target }}
+
+      - name: Upload binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: binary-${{ matrix.target }}
+          path: target/${{ matrix.target }}/release/research-master-mcp
+          retention-days: 5
+
+  # Build binaries for non-Linux platforms
+  build:
+    name: Build (${{ matrix.target }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
           # macOS Intel
           - os: macos-14
             target: x86_64-apple-darwin
@@ -71,7 +103,9 @@ jobs:
   # Create GitHub release
   release:
     name: Create Release
-    needs: build
+    needs:
+      - build
+      - build-linux
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -159,7 +193,6 @@ jobs:
   publish-docker:
     name: Publish Docker Image (Multi-Arch)
     needs:
-      - release
       - build-apk
     runs-on: ubuntu-latest
     steps:
@@ -243,7 +276,7 @@ jobs:
   # Build platform-specific packages
   build-deb:
     name: Build Debian Package (${{ matrix.arch }})
-    needs: release
+    needs: build-linux
     runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
@@ -293,7 +326,7 @@ jobs:
 
   build-rpm:
     name: Build RedHat Package (${{ matrix.arch }})
-    needs: release
+    needs: build-linux
     runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
@@ -346,7 +379,6 @@ jobs:
 
   build-apk:
     name: Build Alpine Package (${{ matrix.arch }})
-    needs: release
     runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
