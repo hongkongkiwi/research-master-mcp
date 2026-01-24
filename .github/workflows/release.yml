@@ -276,7 +276,7 @@ jobs:
   # Build platform-specific packages
   build-deb:
     name: Build Debian Package (${{ matrix.arch }})
-    needs: build-linux
+    needs: [build-linux, release]
     runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
@@ -326,7 +326,7 @@ jobs:
 
   build-rpm:
     name: Build RedHat Package (${{ matrix.arch }})
-    needs: build-linux
+    needs: [build-linux, release]
     runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
