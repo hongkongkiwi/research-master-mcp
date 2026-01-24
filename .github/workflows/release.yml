@@ -530,6 +530,8 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: release-binaries
+          pattern: binary-*
+          merge-multiple: true
 
       - name: List downloaded binaries
         run: |
