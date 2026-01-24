@@ -530,8 +530,11 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: release-binaries
-          pattern: binary-*
-          merge-multiple: true
+
+      - name: List downloaded binaries
+        run: |
+          echo "=== release-binaries contents ==="
+          find release-binaries -type f -exec ls -la {} \;
 
       - name: Download all packages
         uses: actions/download-artifact@v4
@@ -544,10 +547,12 @@ jobs:
         run: |
           mkdir -p release-packages
 
-          # Copy and flatten release binaries
-          for dir in release-binaries/binary-*; do
-            if [ -d "$dir" ]; then
-              cp -r "$dir"/* release-packages/ 2>/dev/null || true
+          # Copy and flatten release binaries (artifacts are files, not directories)
+          for artifact in release-binaries/*; do
+            if [ -f "$artifact" ]; then
+              cp "$artifact" release-packages/
+            elif [ -d "$artifact" ]; then
+              cp -r "$artifact"/* release-packages/ 2>/dev/null || true
             fi
           done
 
@@ -626,19 +631,35 @@ jobs:
           name: sha256sums
           path: homebrew-tmp
 
-      - name: Extract SHA256 for x86_64-unknown-linux-gnu
+      - name: Extract SHA256 checksums for all platforms
         id: sha256
         run: |
-          SHA256=$(grep 'research-master-mcp-x86_64-unknown-linux-gnu' homebrew-tmp/SHA256SUMS.txt | awk '{print $1}')
-          echo "sha256=${SHA256}" >> "$GITHUB_OUTPUT"
-          echo "SHA256: $SHA256"
+          # Extract SHA256 for each platform
+          SHA256_X86_64_DARWIN=$(grep 'research-master-mcp-x86_64-apple-darwin' homebrew-tmp/SHA256SUMS.txt | awk '{print $1}')
+          SHA256_AARCH64_DARWIN=$(grep 'research-master-mcp-aarch64-apple-darwin' homebrew-tmp/SHA256SUMS.txt | awk '{print $1}')
+          SHA256_X86_64_LINUX=$(grep 'research-master-mcp-x86_64-unknown-linux-gnu' homebrew-tmp/SHA256SUMS.txt | awk '{print $1}')
+          SHA256_AARCH64_LINUX=$(grep 'research-master-mcp-aarch64-unknown-linux-gnu' homebrew-tmp/SHA256SUMS.txt | awk '{print $1}')
+
+          {
+            echo "sha256_x86_64_darwin=${SHA256_X86_64_DARWIN}"
+            echo "sha256_aarch64_darwin=${SHA256_AARCH64_DARWIN}"
+            echo "sha256_x86_64_linux=${SHA256_X86_64_LINUX}"
+            echo "sha256_aarch64_linux=${SHA256_AARCH64_LINUX}"
+            echo "SHA256 x86_64-darwin: $SHA256_X86_64_DARWIN"
+            echo "SHA256 aarch64-darwin: $SHA256_AARCH64_DARWIN"
+            echo "SHA256 x86_64-linux: $SHA256_X86_64_LINUX"
+            echo "SHA256 aarch64-linux: $SHA256_AARCH64_LINUX"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Update Homebrew formula
         run: |
           VERSION=$(echo '${{ github.ref_name }}' | sed 's/v//')
-          SHA256="${{ steps.sha256.outputs.sha256 }}"
+          SHA256_X86_64_DARWIN="${{ steps.sha256.outputs.sha256_x86_64_darwin }}"
+          SHA256_AARCH64_DARWIN="${{ steps.sha256.outputs.sha256_aarch64_darwin }}"
+          SHA256_X86_64_LINUX="${{ steps.sha256.outputs.sha256_x86_64_linux }}"
+          SHA256_AARCH64_LINUX="${{ steps.sha256.outputs.sha256_aarch64_linux }}"
 
-          cat > homebrew-tap/research-master-mcp.rb << EOF
+          cat > homebrew-tap/Formula/research-master-mcp.rb << EOF
           class ResearchMasterMcp < Formula
             desc "MCP server for searching and downloading academic papers"
             homepage "https://github.com/hongkongkiwi/research-master-mcp"
@@ -647,45 +668,65 @@ jobs:
 
             on_macos do
               on_intel do
-                url "https://github.com/hongkongkiwi/research-master-mcp/releases/download/v${VERSION}/research-master-mcp-x86_64-apple-darwin.gz"
-                sha256 "${SHA256}"
+                url "https://github.com/hongkongkiwi/research-master-mcp/releases/download/v${VERSION}/research-master-mcp-v${VERSION}-x86_64-apple-darwin.tar.gz"
+                sha256 "${SHA256_X86_64_DARWIN}"
               end
 
               on_arm do
-                url "https://github.com/hongkongkiwi/research-master-mcp/releases/download/v${VERSION}/research-master-mcp-aarch64-apple-darwin.gz"
-                sha256 "${SHA256}"
+                url "https://github.com/hongkongkiwi/research-master-mcp/releases/download/v${VERSION}/research-master-mcp-v${VERSION}-aarch64-apple-darwin.tar.gz"
+                sha256 "${SHA256_AARCH64_DARWIN}"
               end
             end
 
             on_linux do
               on_x86_64 do
-                url "https://github.com/hongkongkiwi/research-master-mcp/releases/download/v${VERSION}/research-master-mcp-x86_64-unknown-linux-gnu.gz"
-                sha256 "${SHA256}"
+                url "https://github.com/hongkongkiwi/research-master-mcp/releases/download/v${VERSION}/research-master-mcp-v${VERSION}-x86_64-unknown-linux-gnu.tar.gz"
+                sha256 "${SHA256_X86_64_LINUX}"
               end
 
-              on_arm64 do
-                url "https://github.com/hongkongkiwi/research-master-mcp/releases/download/v${VERSION}/research-master-mcp-aarch64-unknown-linux-gnu.gz"
-                sha256 "${SHA256}"
+              on_arm do
+                url "https://github.com/hongkongkiwi/research-master-mcp/releases/download/v${VERSION}/research-master-mcp-v${VERSION}-aarch64-unknown-linux-gnu.tar.gz"
+                sha256 "${SHA256_AARCH64_LINUX}"
               end
             end
 
             def install
               bin.install "research-master-mcp"
+              etc.install "research-master.example.toml"
+            end
+
+            def caveats
+              <<~EOS
+                Configuration file installed at:
+                  #{etc}/research-master/research-master.example.toml
+
+                Copy it to #{etc}/research-master/research-master.toml to customize.
+
+                To use with Claude Desktop, add to your MCP config:
+                  {
+                    "mcpServers": {
+                      "research-master": {
+                        "command": "#{bin}/research-master-mcp",
+                        "args": ["serve"]
+                      }
+                    }
+                  }
+              EOS
             end
 
             test do
-              assert_match "research-master-mcp", shell_output("#{bin}/research-master-mcp --help")
+              assert_match version.to_s, shell_output("#{bin}/research-master-mcp --version").strip
             end
           end
           EOF
 
-          cat homebrew-tap/research-master-mcp.rb
+          cat homebrew-tap/Formula/research-master-mcp.rb
 
       - name: Commit and push changes
         working-directory: ./homebrew-tap
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add research-master-mcp.rb
+          git add Formula/research-master-mcp.rb
           git commit -m "Update research-master-mcp to v${{ github.ref_name }}"
           git push
