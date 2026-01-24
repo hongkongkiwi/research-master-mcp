@@ -360,14 +360,15 @@ jobs:
           VERSION="${{ github.event.inputs.version || github.ref_name }}"
           VERSION="${VERSION#v}"
 
-          mkdir -p rpmbuild/BUILD rpmbuild/BUILDROOT rpmbuild/RPMS rpmbuild/SOURCES rpmbuild/SPECS rpmbuild/SRPMS rpmbuild/SOURCES
+          mkdir -p rpmbuild/BUILD rpmbuild/BUILDROOT rpmbuild/RPMS rpmbuild/SOURCES rpmbuild/SPECS rpmbuild/SRPMS
 
-          # Copy binary to SOURCES (rpmbuild expects sources in SOURCES dir)
-          cp target/${{ matrix.target }}/release/research-master-mcp rpmbuild/SOURCES/
+          # Create tarball directory structure (rpmbuild extracts to VERSION directory)
+          mkdir -p "rpmbuild/SOURCES/research-master-mcp-${VERSION}"
+          cp target/${{ matrix.target }}/release/research-master-mcp "rpmbuild/SOURCES/research-master-mcp-${VERSION}/"
 
           # Create tarball for SOURCES
           cd rpmbuild/SOURCES
-          tar czf "research-master-mcp-${VERSION}.tar.gz" research-master-mcp
+          tar czf "research-master-mcp-${VERSION}.tar.gz" "research-master-mcp-${VERSION}"
           cd ../..
 
           # Create spec file
