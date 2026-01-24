@@ -526,11 +526,12 @@ jobs:
       - publish-docker
     runs-on: ubuntu-latest
     steps:
-      - name: Download release binaries
+      - name: Download all binaries for checksums
         uses: actions/download-artifact@v4
         with:
-          name: release
           path: release-binaries
+          pattern: binary-*
+          merge-multiple: true
 
       - name: Download all packages
         uses: actions/download-artifact@v4
