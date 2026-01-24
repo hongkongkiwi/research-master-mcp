@@ -1,6 +1,6 @@
 [package]
 name = "research-master-mcp"
-version = "0.1.31"
+version = "0.1.32"
 edition = "2021"
 description = "MCP server for searching and downloading academic papers from multiple research sources"
 authors = ["hongkongkiwi"]
