@@ -360,11 +360,15 @@ jobs:
           VERSION="${{ github.event.inputs.version || github.ref_name }}"
           VERSION="${VERSION#v}"
 
-          mkdir -p rpmbuild/{BUILD,BUILDROOT,RPMS,SOURCES,SPECS,SRPMS}
-          mkdir -p rpmbuild/BUILDROOT/usr/bin
+          mkdir -p rpmbuild/BUILD rpmbuild/BUILDROOT rpmbuild/RPMS rpmbuild/SOURCES rpmbuild/SPECS rpmbuild/SRPMS rpmbuild/SOURCES
 
-          # Copy binary
-          cp target/${{ matrix.target }}/release/research-master-mcp rpmbuild/BUILDROOT/usr/bin/
+          # Copy binary to SOURCES (rpmbuild expects sources in SOURCES dir)
+          cp target/${{ matrix.target }}/release/research-master-mcp rpmbuild/SOURCES/
+
+          # Create tarball for SOURCES
+          cd rpmbuild/SOURCES
+          tar czf "research-master-mcp-${VERSION}.tar.gz" research-master-mcp
+          cd ../..
 
           # Create spec file
           cat > rpmbuild/SPECS/research-master-mcp.spec << EOF
@@ -374,6 +378,7 @@ jobs:
           Summary:        Model Context Protocol server for academic research sources
           License:        MIT
           URL:            https://github.com/hongkongkiwi/research-master-mcp
+          Source0:        %{name}-%{version}.tar.gz
           BuildArch:      ${{ matrix.rpm_arch }}
           %description
           Model Context Protocol server that provides unified access to 26+ academic
@@ -382,7 +387,7 @@ jobs:
 
           %install
           mkdir -p %{buildroot}/usr/bin
-          install -m 755 %{_builddir}/usr/bin/research-master-mcp %{buildroot}/usr/bin/research-master-mcp
+          install -m 755 %{_builddir}/%{name}-%{version}/research-master-mcp %{buildroot}/usr/bin/research-master-mcp
 
           %files
           /usr/bin/research-master-mcp
@@ -393,7 +398,6 @@ jobs:
 
       - name: Build .rpm package
         run: |
-          cp target/${{ matrix.target }}/release/research-master-mcp rpmbuild/BUILDROOT/usr/bin/
           rpmbuild --define "_topdir $PWD/rpmbuild" \
             -bb rpmbuild/SPECS/research-master-mcp.spec \
             --target ${{ matrix.rpm_arch }}
@@ -497,10 +501,9 @@ jobs:
             sh -c 'apk add --no-cache alpine-sdk && \
               adduser -D builder && addgroup builder abuild && \
               chown -R builder:builder /work/apk-build /work/apk-packages && \
-              su builder -c "export REPODEST=/work/apk-packages PACKAGER= && \
-                abuild-keygen -a -n && \
-                cp /home/builder/.abuild/*.rsa.pub /etc/apk/keys/ && \
-                abuild -r"'
+              su builder -c "export REPODEST=/work/apk-packages PACKAGER= && abuild-keygen -a -n" && \
+              cp /home/builder/.abuild/*.rsa.pub /etc/apk/keys/ && \
+              su builder -c "export REPODEST=/work/apk-packages PACKAGER= && abuild -r"'
 
       - name: Upload Alpine package
         uses: actions/upload-artifact@v4
