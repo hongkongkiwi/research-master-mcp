@@ -652,10 +652,11 @@ jobs:
         id: sha256
         run: |
           # Extract SHA256 for each platform (files include version prefix like v0.1.32)
-          SHA256_X86_64_DARWIN=$(grep -E 'research-master-mcp-.*-x86_64-apple-darwin\\.tar\\.gz' homebrew-tmp/SHA256SUMS.txt | awk '{print $1}' || true)
-          SHA256_AARCH64_DARWIN=$(grep -E 'research-master-mcp-.*-aarch64-apple-darwin\\.tar\\.gz' homebrew-tmp/SHA256SUMS.txt | awk '{print $1}' || true)
-          SHA256_X86_64_LINUX=$(grep -E 'research-master-mcp-.*-x86_64-unknown-linux-gnu\\.tar\\.gz' homebrew-tmp/SHA256SUMS.txt | awk '{print $1}' || true)
-          SHA256_AARCH64_LINUX=$(grep -E 'research-master-mcp-.*-aarch64-unknown-linux-gnu\\.tar\\.gz' homebrew-tmp/SHA256SUMS.txt | awk '{print $1}' || true)
+          # Note: Use simplified patterns to avoid YAML escaping issues with backslashes
+          SHA256_X86_64_DARWIN=$(grep 'x86_64-apple-darwin.*tar\.gz$' homebrew-tmp/SHA256SUMS.txt | awk '{print $1}' || true)
+          SHA256_AARCH64_DARWIN=$(grep 'aarch64-apple-darwin.*tar\.gz$' homebrew-tmp/SHA256SUMS.txt | awk '{print $1}' || true)
+          SHA256_X86_64_LINUX=$(grep 'x86_64-unknown-linux-gnu.*tar\.gz$' homebrew-tmp/SHA256SUMS.txt | awk '{print $1}' || true)
+          SHA256_AARCH64_LINUX=$(grep 'aarch64-unknown-linux-gnu.*tar\.gz$' homebrew-tmp/SHA256SUMS.txt | awk '{print $1}' || true)
 
           for value in "$SHA256_X86_64_DARWIN" "$SHA256_AARCH64_DARWIN" "$SHA256_X86_64_LINUX" "$SHA256_AARCH64_LINUX"; do
             if [ -z "$value" ]; then
