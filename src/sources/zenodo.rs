@@ -11,7 +11,7 @@ use crate::models::{Paper, PaperBuilder, SearchQuery, SearchResponse, SourceType
 use crate::sources::{Source, SourceCapabilities, SourceError};
 use crate::utils::{api_retry_config, with_retry, HttpClient};
 
-const ZENODO_API_BASE: &str = "https://zenodo.org/api";
+const ZENODO_API_BASE: &str = "https://zenodo.org/api/records";
 
 /// Zenodo research source
 ///

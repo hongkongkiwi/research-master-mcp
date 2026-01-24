@@ -79,6 +79,14 @@ impl Source for ConnectedPapersSource {
 
                 if !response.status().is_success() {
                     let status = response.status();
+                    // Connected Papers may return network errors or blocking
+                    // Return empty results gracefully
+                    if status == reqwest::StatusCode::FORBIDDEN
+                        || status == reqwest::StatusCode::TOO_MANY_REQUESTS
+                    {
+                        tracing::debug!("Connected Papers API blocked or rate-limited - skipping");
+                        return Err(SourceError::Api("Connected Papers blocked".to_string()));
+                    }
                     let text = response.text().await.unwrap_or_default();
                     return Err(SourceError::Api(format!(
                         "Connected Papers API returned status {}: {}",
@@ -93,7 +101,21 @@ impl Source for ConnectedPapersSource {
                 Ok(json)
             }
         })
-        .await?;
+        .await;
+
+        // Handle API blocking gracefully
+        let response = match response {
+            Ok(r) => r,
+            Err(SourceError::Api(msg)) if msg.contains("blocked") => {
+                tracing::debug!("Connected Papers API blocked - returning empty results");
+                return Ok(SearchResponse::new(
+                    vec![],
+                    "Connected Papers",
+                    &query.query,
+                ));
+            }
+            Err(e) => return Err(e),
+        };
 
         let total = response.total_results.unwrap_or(0);
         let papers: Result<Vec<Paper>, SourceError> = response

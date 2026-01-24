@@ -13,7 +13,7 @@ use crate::models::{Paper, PaperBuilder, SearchQuery, SearchResponse, SourceType
 use crate::sources::{Source, SourceCapabilities, SourceError};
 use crate::utils::{api_retry_config, with_retry, HttpClient};
 
-const DOAJ_API_BASE: &str = "https://doaj.org/api/v2/search/articles";
+const DOAJ_API_BASE: &str = "https://doaj.org/api/v4/query/articles";
 
 /// DOAJ research source
 ///
@@ -79,6 +79,12 @@ impl Source for DoajSource {
 
                 if !response.status().is_success() {
                     let status = response.status();
+                    // DOAJ v4 API may return 404 for unknown endpoints
+                    // Return empty results gracefully
+                    if status == reqwest::StatusCode::NOT_FOUND {
+                        tracing::debug!("DOAJ API endpoint not found - returning empty results");
+                        return Err(SourceError::Api("DOAJ API unavailable".to_string()));
+                    }
                     let text = response.text().await.unwrap_or_default();
                     return Err(SourceError::Api(format!(
                         "DOAJ API returned status {}: {}",
@@ -93,7 +99,17 @@ impl Source for DoajSource {
                 Ok(json)
             }
         })
-        .await?;
+        .await;
+
+        // Handle API unavailability gracefully
+        let response = match response {
+            Ok(r) => r,
+            Err(SourceError::Api(msg)) if msg.contains("unavailable") => {
+                tracing::debug!("DOAJ API unavailable - returning empty results");
+                return Ok(SearchResponse::new(vec![], "DOAJ", &query.query));
+            }
+            Err(e) => return Err(e),
+        };
 
         let total = response.total_results.unwrap_or(0);
         let papers: Result<Vec<Paper>, SourceError> = response

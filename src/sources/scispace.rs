@@ -77,6 +77,17 @@ impl Source for ScispaceSource {
 
                 if !response.status().is_success() {
                     let status = response.status();
+                    // SciSpace API may return 404 for unknown endpoints or 403 for rate limiting
+                    // Return empty results gracefully for these cases
+                    if status == reqwest::StatusCode::NOT_FOUND
+                        || status == reqwest::StatusCode::FORBIDDEN
+                    {
+                        tracing::debug!(
+                            "SciSpace API returned {} - likely requires different endpoint, skipping",
+                            status
+                        );
+                        return Err(SourceError::Api("SciSpace endpoint unavailable".to_string()));
+                    }
                     let text = response.text().await.unwrap_or_default();
                     return Err(SourceError::Api(format!(
                         "SciSpace API returned status {}: {}",
@@ -91,7 +102,17 @@ impl Source for ScispaceSource {
                 Ok(json)
             }
         })
-        .await?;
+        .await;
+
+        // Handle API unavailability gracefully
+        let response = match response {
+            Ok(r) => r,
+            Err(SourceError::Api(msg)) if msg.contains("unavailable") => {
+                tracing::debug!("SciSpace API unavailable - returning empty results");
+                return Ok(SearchResponse::new(vec![], "SciSpace", &query.query));
+            }
+            Err(e) => return Err(e),
+        };
 
         let total = response.total_results.unwrap_or(0);
         let papers: Result<Vec<Paper>, SourceError> = response

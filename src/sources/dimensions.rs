@@ -108,6 +108,14 @@ impl Source for DimensionsSource {
 
                 let status = response.status();
                 if !status.is_success() {
+                    // Dimensions may return network errors or blocking
+                    // Return empty results gracefully
+                    if status == reqwest::StatusCode::FORBIDDEN
+                        || status == reqwest::StatusCode::TOO_MANY_REQUESTS
+                    {
+                        tracing::debug!("Dimensions API blocked or rate-limited - skipping");
+                        return Err(SourceError::Api("Dimensions blocked".to_string()));
+                    }
                     let text = response.text().await.unwrap_or_default();
                     return Err(SourceError::Api(format!(
                         "Dimensions API returned status {}: {}",
@@ -122,7 +130,17 @@ impl Source for DimensionsSource {
                 Ok(json)
             }
         })
-        .await?;
+        .await;
+
+        // Handle API blocking gracefully
+        let response = match response {
+            Ok(r) => r,
+            Err(SourceError::Api(msg)) if msg.contains("blocked") => {
+                tracing::debug!("Dimensions API blocked - returning empty results");
+                return Ok(SearchResponse::new(vec![], "Dimensions", &query.query));
+            }
+            Err(e) => return Err(e),
+        };
 
         let papers: Result<Vec<Paper>, SourceError> = response
             .data

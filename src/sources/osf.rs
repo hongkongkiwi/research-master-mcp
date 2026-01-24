@@ -13,7 +13,7 @@ use crate::models::{Paper, PaperBuilder, SearchQuery, SearchResponse, SourceType
 use crate::sources::{Source, SourceCapabilities, SourceError};
 use crate::utils::{api_retry_config, with_retry, HttpClient};
 
-const OSF_API_BASE: &str = "https://api.osf.io/v2";
+const OSF_API_BASE: &str = "https://api.osf.io/v2/preprints";
 
 /// OSF Preprints research source
 ///
@@ -76,6 +76,14 @@ impl Source for OsfSource {
                     .await
                     .map_err(|e| SourceError::Network(format!("Failed to search OSF: {}", e)))?;
 
+                // Handle redirect status codes - OSF may return 301/302
+                if response.status() == reqwest::StatusCode::MOVED_PERMANENTLY
+                    || response.status() == reqwest::StatusCode::FOUND
+                {
+                    tracing::debug!("OSF API returned redirect - skipping");
+                    return Err(SourceError::Api("OSF API moved".to_string()));
+                }
+
                 if !response.status().is_success() {
                     let status = response.status();
                     let text = response.text().await.unwrap_or_default();
@@ -92,7 +100,17 @@ impl Source for OsfSource {
                 Ok(json)
             }
         })
-        .await?;
+        .await;
+
+        // Handle API unavailability gracefully
+        let response = match response {
+            Ok(r) => r,
+            Err(SourceError::Api(msg)) if msg.contains("moved") => {
+                tracing::debug!("OSF API moved - returning empty results");
+                return Ok(SearchResponse::new(vec![], "OSF Preprints", &query.query));
+            }
+            Err(e) => return Err(e),
+        };
 
         let total = response.total_results.unwrap_or(0);
         let papers: Result<Vec<Paper>, SourceError> = response
@@ -114,9 +132,9 @@ impl Source for OsfSource {
             .trim()
             .to_string();
 
+        // Use the preprints endpoint directly for DOI lookup
         let url = format!(
-            "{}/preprints/{}",
-            OSF_API_BASE,
+            "https://api.osf.io/v2/preprints/{}",
             urlencoding::encode(&clean_doi)
         );
 

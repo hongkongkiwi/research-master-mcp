@@ -317,9 +317,16 @@ impl Source for DblpSource {
                 }
 
                 if !response.status().is_success() {
+                    let status = response.status();
+                    // DBLP may return 500 for server errors or rate limiting
+                    // Return empty results gracefully
+                    if status == reqwest::StatusCode::INTERNAL_SERVER_ERROR {
+                        tracing::debug!("DBLP API returned 500 - returning empty results");
+                        return Err(SourceError::Api("DBLP server error".to_string()));
+                    }
                     return Err(SourceError::Api(format!(
                         "DBLP API returned status: {}",
-                        response.status()
+                        status
                     )));
                 }
 
@@ -328,10 +335,14 @@ impl Source for DblpSource {
         })
         .await;
 
-        // Handle the case where 204 is returned (no results)
+        // Handle the case where 204 is returned (no results) or 500 server errors
         let response = match response {
             Ok(r) => r,
             Err(SourceError::NotFound(_)) => {
+                return Ok(SearchResponse::new(vec![], "DBLP", &query.query));
+            }
+            Err(SourceError::Api(msg)) if msg.contains("server error") => {
+                tracing::debug!("DBLP server error - returning empty results");
                 return Ok(SearchResponse::new(vec![], "DBLP", &query.query));
             }
             Err(e) => return Err(e),

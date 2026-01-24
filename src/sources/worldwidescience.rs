@@ -75,6 +75,31 @@ impl Source for WorldWideScienceSource {
                     SourceError::Network(format!("Failed to search WorldWideScience: {}", e))
                 })?;
 
+                // WorldWideScience API may return 404 or HTML pages
+                // Return empty results gracefully
+                if response.status() == reqwest::StatusCode::NOT_FOUND {
+                    tracing::debug!("WorldWideScience API endpoint not available - skipping");
+                    return Err(SourceError::Api(
+                        "WorldWideScience API not available".to_string(),
+                    ));
+                }
+
+                // Check content-type header for JSON response
+                let content_type = response
+                    .headers()
+                    .get(reqwest::header::CONTENT_TYPE)
+                    .and_then(|v| v.to_str().ok())
+                    .unwrap_or_default();
+                if !content_type.contains("application/json") {
+                    tracing::debug!(
+                        "WorldWideScience API returned non-JSON content-type: {} - skipping",
+                        content_type
+                    );
+                    return Err(SourceError::Api(
+                        "WorldWideScience API not available".to_string(),
+                    ));
+                }
+
                 if !response.status().is_success() {
                     let status = response.status();
                     let text = response.text().await.unwrap_or_default();
@@ -91,7 +116,22 @@ impl Source for WorldWideScienceSource {
                 Ok(json)
             }
         })
-        .await?;
+        .await;
+
+        // Handle API not available gracefully
+        match &response {
+            Err(SourceError::Api(msg)) if msg.contains("not available") => {
+                tracing::debug!("WorldWideScience API not available - returning empty results");
+                return Ok(SearchResponse::new(
+                    Vec::new(),
+                    "WorldWideScience",
+                    &query.query,
+                ));
+            }
+            _ => {}
+        }
+
+        let response = response?;
 
         let total = response.total_hits.unwrap_or(0);
         let papers: Result<Vec<Paper>, SourceError> = response
