@@ -57,7 +57,8 @@ impl Source for JstorSource {
 
     async fn search(&self, query: &SearchQuery) -> Result<SearchResponse, SourceError> {
         if self.api_key.is_none() {
-            tracing::warn!("JSTOR_API_KEY not set - limited functionality");
+            tracing::debug!("JSTOR_API_KEY not set - skipping search");
+            return Ok(SearchResponse::new(Vec::new(), "JSTOR", &query.query));
         }
 
         let max_results = query.max_results.min(100);

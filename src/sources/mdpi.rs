@@ -16,16 +16,21 @@ const MDPI_API_BASE: &str = "https://api.mdpi.com/v1";
 /// MDPI research source
 ///
 /// Uses the MDPI API for searching and retrieving research papers.
-/// MDPI is free and requires no API key for basic search.
+/// API documentation: <https://www.mdpi.com>
+///
+/// API key can be obtained from MDPI and set via MDPI_API_KEY environment variable.
 #[derive(Debug, Clone)]
 pub struct MdpiSource {
     client: Arc<HttpClient>,
+    api_key: Option<String>,
 }
 
 impl MdpiSource {
     pub fn new() -> Result<Self, SourceError> {
+        let api_key = std::env::var("MDPI_API_KEY").ok();
         Ok(Self {
             client: Arc::new(HttpClient::new()?),
+            api_key,
         })
     }
 }
@@ -62,17 +67,32 @@ impl Source for MdpiSource {
 
         let client = Arc::clone(&self.client);
         let url_for_retry = url.clone();
+        let api_key = self.api_key.clone();
 
         let response = with_retry(api_retry_config(), || {
             let client = Arc::clone(&client);
             let url = url_for_retry.clone();
+            let api_key = api_key.clone();
             async move {
-                let request = client.get(&url);
+                let mut request = client.get(&url);
+
+                if let Some(key) = api_key {
+                    request = request.header("Authorization", format!("Bearer {}", key));
+                }
 
                 let response = request
                     .send()
                     .await
                     .map_err(|e| SourceError::Network(format!("Failed to search MDPI: {}", e)))?;
+
+                // MDPI API may return 403 if no valid API key is provided
+                // In this case, return empty results gracefully
+                if response.status() == reqwest::StatusCode::FORBIDDEN {
+                    tracing::debug!(
+                        "MDPI API returned 403 - likely requires authentication, skipping"
+                    );
+                    return Err(SourceError::Api("MDPI requires authentication".to_string()));
+                }
 
                 if !response.status().is_success() {
                     let status = response.status();
@@ -90,7 +110,20 @@ impl Source for MdpiSource {
                 Ok(json)
             }
         })
-        .await?;
+        .await;
+
+        // Check if we got an auth error and return empty results silently
+        match &response {
+            Err(SourceError::Api(msg))
+                if msg.contains("authentication") || msg.contains("requires") =>
+            {
+                tracing::debug!("MDPI requires authentication - returning empty results");
+                return Ok(SearchResponse::new(Vec::new(), "MDPI", &query.query));
+            }
+            _ => {}
+        }
+
+        let response = response?;
 
         let total = response.total_results.unwrap_or(0);
         let papers: Result<Vec<Paper>, SourceError> = response

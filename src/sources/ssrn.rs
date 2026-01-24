@@ -145,6 +145,28 @@ impl Source for SsrnSource {
                     .await
                     .map_err(|e| SourceError::Network(format!("Failed to search SSRN: {}", e)))?;
 
+                // SSRN (Elsevier) may block automated requests with 403
+                // Also protected by Cloudflare which returns 403 for automated requests
+                if response.status() == reqwest::StatusCode::FORBIDDEN {
+                    // Read the response body to check for blocking
+                    let text = response.text().await.unwrap_or_default();
+                    let text_lower = text.to_lowercase();
+                    // Check for various blocking indicators
+                    if text_lower.contains("automated script")
+                        || text_lower.contains("elsevier")
+                        || text_lower.contains("content_protection")
+                        || text_lower.contains("search engine")
+                        || text_lower.contains("cloudflare")
+                        || text_lower.contains("attention required")
+                    {
+                        tracing::debug!("SSRN blocked automated requests (Cloudflare/Elsevier anti-bot), skipping");
+                        return Err(SourceError::Api("SSRN blocked automated requests".to_string()));
+                    }
+                    // If it's a 403 but not blocking detected
+                    tracing::debug!("SSRN returned 403 - skipping");
+                    return Err(SourceError::Api("SSRN returned 403".to_string()));
+                }
+
                 if !response.status().is_success() {
                     return Err(SourceError::Api(format!(
                         "SSRN returned status: {}",
@@ -155,8 +177,18 @@ impl Source for SsrnSource {
                 Ok(response)
             }
         })
-        .await?;
+        .await;
 
+        // Check if we got a blocked/403 error and return empty results silently
+        match &response {
+            Err(SourceError::Api(msg)) if msg.contains("blocked") || msg.contains("403") => {
+                tracing::debug!("SSRN blocked - returning empty results");
+                return Ok(SearchResponse::new(Vec::new(), "SSRN", &query.query));
+            }
+            _ => {}
+        }
+
+        let response = response?;
         let html_content = response
             .text()
             .await

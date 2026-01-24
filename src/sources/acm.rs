@@ -57,7 +57,8 @@ impl Source for AcmSource {
 
     async fn search(&self, query: &SearchQuery) -> Result<SearchResponse, SourceError> {
         if self.api_key.is_none() {
-            tracing::warn!("ACM_API_KEY not set - limited functionality");
+            tracing::debug!("ACM_API_KEY not set - skipping search");
+            return Ok(SearchResponse::new(Vec::new(), "ACM", &query.query));
         }
 
         let max_results = query.max_results.min(100);

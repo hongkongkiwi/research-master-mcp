@@ -54,6 +54,11 @@ impl Source for IeeeXploreSource {
     }
 
     async fn search(&self, query: &SearchQuery) -> Result<SearchResponse, SourceError> {
+        if self.api_key.is_none() {
+            tracing::debug!("IEEE_XPLORE_API_KEY not set - skipping search");
+            return Ok(SearchResponse::new(Vec::new(), "IEEE Xplore", &query.query));
+        }
+
         let max_results = query.max_results.min(100).min(100);
         let mut url = format!(
             "{}?max_records={}&apikey={}",
