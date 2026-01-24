@@ -90,6 +90,11 @@ impl Source for CoreSource {
                         tracing::debug!("CORE API endpoint not found - returning empty results");
                         return Err(SourceError::Api("CORE API unavailable".to_string()));
                     }
+                    // Handle rate limiting
+                    if status == reqwest::StatusCode::TOO_MANY_REQUESTS {
+                        tracing::debug!("CORE API rate-limited - returning empty results");
+                        return Err(SourceError::Api("CORE rate-limited".to_string()));
+                    }
                     let text = response.text().await.unwrap_or_default();
                     return Err(SourceError::Api(format!(
                         "CORE API returned status {}: {}",
@@ -106,11 +111,15 @@ impl Source for CoreSource {
         })
         .await;
 
-        // Handle API unavailability gracefully
+        // Handle API unavailability and rate limiting gracefully
         let response = match response {
             Ok(r) => r,
             Err(SourceError::Api(msg)) if msg.contains("unavailable") => {
                 tracing::debug!("CORE API unavailable - returning empty results");
+                return Ok(SearchResponse::new(vec![], "CORE", &query.query));
+            }
+            Err(SourceError::Api(msg)) if msg.contains("rate-limited") => {
+                tracing::debug!("CORE rate-limited - returning empty results");
                 return Ok(SearchResponse::new(vec![], "CORE", &query.query));
             }
             Err(e) => return Err(e),

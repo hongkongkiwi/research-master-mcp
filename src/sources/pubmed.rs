@@ -180,7 +180,8 @@ impl PubMedSource {
         #[derive(Debug, Deserialize)]
         #[allow(non_snake_case)]
         struct Abstract {
-            AbstractText: Option<AbstractText>,
+            #[serde(rename = "AbstractText", default)]
+            abstract_texts: Vec<AbstractText>,
         }
 
         #[derive(Debug, Deserialize)]
@@ -318,8 +319,13 @@ impl PubMedSource {
                 .as_ref()
                 .and_then(|m| m.Article.as_ref())
                 .and_then(|a| a.Abstract.as_ref())
-                .and_then(|ab| ab.AbstractText.as_ref())
-                .map(|at| at.text.clone())
+                .map(|ab| {
+                    ab.abstract_texts
+                        .iter()
+                        .map(|at| at.text.clone())
+                        .collect::<Vec<_>>()
+                        .join(" ")
+                })
                 .unwrap_or_default();
 
             let published_date = article
