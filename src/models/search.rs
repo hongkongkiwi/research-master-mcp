@@ -299,6 +299,81 @@ impl DownloadResult {
     }
 }
 
+/// Batch download request containing multiple individual download requests
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BatchDownloadRequest {
+    /// List of individual download requests
+    pub requests: Vec<DownloadRequest>,
+}
+
+impl BatchDownloadRequest {
+    /// Create a new batch download request from a list of requests
+    pub fn new(requests: Vec<DownloadRequest>) -> Self {
+        Self { requests }
+    }
+
+    /// Add a download request to the batch
+    pub fn add_request(&mut self, request: DownloadRequest) {
+        self.requests.push(request);
+    }
+
+    /// Get the number of requests in the batch
+    pub fn len(&self) -> usize {
+        self.requests.len()
+    }
+
+    /// Check if the batch is empty
+    pub fn is_empty(&self) -> bool {
+        self.requests.is_empty()
+    }
+}
+
+/// Result of a batch download operation
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BatchDownloadResult {
+    /// Individual download results
+    pub results: Vec<DownloadResult>,
+
+    /// Total number of successful downloads
+    pub successful: usize,
+
+    /// Total number of failed downloads
+    pub failed: usize,
+
+    /// Total bytes downloaded
+    pub total_bytes: u64,
+}
+
+impl BatchDownloadResult {
+    /// Create a new batch download result from individual results
+    pub fn new(results: Vec<DownloadResult>) -> Self {
+        let successful = results.iter().filter(|r| r.success).count();
+        let failed = results.len() - successful;
+        let total_bytes = results.iter().map(|r| r.bytes).sum();
+
+        Self {
+            results,
+            successful,
+            failed,
+            total_bytes,
+        }
+    }
+
+    /// Get the success rate as a percentage (0.0 to 1.0)
+    pub fn success_rate(&self) -> f64 {
+        if self.results.is_empty() {
+            0.0
+        } else {
+            self.successful as f64 / self.results.len() as f64
+        }
+    }
+
+    /// Check if all downloads succeeded (and there was at least one)
+    pub fn is_all_success(&self) -> bool {
+        !self.results.is_empty() && self.failed == 0
+    }
+}
+
 /// Result of a paper read operation
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ReadResult {
@@ -340,5 +415,73 @@ impl ReadResult {
             success: false,
             error: Some(error.into()),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_batch_download_request_new() {
+        let requests = vec![
+            DownloadRequest::new("paper1", "/downloads"),
+            DownloadRequest::new("paper2", "/downloads"),
+        ];
+        let batch = BatchDownloadRequest::new(requests);
+        assert_eq!(batch.len(), 2);
+        assert!(!batch.is_empty());
+    }
+
+    #[test]
+    fn test_batch_download_request_add() {
+        let mut batch = BatchDownloadRequest::new(vec![]);
+        assert!(batch.is_empty());
+
+        batch.add_request(DownloadRequest::new("paper1", "/downloads"));
+        assert_eq!(batch.len(), 1);
+    }
+
+    #[test]
+    fn test_batch_download_result_new() {
+        let results = vec![
+            DownloadResult::success("/path/to/paper1.pdf", 1024),
+            DownloadResult::success("/path/to/paper2.pdf", 2048),
+            DownloadResult::error("Failed to download"),
+        ];
+
+        let batch = BatchDownloadResult::new(results);
+
+        assert_eq!(batch.successful, 2);
+        assert_eq!(batch.failed, 1);
+        assert_eq!(batch.total_bytes, 3072);
+        assert!((batch.success_rate() - 0.666).abs() < 0.001);
+        assert!(!batch.is_all_success());
+    }
+
+    #[test]
+    fn test_batch_download_result_all_success() {
+        let results = vec![
+            DownloadResult::success("/path/to/paper1.pdf", 1024),
+            DownloadResult::success("/path/to/paper2.pdf", 2048),
+        ];
+
+        let batch = BatchDownloadResult::new(results);
+
+        assert_eq!(batch.successful, 2);
+        assert_eq!(batch.failed, 0);
+        assert_eq!(batch.success_rate(), 1.0);
+        assert!(batch.is_all_success());
+    }
+
+    #[test]
+    fn test_batch_download_result_empty() {
+        let batch = BatchDownloadResult::new(vec![]);
+
+        assert_eq!(batch.successful, 0);
+        assert_eq!(batch.failed, 0);
+        assert_eq!(batch.total_bytes, 0);
+        assert_eq!(batch.success_rate(), 0.0);
+        assert!(!batch.is_all_success());
     }
 }

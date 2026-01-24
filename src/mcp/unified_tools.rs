@@ -6,6 +6,87 @@ use serde_json::Value;
 
 use super::tools::ToolHandler;
 
+/// Helper function to auto-detect the appropriate source for a paper ID
+fn auto_detect_source(
+    sources: &Arc<Vec<Arc<dyn crate::sources::Source>>>,
+    paper_id: &str,
+) -> Result<Arc<dyn crate::sources::Source>, String> {
+    let paper_id_lower = paper_id.to_lowercase();
+
+    // arXiv: arXiv:1234.5678 or numeric format like 1234.5678
+    if paper_id_lower.starts_with("arxiv:")
+        || (paper_id.len() > 4 && paper_id.chars().take(9).all(|c| c.is_numeric() || c == '.'))
+    {
+        return sources
+            .iter()
+            .find(|s| s.id() == "arxiv")
+            .cloned()
+            .ok_or_else(|| "arXiv source not available".to_string());
+    }
+
+    // PMC: PMC followed by digits
+    if paper_id_upper_start(paper_id, "PMC") {
+        return sources
+            .iter()
+            .find(|s| s.id() == "pmc")
+            .cloned()
+            .ok_or_else(|| "PMC source not available".to_string());
+    }
+
+    // HAL: hal- followed by digits
+    if paper_id_lower.starts_with("hal-") {
+        return sources
+            .iter()
+            .find(|s| s.id() == "hal")
+            .cloned()
+            .ok_or_else(|| "HAL source not available".to_string());
+    }
+
+    // IACR: format like 2023/1234
+    if paper_id.chars().filter(|&c| c == '/').count() == 1 {
+        return sources
+            .iter()
+            .find(|s| s.id() == "iacr")
+            .cloned()
+            .ok_or_else(|| "IACR source not available".to_string());
+    }
+
+    // DOI format (10.xxxx/xxxxxx) - prefer Semantic Scholar for DOI lookup
+    if paper_id.starts_with("10.") {
+        // First, explicitly check for Semantic Scholar (preferred)
+        if let Some(source) = sources
+            .iter()
+            .find(|s| s.id() == "semantic" && s.supports_doi_lookup())
+        {
+            return Ok(Arc::clone(source));
+        }
+        // Fallback to any DOI-capable source
+        if let Some(source) = sources.iter().find(|s| s.supports_doi_lookup()) {
+            return Ok(Arc::clone(source));
+        }
+    }
+
+    // Default: try arXiv first, then semantic
+    if let Some(source) = sources.iter().find(|s| s.id() == "arxiv") {
+        return Ok(Arc::clone(source));
+    }
+
+    if let Some(source) = sources.iter().find(|s| s.id() == "semantic") {
+        return Ok(Arc::clone(source));
+    }
+
+    Err("Could not auto-detect source. Please specify source explicitly.".to_string())
+}
+
+/// Helper function to check if a string starts with a specific prefix (case-insensitive)
+fn paper_id_upper_start(paper_id: &str, prefix: &str) -> bool {
+    if paper_id.len() < prefix.len() {
+        return false;
+    }
+
+    paper_id[..prefix.len()].to_uppercase() == prefix
+}
+
 /// Handler for searching papers across all or specific sources
 #[derive(Debug)]
 pub struct SearchPapersHandler {
@@ -94,6 +175,8 @@ impl ToolHandler for SearchByAuthorHandler {
             .and_then(|v| v.as_u64())
             .unwrap_or(10) as usize;
 
+        let year = args.get("year").and_then(|v| v.as_str());
+
         let source_filter = args.get("source").and_then(|v| v.as_str());
 
         let mut all_results = Vec::new();
@@ -111,7 +194,7 @@ impl ToolHandler for SearchByAuthorHandler {
                 continue;
             }
 
-            match source.search_by_author(author, max_results).await {
+            match source.search_by_author(author, max_results, year).await {
                 Ok(response) => {
                     all_results.extend(response.papers);
                 }
@@ -393,85 +476,19 @@ impl GetPaperHandler {
         &self,
         paper_id: &str,
         source_override: Option<&str>,
-    ) -> Result<&Arc<dyn crate::sources::Source>, String> {
+    ) -> Result<Arc<dyn crate::sources::Source>, String> {
         // If source is explicitly specified, use it
         if let Some(source_id) = source_override {
             return self
                 .sources
                 .iter()
                 .find(|s| s.id() == source_id)
+                .cloned()
                 .ok_or_else(|| format!("Source '{}' not found", source_id));
         }
 
-        // Auto-detect based on paper ID format
-        let paper_id_lower = paper_id.to_lowercase();
-
-        // arXiv: arXiv:1234.5678 or numeric format like 1234.5678
-        if paper_id_lower.starts_with("arxiv:")
-            || (paper_id.len() > 4 && paper_id.chars().take(9).all(|c| c.is_numeric() || c == '.'))
-        {
-            return self
-                .sources
-                .iter()
-                .find(|s| s.id() == "arxiv")
-                .ok_or_else(|| "arXiv source not available".to_string());
-        }
-
-        // PMC: PMC followed by digits
-        if paper_id_upper_start(paper_id, "PMC") {
-            return self
-                .sources
-                .iter()
-                .find(|s| s.id() == "pmc")
-                .ok_or_else(|| "PMC source not available".to_string());
-        }
-
-        // HAL: hal- followed by digits
-        if paper_id_lower.starts_with("hal-") {
-            return self
-                .sources
-                .iter()
-                .find(|s| s.id() == "hal")
-                .ok_or_else(|| "HAL source not available".to_string());
-        }
-
-        // IACR: format like 2023/1234
-        if paper_id.chars().filter(|&c| c == '/').count() == 1 {
-            return self
-                .sources
-                .iter()
-                .find(|s| s.id() == "iacr")
-                .ok_or_else(|| "IACR source not available".to_string());
-        }
-
-        // DOI format (10.xxxx/xxxxxx) - try sources with DOI lookup
-        if paper_id.starts_with("10.") {
-            for source in self.sources.iter() {
-                if source.supports_doi_lookup() {
-                    // Return first source with DOI lookup (prefer semantic)
-                    if source.id() == "semantic" {
-                        return Ok(source);
-                    }
-                }
-            }
-            // Fallback to any DOI-capable source
-            for source in self.sources.iter() {
-                if source.supports_doi_lookup() {
-                    return Ok(source);
-                }
-            }
-        }
-
-        // Default: try arXiv first, then semantic
-        if let Some(source) = self.sources.iter().find(|s| s.id() == "arxiv") {
-            return Ok(source);
-        }
-
-        if let Some(source) = self.sources.iter().find(|s| s.id() == "semantic") {
-            return Ok(source);
-        }
-
-        Err("Could not auto-detect source. Please specify source explicitly.".to_string())
+        // Use shared auto-detection logic
+        auto_detect_source(&self.sources, paper_id)
     }
 }
 
@@ -480,61 +497,19 @@ impl DownloadPaperHandler {
         &self,
         paper_id: &str,
         source_override: Option<&str>,
-    ) -> Result<&Arc<dyn crate::sources::Source>, String> {
-        // Same logic as GetPaperHandler
+    ) -> Result<Arc<dyn crate::sources::Source>, String> {
+        // If source is explicitly specified, use it
         if let Some(source_id) = source_override {
             return self
                 .sources
                 .iter()
                 .find(|s| s.id() == source_id)
+                .cloned()
                 .ok_or_else(|| format!("Source '{}' not found", source_id));
         }
 
-        let paper_id_lower = paper_id.to_lowercase();
-
-        if paper_id_lower.starts_with("arxiv:")
-            || (paper_id.len() > 4 && paper_id.chars().take(9).all(|c| c.is_numeric() || c == '.'))
-        {
-            return self
-                .sources
-                .iter()
-                .find(|s| s.id() == "arxiv")
-                .ok_or_else(|| "arXiv source not available".to_string());
-        }
-
-        if paper_id_upper_start(paper_id, "PMC") {
-            return self
-                .sources
-                .iter()
-                .find(|s| s.id() == "pmc")
-                .ok_or_else(|| "PMC source not available".to_string());
-        }
-
-        if paper_id_lower.starts_with("hal-") {
-            return self
-                .sources
-                .iter()
-                .find(|s| s.id() == "hal")
-                .ok_or_else(|| "HAL source not available".to_string());
-        }
-
-        if paper_id.chars().filter(|&c| c == '/').count() == 1 {
-            return self
-                .sources
-                .iter()
-                .find(|s| s.id() == "iacr")
-                .ok_or_else(|| "IACR source not available".to_string());
-        }
-
-        if let Some(source) = self.sources.iter().find(|s| s.id() == "arxiv") {
-            return Ok(source);
-        }
-
-        if let Some(source) = self.sources.iter().find(|s| s.id() == "semantic") {
-            return Ok(source);
-        }
-
-        Err("Could not auto-detect source. Please specify source explicitly.".to_string())
+        // Use shared auto-detection logic
+        auto_detect_source(&self.sources, paper_id)
     }
 }
 
@@ -543,71 +518,20 @@ impl ReadPaperHandler {
         &self,
         paper_id: &str,
         source_override: Option<&str>,
-    ) -> Result<&Arc<dyn crate::sources::Source>, String> {
-        // Same logic as GetPaperHandler
+    ) -> Result<Arc<dyn crate::sources::Source>, String> {
+        // If source is explicitly specified, use it
         if let Some(source_id) = source_override {
             return self
                 .sources
                 .iter()
                 .find(|s| s.id() == source_id)
+                .cloned()
                 .ok_or_else(|| format!("Source '{}' not found", source_id));
         }
 
-        let paper_id_lower = paper_id.to_lowercase();
-
-        if paper_id_lower.starts_with("arxiv:")
-            || (paper_id.len() > 4 && paper_id.chars().take(9).all(|c| c.is_numeric() || c == '.'))
-        {
-            return self
-                .sources
-                .iter()
-                .find(|s| s.id() == "arxiv")
-                .ok_or_else(|| "arXiv source not available".to_string());
-        }
-
-        if paper_id_upper_start(paper_id, "PMC") {
-            return self
-                .sources
-                .iter()
-                .find(|s| s.id() == "pmc")
-                .ok_or_else(|| "PMC source not available".to_string());
-        }
-
-        if paper_id_lower.starts_with("hal-") {
-            return self
-                .sources
-                .iter()
-                .find(|s| s.id() == "hal")
-                .ok_or_else(|| "HAL source not available".to_string());
-        }
-
-        if paper_id.chars().filter(|&c| c == '/').count() == 1 {
-            return self
-                .sources
-                .iter()
-                .find(|s| s.id() == "iacr")
-                .ok_or_else(|| "IACR source not available".to_string());
-        }
-
-        if let Some(source) = self.sources.iter().find(|s| s.id() == "arxiv") {
-            return Ok(source);
-        }
-
-        if let Some(source) = self.sources.iter().find(|s| s.id() == "semantic") {
-            return Ok(source);
-        }
-
-        Err("Could not auto-detect source. Please specify source explicitly.".to_string())
+        // Use shared auto-detection logic
+        auto_detect_source(&self.sources, paper_id)
     }
-}
-
-/// Helper function to check if a string starts with a specific prefix (case-insensitive)
-fn paper_id_upper_start(paper_id: &str, prefix: &str) -> bool {
-    if paper_id.len() < prefix.len() {
-        return false;
-    }
-
-    paper_id[..prefix.len()].to_uppercase() == prefix
 }
 
 #[cfg(test)]

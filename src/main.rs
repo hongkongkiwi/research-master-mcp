@@ -11,7 +11,7 @@ use research_master_mcp::utils::{
 };
 use std::io::IsTerminal;
 use std::path::PathBuf;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
@@ -557,7 +557,8 @@ async fn main() -> Result<()> {
             search_query.fetch_details = fetch_details;
 
             let sources = get_sources(&registry, source, SourceCapabilities::SEARCH);
-            let mut all_papers = Vec::new();
+            let all_papers = Arc::new(Mutex::new(Vec::new()));
+            let quiet = cli.quiet;
 
             // Initialize cache if not disabled
             let cache = if cli.no_cache {
@@ -568,58 +569,97 @@ async fn main() -> Result<()> {
                 Some(c)
             };
 
-            for src in sources {
-                let source_id = src.id();
+            // Create a vector to hold all spawned tasks
+            let mut handles = Vec::new();
 
-                // Check cache first
-                if let Some(ref cache_service) = cache {
-                    match cache_service.get_search(&search_query, source_id) {
-                        research_master_mcp::utils::CacheResult::Hit(response) => {
-                            if !cli.quiet {
+            for src in sources {
+                let src = Arc::clone(src);
+                let search_query = search_query.clone();
+                let cache = cache.clone();
+
+                // Spawn a task for each source
+                let handle = tokio::spawn(async move {
+                    let source_id = src.id();
+                    let mut papers = Vec::new();
+
+                    // Check cache first
+                    if let Some(ref cache_service) = cache {
+                        match cache_service.get_search(&search_query, source_id) {
+                            research_master_mcp::utils::CacheResult::Hit(response) => {
+                                if !quiet {
+                                    eprintln!(
+                                        "[CACHE HIT] Found {} papers from {}",
+                                        response.papers.len(),
+                                        source_id
+                                    );
+                                }
+                                return response.papers;
+                            }
+                            research_master_mcp::utils::CacheResult::Expired => {
+                                if !quiet {
+                                    eprintln!(
+                                        "[CACHE EXPIRED] Fetching fresh results from {}",
+                                        source_id
+                                    );
+                                }
+                            }
+                            research_master_mcp::utils::CacheResult::Miss => {
+                                if !quiet {
+                                    eprintln!("[CACHE MISS] Fetching from {}", source_id);
+                                }
+                            }
+                        }
+                    }
+
+                    // Fetch from API
+                    match src.search(&search_query).await {
+                        Ok(response) => {
+                            if !quiet {
                                 eprintln!(
-                                    "[CACHE HIT] Found {} papers from {}",
+                                    "Found {} papers from {}",
                                     response.papers.len(),
                                     source_id
                                 );
                             }
-                            all_papers.extend(response.papers);
-                            continue;
-                        }
-                        research_master_mcp::utils::CacheResult::Expired => {
-                            if !cli.quiet {
-                                eprintln!(
-                                    "[CACHE EXPIRED] Fetching fresh results from {}",
-                                    source_id
-                                );
+                            // Cache the result
+                            if let Some(ref cache_service) = cache {
+                                cache_service.set_search(source_id, &search_query, &response);
                             }
+                            papers = response.papers;
                         }
-                        research_master_mcp::utils::CacheResult::Miss => {
-                            if !cli.quiet {
-                                eprintln!("[CACHE MISS] Fetching from {}", source_id);
+                        Err(e) => {
+                            if !quiet {
+                                eprintln!("Error searching {}: {}", source_id, e);
                             }
                         }
                     }
-                }
 
-                // Fetch from API
-                match src.search(&search_query).await {
-                    Ok(response) => {
-                        if !cli.quiet {
-                            eprintln!("Found {} papers from {}", response.papers.len(), source_id);
-                        }
-                        // Cache the result
-                        if let Some(ref cache_service) = cache {
-                            cache_service.set_search(source_id, &search_query, &response);
-                        }
-                        all_papers.extend(response.papers);
+                    papers
+                });
+
+                handles.push(handle);
+            }
+
+            // Wait for all tasks to complete and collect results
+            for handle in handles {
+                match handle.await {
+                    Ok(papers) => {
+                        let mut all_papers = all_papers.lock().unwrap();
+                        all_papers.extend(papers);
                     }
                     Err(e) => {
-                        if !cli.quiet {
-                            eprintln!("Error searching {}: {}", source_id, e);
+                        if !quiet {
+                            eprintln!("Task error: {}", e);
                         }
                     }
                 }
             }
+
+            // Get the collected papers
+            let mut all_papers = {
+                let all_papers = all_papers.lock().unwrap();
+                all_papers.clone()
+            };
 
             if dedup {
                 let strategy = match dedup_strategy.unwrap_or(DedupStrategy::First) {
@@ -637,28 +677,70 @@ async fn main() -> Result<()> {
             author,
             source,
             max_results,
-            year: _,
+            year,
             dedup,
             dedup_strategy,
         }) => {
             let sources = get_sources(&registry, source, SourceCapabilities::AUTHOR_SEARCH);
-            let mut all_papers = Vec::new();
+            let all_papers = Arc::new(Mutex::new(Vec::new()));
+            let quiet = cli.quiet;
+
+            // Create a vector to hold all spawned tasks
+            let mut handles = Vec::new();
 
             for src in sources {
-                match src.search_by_author(&author, max_results).await {
-                    Ok(response) => {
-                        if !cli.quiet {
-                            eprintln!("Found {} papers from {}", response.papers.len(), src.id());
+                let src = Arc::clone(src);
+                let author = author.clone();
+                let year = year.clone();
+
+                // Spawn a task for each source
+                let handle = tokio::spawn(async move {
+                    match src
+                        .search_by_author(&author, max_results, year.as_deref())
+                        .await
+                    {
+                        Ok(response) => {
+                            if !quiet {
+                                eprintln!(
+                                    "Found {} papers from {}",
+                                    response.papers.len(),
+                                    src.id()
+                                );
+                            }
+                            response.papers
                         }
-                        all_papers.extend(response.papers);
+                        Err(e) => {
+                            if !quiet {
+                                eprintln!("Error searching author in {}: {}", src.id(), e);
+                            }
+                            Vec::new()
+                        }
+                    }
+                });
+
+                handles.push(handle);
+            }
+
+            // Wait for all tasks to complete and collect results
+            for handle in handles {
+                match handle.await {
+                    Ok(papers) => {
+                        let mut all_papers = all_papers.lock().unwrap();
+                        all_papers.extend(papers);
                     }
                     Err(e) => {
-                        if !cli.quiet {
-                            eprintln!("Error searching author in {}: {}", src.id(), e);
+                        if !quiet {
+                            eprintln!("Task error: {}", e);
                         }
                     }
                 }
             }
+
+            // Get the collected papers
+            let mut all_papers = {
+                let all_papers = all_papers.lock().unwrap();
+                all_papers.clone()
+            };
 
             if dedup {
                 let strategy = match dedup_strategy.unwrap_or(DedupStrategy::First) {

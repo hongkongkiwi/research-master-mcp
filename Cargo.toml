@@ -68,6 +68,7 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
 # Configuration
 config = "0.15"
+toml = "0.8"
 
 # Text similarity for deduplication
 strsim = "0.11"
@@ -86,6 +87,10 @@ lopdf = "0.34"
 # Rate limiting
 governor = "0.6"
 nonzero_ext = "0.3"
+
+# Async streaming
+async-stream = "0.3"
+futures-util = "0.3"
 
 # Caching
 md5 = "0.7"

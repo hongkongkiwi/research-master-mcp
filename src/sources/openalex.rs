@@ -195,6 +195,7 @@ impl Source for OpenAlexSource {
         &self,
         author: &str,
         max_results: usize,
+        year: Option<&str>,
     ) -> Result<SearchResponse, SourceError> {
         let url = format!("/authors?search={}&per-page=1", urlencoding::encode(author));
 
@@ -217,7 +218,29 @@ impl Source for OpenAlexSource {
             .ok_or_else(|| SourceError::NotFound("Author not found".to_string()))?;
 
         // Get papers by author
-        let papers_url = format!("/authors/{}/works?per-page={}", author_id, max_results);
+        let mut papers_url = format!("/authors/{}/works?per-page={}", author_id, max_results);
+
+        // Add year filter if provided (OpenAlex uses "from_publication_date" and "to_publication_date")
+        if let Some(y) = year {
+            // Handle year ranges like "2018-2022", "2010-", "-2015"
+            if y.contains('-') {
+                let parts: Vec<&str> = y.split('-').collect();
+                if parts.len() == 2 {
+                    if !parts[0].is_empty() {
+                        papers_url.push_str(&format!("&from_publication_date={}-01-01", parts[0]));
+                    }
+                    if !parts[1].is_empty() {
+                        papers_url.push_str(&format!("&to_publication_date={}-12-31", parts[1]));
+                    }
+                }
+            } else if let Ok(year_num) = y.parse::<i32>() {
+                // Single year - use from/to publication date for exact year
+                papers_url.push_str(&format!(
+                    "&from_publication_date={}-01-01&to_publication_date={}-12-31",
+                    year_num, year_num
+                ));
+            }
+        }
 
         let papers_response = self
             .client
@@ -560,5 +583,130 @@ mod tests {
     fn test_openalex_name() {
         let source = OpenAlexSource::new().unwrap();
         assert_eq!(source.name(), "OpenAlex");
+    }
+
+    #[test]
+    fn test_parse_search_response() {
+        // Mock OpenAlex search API response
+        let mock_response = r#"
+        {
+            "results": [
+                {
+                    "id": "https://openalex.org/W1234567890",
+                    "title": "Deep Learning for Computer Vision",
+                    "publication_year": 2023,
+                    "cited_by_count": 50,
+                    "doi": "https://doi.org/10.1234/cvpr2023",
+                    "abstract": "A comprehensive survey of deep learning techniques.",
+                    "authorships": [
+                        {"author": {"display_name": "Alice Chen"}},
+                        {"author": {"display_name": "Bob Smith"}}
+                    ]
+                }
+            ],
+            "meta": {"count": 1, "db_response_time_ms": 10}
+        }
+        "#;
+
+        // Parse the mock response
+        let parse_result: Result<WorksResponse, serde_json::Error> =
+            serde_json::from_str(mock_response);
+        assert!(parse_result.is_ok(), "Mock response should be valid JSON");
+
+        // Verify parsed data
+        let response = parse_result.unwrap();
+        assert_eq!(response.results.len(), 1);
+
+        let paper = &response.results[0];
+        assert_eq!(paper.title, "Deep Learning for Computer Vision");
+        assert_eq!(paper.publication_year, Some(2023));
+        assert_eq!(paper.cited_by_count, Some(50));
+        assert_eq!(paper.authorships.len(), 2);
+    }
+
+    #[test]
+    fn test_parse_paper_details() {
+        // Mock OpenAlex paper details response
+        let mock_response = r#"
+        {
+            "id": "https://openalex.org/W9876543210",
+            "title": "Natural Language Processing Advances",
+            "publication_year": 2024,
+            "cited_by_count": 100,
+            "doi": "https://doi.org/10.5678/acl2024",
+            "abstract": "New advances in NLP and transformers.",
+            "authorships": [
+                {"author": {"display_name": "Carol Davis"}}
+            ]
+        }
+        "#;
+
+        let parse_result: Result<WorkResponse, serde_json::Error> =
+            serde_json::from_str(mock_response);
+        assert!(parse_result.is_ok(), "Should parse valid JSON");
+
+        let paper = parse_result.unwrap();
+        assert_eq!(paper.title, "Natural Language Processing Advances");
+        assert_eq!(paper.publication_year, Some(2024));
+        assert_eq!(paper.cited_by_count, Some(100));
+        assert_eq!(paper.authorships.len(), 1);
+    }
+
+    #[test]
+    fn test_parse_citations_response() {
+        // Mock citations response (uses same structure as search)
+        let mock_response = r#"
+        {
+            "results": [
+                {
+                    "id": "https://openalex.org/W111",
+                    "title": "Citing Paper 1",
+                    "publication_year": 2024,
+                    "cited_by_count": 10,
+                    "authorships": [{"author": {"display_name": "Author One"}}]
+                },
+                {
+                    "id": "https://openalex.org/W222",
+                    "title": "Citing Paper 2",
+                    "publication_year": 2023,
+                    "cited_by_count": 5,
+                    "authorships": [{"author": {"display_name": "Author Two"}}]
+                }
+            ],
+            "meta": {"count": 2}
+        }
+        "#;
+
+        let parse_result: Result<WorksResponse, serde_json::Error> =
+            serde_json::from_str(mock_response);
+        assert!(parse_result.is_ok(), "Should parse valid citations JSON");
+
+        let citations = parse_result.unwrap();
+        assert_eq!(citations.results.len(), 2);
+        assert_eq!(citations.results[0].title, "Citing Paper 1");
+        assert_eq!(citations.results[1].title, "Citing Paper 2");
+    }
+
+    #[test]
+    fn test_parse_author_search_response() {
+        // Mock author search response
+        let mock_response = r#"
+        {
+            "results": [
+                {"id": "https://openalex.org/A1234567890"},
+                {"id": "https://openalex.org/A0987654321"}
+            ],
+            "meta": {"count": 2}
+        }
+        "#;
+
+        let parse_result: Result<AuthorsResponse, serde_json::Error> =
+            serde_json::from_str(mock_response);
+        assert!(parse_result.is_ok(), "Should parse valid authors JSON");
+
+        let authors = parse_result.unwrap();
+        assert_eq!(authors.results.len(), 2);
+        assert!(authors.results[0].id.is_some());
+        assert!(authors.results[1].id.is_some());
     }
 }

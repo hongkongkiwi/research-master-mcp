@@ -1,6 +1,6 @@
 //! Deduplication utilities for papers across sources.
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use strsim::jaro_winkler;
 
 use crate::models::Paper;
@@ -170,6 +170,138 @@ pub fn deduplicate_papers(papers: Vec<Paper>, strategy: DuplicateStrategy) -> Ve
         .filter(|(i, _)| !to_remove.contains(i))
         .map(|(_, p)| p)
         .collect()
+}
+
+/// Fast hash-based deduplication for papers
+///
+/// Uses a two-pass algorithm for O(n) complexity on exact matches:
+/// 1. First pass: Hash-based matching for DOIs and normalized titles (O(n))
+/// 2. Second pass: Similarity check only for papers not matched by hash
+///
+/// This is significantly faster than the O(n²) similarity-only approach
+/// for large paper lists with many exact matches.
+pub fn fast_deduplicate_papers(papers: Vec<Paper>, strategy: DuplicateStrategy) -> Vec<Paper> {
+    if papers.len() <= 1 {
+        return papers;
+    }
+
+    // Maps for O(1) lookups
+    let mut doi_map: HashMap<String, Vec<usize>> = HashMap::new();
+    let mut title_map: HashMap<String, Vec<usize>> = HashMap::new();
+
+    // First pass: build hash maps (O(n))
+    for (idx, paper) in papers.iter().enumerate() {
+        // Index by lowercase DOI
+        if let Some(ref doi) = paper.doi {
+            let doi_key = doi.to_lowercase();
+            doi_map.entry(doi_key).or_default().push(idx);
+        }
+
+        // Index by normalized title
+        let normalized = normalize_title(&paper.title.to_lowercase());
+        title_map.entry(normalized).or_default().push(idx);
+    }
+
+    // Track duplicates using a HashSet for O(1) lookups
+    let mut duplicates: HashSet<usize> = HashSet::new();
+
+    // Process DOI matches (strongest signal) - O(n)
+    for (_, indices) in doi_map.into_iter() {
+        if indices.len() > 1 {
+            match strategy {
+                DuplicateStrategy::First => {
+                    for idx in indices.iter().skip(1) {
+                        duplicates.insert(*idx);
+                    }
+                }
+                DuplicateStrategy::Last => {
+                    for idx in indices.iter().take(indices.len() - 1) {
+                        duplicates.insert(*idx);
+                    }
+                }
+                DuplicateStrategy::Mark => {
+                    // Keep all
+                }
+            }
+        }
+    }
+
+    // Process title matches for papers not already marked as DOI duplicates
+    // Only compare papers from different sources to avoid false positives
+    for (_, indices) in title_map.into_iter() {
+        if indices.len() > 1 {
+            let mut to_mark: Vec<usize> = Vec::new();
+
+            // Check each pair
+            for i in 0..indices.len() {
+                if duplicates.contains(&indices[i]) {
+                    continue;
+                }
+
+                for j in (i + 1)..indices.len() {
+                    if duplicates.contains(&indices[j]) {
+                        continue;
+                    }
+
+                    let paper_i = &papers[indices[i]];
+                    let paper_j = &papers[indices[j]];
+
+                    // Skip same source
+                    if paper_i.source == paper_j.source {
+                        continue;
+                    }
+
+                    // Check if already marked as DOI duplicate
+                    if let (Some(doi_i), Some(doi_j)) = (&paper_i.doi, &paper_j.doi) {
+                        if doi_i.to_lowercase() == doi_j.to_lowercase() {
+                            continue; // Already handled by DOI matching
+                        }
+                    }
+
+                    // Additional similarity check for confidence
+                    if title_similarity_confidence(paper_i, paper_j) {
+                        match strategy {
+                            DuplicateStrategy::First => to_mark.push(indices[j]),
+                            DuplicateStrategy::Last => to_mark.push(indices[i]),
+                            DuplicateStrategy::Mark => {}
+                        }
+                    }
+                }
+            }
+
+            // Add to duplicates
+            for idx in to_mark {
+                duplicates.insert(idx);
+            }
+        }
+    }
+
+    // Filter papers
+    papers
+        .into_iter()
+        .enumerate()
+        .filter(|(i, _)| !duplicates.contains(i))
+        .map(|(_, p)| p)
+        .collect()
+}
+
+/// Calculate confidence that two papers are the same based on multiple signals
+fn title_similarity_confidence(a: &Paper, b: &Paper) -> bool {
+    // High title similarity
+    let title_a = a.title.to_lowercase().trim().to_string();
+    let title_b = b.title.to_lowercase().trim().to_string();
+    let similarity = jaro_winkler(&title_a, &title_b);
+
+    if similarity >= 0.95 && authors_match(a, b) {
+        return true;
+    }
+
+    // Exact normalized title match with author overlap
+    if normalize_title(&title_a) == normalize_title(&title_b) && authors_match(a, b) {
+        return true;
+    }
+
+    false
 }
 
 #[cfg(test)]
@@ -409,5 +541,142 @@ mod tests {
         let deduped = deduplicate_papers(papers.clone(), DuplicateStrategy::First);
         // Without authors, should still match on title
         assert_eq!(deduped.len(), 1);
+    }
+
+    // Tests for fast_deduplicate_papers
+
+    #[test]
+    fn test_fast_deduplicate_by_doi() {
+        let papers = vec![
+            PaperBuilder::new("1", "Test Paper", "https://arxiv.org/1", SourceType::Arxiv)
+                .doi("10.1234/test")
+                .build(),
+            PaperBuilder::new(
+                "2",
+                "Test Paper",
+                "https://semantic.org/2",
+                SourceType::SemanticScholar,
+            )
+            .doi("10.1234/test")
+            .build(),
+        ];
+
+        let deduped = fast_deduplicate_papers(papers, DuplicateStrategy::First);
+        assert_eq!(deduped.len(), 1);
+        assert_eq!(deduped[0].paper_id, "1");
+    }
+
+    #[test]
+    fn test_fast_deduplicate_by_title() {
+        let papers = vec![
+            PaperBuilder::new(
+                "1",
+                "Machine Learning for Cats",
+                "https://arxiv.org/1",
+                SourceType::Arxiv,
+            )
+            .authors("John Doe")
+            .build(),
+            PaperBuilder::new(
+                "2",
+                "Machine Learning for Cats",
+                "https://semantic.org/2",
+                SourceType::SemanticScholar,
+            )
+            .authors("John Doe; Jane Smith")
+            .build(),
+        ];
+
+        let deduped = fast_deduplicate_papers(papers, DuplicateStrategy::First);
+        assert_eq!(deduped.len(), 1);
+    }
+
+    #[test]
+    fn test_fast_deduplicate_keep_last() {
+        let papers = vec![
+            PaperBuilder::new("1", "Test Paper", "https://arxiv.org/1", SourceType::Arxiv)
+                .doi("10.1234/test")
+                .build(),
+            PaperBuilder::new(
+                "2",
+                "Test Paper",
+                "https://semantic.org/2",
+                SourceType::SemanticScholar,
+            )
+            .doi("10.1234/test")
+            .build(),
+        ];
+
+        let deduped = fast_deduplicate_papers(papers, DuplicateStrategy::Last);
+        assert_eq!(deduped.len(), 1);
+        assert_eq!(deduped[0].paper_id, "2");
+    }
+
+    #[test]
+    fn test_fast_deduplicate_empty() {
+        let papers = vec![];
+        let deduped = fast_deduplicate_papers(papers, DuplicateStrategy::First);
+        assert_eq!(deduped.len(), 0);
+    }
+
+    #[test]
+    fn test_fast_deduplicate_single() {
+        let papers =
+            vec![
+                PaperBuilder::new("1", "Test Paper", "https://arxiv.org/1", SourceType::Arxiv)
+                    .build(),
+            ];
+
+        let deduped = fast_deduplicate_papers(papers, DuplicateStrategy::First);
+        assert_eq!(deduped.len(), 1);
+    }
+
+    #[test]
+    fn test_fast_no_duplicates_different_titles() {
+        let papers = vec![
+            PaperBuilder::new("1", "Paper A", "https://arxiv.org/1", SourceType::Arxiv)
+                .authors("John Doe")
+                .build(),
+            PaperBuilder::new(
+                "2",
+                "Paper B",
+                "https://semantic.org/2",
+                SourceType::SemanticScholar,
+            )
+            .authors("John Doe")
+            .build(),
+        ];
+
+        let deduped = fast_deduplicate_papers(papers, DuplicateStrategy::First);
+        assert_eq!(deduped.len(), 2);
+    }
+
+    #[test]
+    fn test_fast_deduplicate_multiple_sources() {
+        let papers = vec![
+            PaperBuilder::new("1", "Test Paper", "https://arxiv.org/1", SourceType::Arxiv)
+                .doi("10.1234/test")
+                .build(),
+            PaperBuilder::new(
+                "2",
+                "Test Paper",
+                "https://semantic.org/2",
+                SourceType::SemanticScholar,
+            )
+            .doi("10.1234/test")
+            .build(),
+            PaperBuilder::new(
+                "3",
+                "Test Paper",
+                "https://openalex.org/3",
+                SourceType::OpenAlex,
+            )
+            .doi("10.1234/test")
+            .build(),
+        ];
+
+        let deduped = fast_deduplicate_papers(papers, DuplicateStrategy::First);
+        assert_eq!(deduped.len(), 1);
+        assert_eq!(deduped[0].paper_id, "1");
     }
 }

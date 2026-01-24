@@ -42,19 +42,29 @@
 //! ```
 
 mod cache;
+mod circuit_breaker;
 mod dedup;
 mod http;
 mod pdf;
+mod progress;
 mod retry;
+mod streaming;
 mod update;
+mod validate;
+
+pub use streaming::{
+    ConcurrentPaperStream, FilterByYearStream, PaperStream, SkipStream, TakeStream,
+};
 
 pub use cache::{CacheResult, CacheService, CacheStats};
-pub use dedup::{deduplicate_papers, find_duplicates, DuplicateStrategy};
+pub use circuit_breaker::{CircuitBreaker, CircuitBreakerManager, CircuitResult, CircuitState};
+pub use dedup::{deduplicate_papers, fast_deduplicate_papers, find_duplicates, DuplicateStrategy};
 pub use http::{HttpClient, RateLimitedRequestBuilder};
 pub use pdf::{
     extract_text, extract_text_simple, get_extraction_info, has_poppler, has_tesseract,
     ExtractionInfo, ExtractionMethod, PdfExtractError,
 };
+pub use progress::{ProgressReporter, SharedProgress};
 pub use retry::{
     api_retry_config, strict_rate_limit_retry_config, with_retry, with_retry_detailed, RetryConfig,
     RetryResult, TransientError,
@@ -64,4 +74,7 @@ pub use update::{
     fetch_and_verify_sha256, fetch_latest_release, fetch_sha256_signature, find_asset_for_platform,
     get_current_target, get_update_instructions, replace_binary, verify_gpg_signature,
     verify_sha256, InstallationMethod, ReleaseAsset, ReleaseInfo,
+};
+pub use validate::{
+    sanitize_filename, sanitize_paper_id, validate_doi, validate_url, ValidationError,
 };

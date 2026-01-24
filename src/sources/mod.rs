@@ -113,6 +113,10 @@ mod worldwidescience;
 #[cfg(feature = "source-zenodo")]
 mod zenodo;
 
+pub mod mock;
+
+pub use mock::MockSource;
+
 pub use registry::{SourceCapabilities, SourceRegistry};
 
 use crate::models::{
@@ -187,6 +191,7 @@ pub trait Source: Send + Sync + std::fmt::Debug {
         &self,
         _author: &str,
         _max_results: usize,
+        _year: Option<&str>,
     ) -> Result<SearchResponse, SourceError> {
         Err(SourceError::NotImplemented)
     }

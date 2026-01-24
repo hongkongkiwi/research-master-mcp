@@ -39,6 +39,6 @@ mod search;
 
 pub use paper::{Paper, PaperBuilder, SourceType};
 pub use search::{
-    CitationRequest, DownloadRequest, DownloadResult, ReadRequest, ReadResult, SearchQuery,
-    SearchResponse, SortBy, SortOrder,
+    BatchDownloadRequest, BatchDownloadResult, CitationRequest, DownloadRequest, DownloadResult,
+    ReadRequest, ReadResult, SearchQuery, SearchResponse, SortBy, SortOrder,
 };

@@ -1,5 +1,7 @@
 //! Configuration management.
 
+mod file_config;
+
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
@@ -133,6 +135,12 @@ pub struct SourceConfig {
     /// Format: source_id:proxy_url (e.g., "semantic:https://proxy:8080")
     #[serde(default)]
     pub proxy_https: Option<String>,
+
+    /// Per-source rate limits (requests per second)
+    /// Format: source_id:rate (e.g., "semantic:0.5,arxiv:5")
+    /// Environment variable: RESEARCH_MASTER_RATE_LIMITS
+    #[serde(default)]
+    pub rate_limits: Option<String>,
 }
 
 impl Default for SourceConfig {
@@ -148,6 +156,7 @@ impl SourceConfig {
             disabled_sources: std::env::var("RESEARCH_MASTER_DISABLED_SOURCES").ok(),
             proxy_http: std::env::var("RESEARCH_MASTER_PROXY_HTTP").ok(),
             proxy_https: std::env::var("RESEARCH_MASTER_PROXY_HTTPS").ok(),
+            rate_limits: std::env::var("RESEARCH_MASTER_RATE_LIMITS").ok(),
         }
     }
 
@@ -157,7 +166,28 @@ impl SourceConfig {
             disabled_sources: None,
             proxy_http: None,
             proxy_https: None,
+            rate_limits: None,
         }
+    }
+
+    /// Parse per-source rate limits from config string
+    /// Format: "source1:rate1,source2:rate2"
+    /// Example: "semantic:0.5,arxiv:5,openalex:2"
+    pub fn parse_rate_limits(&self) -> std::collections::HashMap<String, f32> {
+        let mut limits = std::collections::HashMap::new();
+
+        if let Some(ref limits_str) = self.rate_limits {
+            for part in limits_str.split(',') {
+                let parts: Vec<&str> = part.split(':').collect();
+                if parts.len() == 2 {
+                    if let Ok(rate) = parts[1].parse::<f32>() {
+                        limits.insert(parts[0].trim().to_string(), rate);
+                    }
+                }
+            }
+        }
+
+        limits
     }
 }
 
@@ -382,6 +412,9 @@ pub fn find_config_file() -> Option<PathBuf> {
     None
 }
 
+pub use file_config::ConfigFile;
+pub use file_config::ConfigFileError;
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -391,5 +424,44 @@ mod tests {
         let config = Config::default();
         assert!(config.downloads.organize_by_source);
         assert_eq!(config.rate_limits.default_requests_per_second, 5.0);
+    }
+
+    #[test]
+    fn test_parse_rate_limits() {
+        let source_config = SourceConfig {
+            rate_limits: Some("semantic:0.5,arxiv:5,openalex:2.5".to_string()),
+            ..Default::default()
+        };
+
+        let limits = source_config.parse_rate_limits();
+        assert_eq!(limits.get("semantic").copied(), Some(0.5));
+        assert_eq!(limits.get("arxiv").copied(), Some(5.0));
+        assert_eq!(limits.get("openalex").copied(), Some(2.5));
+        assert_eq!(limits.get("nonexistent"), None);
+    }
+
+    #[test]
+    fn test_parse_rate_limits_empty() {
+        let source_config = SourceConfig {
+            rate_limits: None,
+            ..Default::default()
+        };
+
+        let limits = source_config.parse_rate_limits();
+        assert!(limits.is_empty());
+    }
+
+    #[test]
+    fn test_parse_rate_limits_invalid_format() {
+        let source_config = SourceConfig {
+            rate_limits: Some("semantic:0.5,invalidformat,arxiv:5".to_string()),
+            ..Default::default()
+        };
+
+        let limits = source_config.parse_rate_limits();
+        assert_eq!(limits.get("semantic").copied(), Some(0.5));
+        assert_eq!(limits.get("arxiv").copied(), Some(5.0));
+        // invalidformat should be ignored (no colon)
+        assert_eq!(limits.len(), 2);
     }
 }

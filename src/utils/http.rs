@@ -30,26 +30,27 @@ const HTTPS_PROXY_ENV_VAR: &str = "HTTPS_PROXY";
 const NO_PROXY_ENV_VAR: &str = "NO_PROXY";
 
 /// Proxy configuration
-/// Note: no_proxy is collected but not currently applied by reqwest
 #[derive(Debug, Clone, Default)]
-#[allow(dead_code)]
 pub struct ProxyConfig {
     pub http_proxy: Option<String>,
     pub https_proxy: Option<String>,
-    pub no_proxy: Option<String>,
+    pub no_proxy: Option<Vec<String>>,
 }
 
 /// Create proxy configuration from environment variables
 pub fn create_proxy_config() -> ProxyConfig {
     let http_proxy = std::env::var(HTTP_PROXY_ENV_VAR).ok();
     let https_proxy = std::env::var(HTTPS_PROXY_ENV_VAR).ok();
-    let no_proxy = std::env::var(NO_PROXY_ENV_VAR).ok();
+    let no_proxy: Option<Vec<String>> = std::env::var(NO_PROXY_ENV_VAR)
+        .ok()
+        .map(|s| s.split(',').map(|v| v.trim().to_string()).collect());
 
     if http_proxy.is_some() || https_proxy.is_some() {
         tracing::info!(
-            "Proxy configured: HTTP={:?}, HTTPS={:?}",
+            "Proxy configured: HTTP={:?}, HTTPS={:?}, NO_PROXY={:?}",
             http_proxy,
-            https_proxy
+            https_proxy,
+            no_proxy
         );
     }
 
@@ -60,11 +61,42 @@ pub fn create_proxy_config() -> ProxyConfig {
     }
 }
 
+/// Check if a URL should bypass the proxy
+fn should_bypass_proxy(url: &str, no_proxy: &Option<Vec<String>>) -> bool {
+    let Some(hosts) = no_proxy else {
+        return false;
+    };
+
+    if hosts.iter().any(|h| h == "*") {
+        return true;
+    }
+
+    // Parse URL to extract host
+    if let Ok(url) = reqwest::Url::parse(url) {
+        let host = url.host_str().map(|h| h.to_lowercase());
+        if let Some(host) = host {
+            // Check exact match or domain suffix match
+            for no_proxy_host in hosts {
+                if host == no_proxy_host.to_lowercase() {
+                    return true;
+                }
+                // Check if the host ends with the no_proxy domain
+                if host.ends_with(&format!(".{}", no_proxy_host.to_lowercase())) {
+                    return true;
+                }
+            }
+        }
+    }
+
+    false
+}
+
 /// Shared HTTP client with sensible defaults and rate limiting
 #[derive(Debug, Clone)]
 pub struct HttpClient {
     client: Arc<Client>,
     rate_limiter: Option<Arc<RateLimiter<NotKeyed, InMemoryState, DefaultClock>>>,
+    no_proxy: Option<Vec<String>>,
 }
 
 /// Rate-limited request builder - compatible API with reqwest::RequestBuilder
@@ -181,6 +213,7 @@ impl HttpClient {
         Ok(Self {
             client: Arc::new(client),
             rate_limiter,
+            no_proxy: proxy.no_proxy,
         })
     }
 
@@ -207,7 +240,13 @@ impl HttpClient {
         Ok(Self {
             client: Arc::new(client),
             rate_limiter: None,
+            no_proxy: proxy.no_proxy,
         })
+    }
+
+    /// Check if a URL should bypass the proxy
+    pub fn should_bypass_proxy(&self, url: &str) -> bool {
+        should_bypass_proxy(url, &self.no_proxy)
     }
 
     /// Create a new HTTP client with a custom rate limit
@@ -245,6 +284,7 @@ impl HttpClient {
         Ok(Self {
             client: Arc::new(client),
             rate_limiter,
+            no_proxy: proxy.no_proxy,
         })
     }
 
@@ -284,6 +324,7 @@ impl HttpClient {
         Ok(Self {
             client: Arc::new(client),
             rate_limiter,
+            no_proxy: None, // Per-source proxy doesn't use env no_proxy
         })
     }
 
@@ -318,6 +359,7 @@ impl HttpClient {
         Self {
             client,
             rate_limiter: Self::create_rate_limiter(),
+            no_proxy: None,
         }
     }
 
@@ -446,7 +488,7 @@ mod tests {
 
         match previous {
             Some(v) => std::env::set_var(RATE_LIMIT_ENV_VAR, v),
-            None => std::env::remove_var(RATE_LIMIT_ENV_VAR),
+            _ => std::env::remove_var(RATE_LIMIT_ENV_VAR),
         }
 
         result
@@ -489,5 +531,54 @@ mod tests {
                 "Should fall back to default rate limiter"
             );
         });
+    }
+
+    #[test]
+    fn test_should_bypass_proxy_no_config() {
+        // No no_proxy configured
+        let result = should_bypass_proxy("https://api.semanticscholar.org", &None);
+        assert!(!result, "Should not bypass when no no_proxy configured");
+    }
+
+    #[test]
+    fn test_should_bypass_proxy_wildcard() {
+        let no_proxy = Some(vec!["*".to_string()]);
+        let result = should_bypass_proxy("https://api.semanticscholar.org", &no_proxy);
+        assert!(result, "Should bypass for wildcard");
+    }
+
+    #[test]
+    fn test_should_bypass_proxy_exact_match() {
+        let no_proxy = Some(vec!["api.semanticscholar.org".to_string()]);
+        let result = should_bypass_proxy("https://api.semanticscholar.org", &no_proxy);
+        assert!(result, "Should bypass for exact match");
+    }
+
+    #[test]
+    fn test_should_bypass_proxy_domain_suffix() {
+        let no_proxy = Some(vec!["semanticscholar.org".to_string()]);
+        let result = should_bypass_proxy("https://api.semanticscholar.org", &no_proxy);
+        assert!(result, "Should bypass for domain suffix match");
+    }
+
+    #[test]
+    fn test_should_bypass_proxy_no_match() {
+        let no_proxy = Some(vec!["other-domain.org".to_string()]);
+        let result = should_bypass_proxy("https://api.semanticscholar.org", &no_proxy);
+        assert!(!result, "Should not bypass when domain doesn't match");
+    }
+
+    #[test]
+    fn test_should_bypass_proxy_multiple_hosts() {
+        let no_proxy = Some(vec![
+            "api.semanticscholar.org".to_string(),
+            "arxiv.org".to_string(),
+        ]);
+        assert!(should_bypass_proxy(
+            "https://api.semanticscholar.org",
+            &no_proxy
+        ));
+        assert!(should_bypass_proxy("https://arxiv.org", &no_proxy));
+        assert!(!should_bypass_proxy("https://openalex.org", &no_proxy));
     }
 }

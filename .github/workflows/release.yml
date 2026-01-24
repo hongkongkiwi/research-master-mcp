@@ -369,7 +369,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y rpm
 
       - name: Build .rpm package
-        run: cargo rpm build --release --target ${{ matrix.target }}
+        run: cargo rpm build --target ${{ matrix.target }}
 
       - name: Upload .rpm package
         uses: actions/upload-artifact@v4

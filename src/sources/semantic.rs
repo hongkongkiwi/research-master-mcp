@@ -208,6 +208,7 @@ impl Source for SemanticScholarSource {
         &self,
         author: &str,
         max_results: usize,
+        year: Option<&str>,
     ) -> Result<SearchResponse, SourceError> {
         // Clone values for retry closure
         let client = Arc::clone(&self.client);
@@ -248,7 +249,12 @@ impl Source for SemanticScholarSource {
             .ok_or_else(|| SourceError::NotFound("Author not found".to_string()))?;
 
         // Then get papers by that author
-        let papers_url = format!("/author/{}/papers?limit={}", author_id, max_results);
+        let mut papers_url = format!("/author/{}/papers?limit={}", author_id, max_results);
+
+        // Add year filter if provided
+        if let Some(y) = year {
+            papers_url.push_str(&format!("&year={}", y));
+        }
 
         let papers_data: PapersResponse = with_retry(api_retry_config(), || {
             let client = Arc::clone(&client);
@@ -583,5 +589,101 @@ mod tests {
     fn test_semantic_name() {
         let source = SemanticScholarSource::new().unwrap();
         assert_eq!(source.name(), "Semantic Scholar");
+    }
+
+    #[test]
+    fn test_parse_search_response() {
+        // Mock Semantic Scholar search API response
+        let mock_response = r#"
+        {
+            "data": [
+                {
+                    "paperId": "paper123",
+                    "corpusId": "12345",
+                    "title": "Machine Learning for Image Recognition",
+                    "abstract": "A novel approach to image recognition using deep learning.",
+                    "year": 2023,
+                    "authors": [{"name": "Jane Smith"}, {"name": "John Doe"}],
+                    "url": "https://www.semanticscholar.org/paper/paper123",
+                    "citationCount": 42
+                }
+            ]
+        }
+        "#;
+
+        // Parse the mock response
+        let parse_result: Result<S2SearchResponse, serde_json::Error> =
+            serde_json::from_str(mock_response);
+        assert!(parse_result.is_ok(), "Mock response should be valid JSON");
+
+        // Verify parsed data
+        let response = parse_result.unwrap();
+        assert_eq!(response.data.len(), 1);
+
+        let paper = &response.data[0];
+        assert_eq!(paper.paper_id, Some("paper123".to_string()));
+        assert_eq!(paper.title, "Machine Learning for Image Recognition");
+        assert_eq!(paper.year, Some(2023));
+        assert_eq!(paper.authors.len(), 2);
+    }
+
+    #[test]
+    fn test_parse_paper_details() {
+        // Mock Semantic Scholar paper details response
+        let mock_response = r#"
+        {
+            "paperId": "abc123",
+            "corpusId": "67890",
+            "title": "Advances in Natural Language Processing",
+            "abstract": "This paper presents new advances in NLP techniques.",
+            "year": 2024,
+            "authors": [{"name": "Alice Johnson"}, {"name": "Bob Williams"}],
+            "url": "https://www.semanticscholar.org/paper/abc123",
+            "citationCount": 100
+        }
+        "#;
+
+        let parse_result: Result<S2Paper, serde_json::Error> = serde_json::from_str(mock_response);
+        assert!(parse_result.is_ok(), "Should parse valid JSON");
+
+        let paper = parse_result.unwrap();
+        assert_eq!(paper.paper_id, Some("abc123".to_string()));
+        assert_eq!(paper.title, "Advances in Natural Language Processing");
+        assert_eq!(paper.year, Some(2024));
+        assert_eq!(paper.authors.len(), 2);
+    }
+
+    #[test]
+    fn test_parse_references_response() {
+        // Mock references response
+        let mock_response = r#"
+        {
+            "data": [
+                {
+                    "paperId": "ref1",
+                    "corpusId": "11111",
+                    "title": "Referenced Paper 1",
+                    "year": 2022,
+                    "authors": [{"name": "Ref Author"}]
+                },
+                {
+                    "paperId": "ref2",
+                    "corpusId": "22222",
+                    "title": "Referenced Paper 2",
+                    "year": 2021,
+                    "authors": [{"name": "Another Author"}]
+                }
+            ]
+        }
+        "#;
+
+        let parse_result: Result<ReferencesResponse, serde_json::Error> =
+            serde_json::from_str(mock_response);
+        assert!(parse_result.is_ok(), "Should parse valid references JSON");
+
+        let refs = parse_result.unwrap();
+        assert_eq!(refs.data.len(), 2);
+        assert_eq!(refs.data[0].paper_id, Some("ref1".to_string()));
+        assert_eq!(refs.data[1].paper_id, Some("ref2".to_string()));
     }
 }
