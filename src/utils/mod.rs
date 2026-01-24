@@ -25,20 +25,17 @@
 //!
 //! # HTTP Client with Rate Limiting
 //!
-//! ```ignore
-//! use research_master_mcp::utils::HttpClient;
-//!
-//! let client = HttpClient::new();
-//! // Use the client to make rate-limited requests
-//! ```
+//! The HTTP client provides built-in rate limiting using the governor crate.
+//! Each source can be configured with different rate limits via environment
+//! variables (e.g., `SEMANTIC_SCHOLAR_RPM` for requests per minute).
 //!
 //! # Retry with Backoff
 //!
-//! ```ignore
-//! use research_master_mcp::utils::{with_retry, RetryConfig, TransientError};
+//! ```rust
+//! use research_master_mcp::utils::RetryConfig;
 //!
-//! let config = RetryConfig::default().max_retries(3);
-//! // Use with_retry to execute operations with automatic retry
+//! let config = RetryConfig::default();
+//! assert_eq!(config.max_attempts, 3);
 //! ```
 
 mod cache;

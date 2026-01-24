@@ -18,17 +18,6 @@ use tracing::warn;
 /// This allows processing large result sets without loading everything
 /// into memory at once. The stream automatically handles pagination
 /// and rate limiting.
-///
-/// # Example
-///
-/// ```ignore
-/// use research_master_mcp::utils::paper_stream;
-///
-/// let stream = paper_stream(arxiv_source, query, 100);
-/// while let Some(paper) = stream.next().await {
-///     println!("{}", paper.title);
-/// }
-/// ```
 pub fn paper_stream<T: Source + Clone + 'static>(
     source: T,
     query: SearchQuery,

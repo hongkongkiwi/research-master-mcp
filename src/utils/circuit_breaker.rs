@@ -9,18 +9,12 @@
 //!
 //! # Usage
 //!
-//! ```ignore
-//! use research_master_mcp::utils::CircuitBreaker;
+//! ```rust
+//! use research_master_mcp::utils::{CircuitBreaker, CircuitState};
 //!
 //! let breaker = CircuitBreaker::new("semantic", 5, std::time::Duration::from_secs(60));
 //!
-//! // Use in an async context
-//! match breaker.execute(|| async {
-//!     client.get(url).send().await
-//! }).await {
-//!     Ok(response) => println!("Success!"),
-//!     Err(e) => println!("Failed: {}", e),
-//! }
+//! assert_eq!(breaker.state(), CircuitState::Closed);
 //! ```
 
 use std::sync::atomic::{AtomicUsize, Ordering};

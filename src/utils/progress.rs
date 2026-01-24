@@ -5,15 +5,12 @@
 //!
 //! # Usage
 //!
-//! ```ignore
+//! ```rust
 //! use research_master_mcp::utils::ProgressReporter;
 //!
 //! let reporter = ProgressReporter::new("Processing papers", 100);
-//! for i in 0..100 {
-//!     // Do some work...
-//!     reporter.inc(1);
-//! }
-//! reporter.finish();
+//! reporter.inc();
+//! assert_eq!(reporter.current(), 1);
 //! ```
 
 use std::sync::atomic::{AtomicUsize, Ordering};
