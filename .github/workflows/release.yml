@@ -150,7 +150,7 @@ jobs:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
         run: |
           if [ -n "$CARGO_REGISTRY_TOKEN" ]; then
-            cargo publish --registry crates-io
+            cargo publish --registry crates-io --allow-dirty
           else
             echo "CARGO_REGISTRY_TOKEN not set, skipping crates.io publish"
           fi
@@ -336,13 +336,13 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y rpm
 
       - name: Build .rpm package
-        run: cargo rpm build --target ${{ matrix.target }} --no-build --no-sign
+        run: cargo rpm build --target ${{ matrix.target }} --no-sign
 
       - name: Upload .rpm package
         uses: actions/upload-artifact@v4
         with:
           name: research-master-mcp.rpm-${{ matrix.arch }}
-          path: target/rpm/RPMS/${{ matrix.rpm_arch }}/*.rpm
+          path: target/${{ matrix.target }}/rpm/RPMS/${{ matrix.rpm_arch }}/*.rpm
 
   build-apk:
     name: Build Alpine Package (${{ matrix.arch }})
@@ -400,9 +400,11 @@ jobs:
 
       - name: Create APKBUILD
         run: |
+          VERSION="${{ github.event.inputs.version || github.ref_name }}"
+          VERSION="${VERSION#v}"
           cat > apk-build/APKBUILD << 'EOF'
-          # Contributor: Research Master MCP
-          # Maintainer: Research Master MCP
+          # Contributor: Research Master MCP <research-master-mcp@users.noreply.github.com>
+          # Maintainer: Research Master MCP <research-master-mcp@users.noreply.github.com>
           pkgname=research-master-mcp
           pkgver=VERSION_PLACEHOLDER
           pkgrel=0
@@ -423,7 +425,7 @@ jobs:
             cp "$srcdir"/usr/bin/research-master-mcp "$pkgdir"/usr/bin/
           }
           EOF
-          sed -i "s/VERSION_PLACEHOLDER/${{ github.ref_name }}/" apk-build/APKBUILD
+          sed -i "s/VERSION_PLACEHOLDER/${VERSION}/" apk-build/APKBUILD
 
       - name: Build .apk package
         run: |
