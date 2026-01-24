@@ -544,10 +544,12 @@ jobs:
         run: |
           mkdir -p release-packages
 
-          # Copy release binaries
-          if [ -d "release-binaries" ]; then
-            cp -r release-binaries/* release-packages/ 2>/dev/null || true
-          fi
+          # Copy and flatten release binaries
+          for dir in release-binaries/binary-*; do
+            if [ -d "$dir" ]; then
+              cp -r "$dir"/* release-packages/ 2>/dev/null || true
+            fi
+          done
 
           # Copy platform packages
           for dir in packages/*; do
@@ -561,7 +563,7 @@ jobs:
       - name: Generate SHA256 checksums
         run: |
           cd release-packages
-          sha256sum ./* > SHA256SUMS.txt
+          find . -maxdepth 1 -type f -exec sha256sum {} \; > SHA256SUMS.txt
           cat SHA256SUMS.txt
 
       - name: Setup GPG for signing
