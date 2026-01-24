@@ -153,6 +153,13 @@ jobs:
 
           ls -la release
 
+          # Verify release artifacts were created
+          if [ -z "$(ls -A release/ 2>/dev/null)" ]; then
+            echo "ERROR: No release artifacts were created!"
+            ls -la binaries/
+            exit 1
+          fi
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2.5.0
         with:
@@ -168,7 +175,7 @@ jobs:
       - name: Upload release binaries for finalize job
         uses: actions/upload-artifact@v4
         with:
-          name: release
+          name: release-binaries
           path: release/
           retention-days: 5
 
@@ -204,6 +211,7 @@ jobs:
     name: Publish Docker Image (Multi-Arch)
     needs:
       - build-apk
+      - build-linux
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -370,6 +378,8 @@ jobs:
           VERSION="${{ github.event.inputs.version || github.ref_name }}"
           VERSION="${VERSION#v}"
           pkgname="research-master-mcp"
+          # Get current date for changelog (format: "Day Month DD YYYY")
+          CHANGELOG_DATE=$(date '+%a %b %d %Y')
 
           mkdir -p rpmbuild/BUILD rpmbuild/BUILDROOT rpmbuild/RPMS rpmbuild/SOURCES rpmbuild/SPECS rpmbuild/SRPMS
 
@@ -404,8 +414,8 @@ jobs:
           %files
           /usr/bin/%{name}
           %changelog
-          * Sat Jan 24 2026 Research Master MCP <research-master-mcp@users.noreply.github.com> - ${VERSION}-0
-          - Initial RPM package
+          * ${CHANGELOG_DATE} Research Master MCP <research-master-mcp@users.noreply.github.com> - ${VERSION}-0
+          - Version ${VERSION} release
           EOF
 
       - name: Build .rpm package
@@ -537,7 +547,7 @@ jobs:
       - name: Download release assets
         uses: actions/download-artifact@v4
         with:
-          name: release
+          name: release-binaries
           path: release-assets
 
       - name: List downloaded assets
