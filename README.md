@@ -9,7 +9,7 @@ A Model Context Protocol (MCP) server for searching and downloading academic pap
 
 ## Overview
 
-Research Master MCP is a comprehensive academic research server that provides unified access to **26 major research repositories and databases**. It implements the Model Context Protocol (MCP) to integrate seamlessly with AI assistants like Claude Desktop, enabling powerful literature search, paper discovery, and citation analysis capabilities.
+Research Master MCP is a comprehensive academic research server that provides unified access to **28 major research repositories and databases**. It implements the Model Context Protocol (MCP) to integrate seamlessly with AI assistants like Claude Desktop, enabling powerful literature search, paper discovery, and citation analysis capabilities.
 
 ## Quick Start
 
@@ -54,7 +54,7 @@ See [Tools](docs/tools.md) for all available MCP tools.
 
 ## Features
 
-- **26 Research Sources**: arXiv, Semantic Scholar, OpenAlex, PubMed, PMC, bioRxiv, and [more](docs/sources.md)
+- **28 Research Sources**: arXiv, Semantic Scholar, OpenAlex, PubMed, PMC, bioRxiv, and [more](docs/sources.md)
 - **Unified Search**: Single query searches across all sources
 - **Smart Source Detection**: Automatically identifies paper IDs (arXiv, PMC, DOI, etc.)
 - **PDF Download**: Save papers to your local filesystem

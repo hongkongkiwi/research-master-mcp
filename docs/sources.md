@@ -1,6 +1,6 @@
 # Research Sources
 
-Research Master MCP supports **26 academic research sources** with different pricing models, API requirements, and capabilities.
+Research Master MCP supports **28 academic research sources** with different pricing models, API requirements, and capabilities.
 
 ## Sources Overview
 

@@ -93,6 +93,40 @@ enum Source {
     Dblp,
     #[value(name = "ssrn")]
     Ssrn,
+    #[value(name = "dimensions")]
+    Dimensions,
+    #[value(name = "ieee_xplore")]
+    IeeeXplore,
+    #[value(name = "europe_pmc")]
+    EuropePmc,
+    #[value(name = "core")]
+    Core,
+    #[value(name = "zenodo")]
+    Zenodo,
+    #[value(name = "unpaywall")]
+    Unpaywall,
+    #[value(name = "mdpi")]
+    Mdpi,
+    #[value(name = "jstor")]
+    Jstor,
+    #[value(name = "scispace")]
+    Scispace,
+    #[value(name = "acm")]
+    Acm,
+    #[value(name = "connected_papers")]
+    ConnectedPapers,
+    #[value(name = "doaj")]
+    Doaj,
+    #[value(name = "worldwidescience")]
+    WorldWideScience,
+    #[value(name = "osf")]
+    Osf,
+    #[value(name = "base")]
+    Base,
+    #[value(name = "springer")]
+    Springer,
+    #[value(name = "google_scholar")]
+    GoogleScholar,
     #[value(name = "all")]
     All,
 }
@@ -1453,6 +1487,23 @@ fn source_to_id(source: Source) -> &'static str {
         Source::Hal => "hal",
         Source::Dblp => "dblp",
         Source::Ssrn => "ssrn",
+        Source::Dimensions => "dimensions",
+        Source::IeeeXplore => "ieee_xplore",
+        Source::EuropePmc => "europe_pmc",
+        Source::Core => "core",
+        Source::Zenodo => "zenodo",
+        Source::Unpaywall => "unpaywall",
+        Source::Mdpi => "mdpi",
+        Source::Jstor => "jstor",
+        Source::Scispace => "scispace",
+        Source::Acm => "acm",
+        Source::ConnectedPapers => "connected_papers",
+        Source::Doaj => "doaj",
+        Source::WorldWideScience => "worldwidescience",
+        Source::Osf => "osf",
+        Source::Base => "base",
+        Source::Springer => "springer",
+        Source::GoogleScholar => "google_scholar",
         Source::All => unreachable!(),
     }
 }

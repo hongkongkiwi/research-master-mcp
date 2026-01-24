@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Research Master MCP is a Model Context Protocol (MCP) server that provides unified access to 26+ academic research sources (arXiv, Semantic Scholar, PubMed, OpenAlex, etc.) for searching, downloading, and analyzing academic papers.
+Research Master MCP is a Model Context Protocol (MCP) server that provides unified access to 28+ academic research sources (arXiv, Semantic Scholar, PubMed, OpenAlex, Europe PMC, etc.) for searching, downloading, and analyzing academic papers.
 
 ## Build & Test Commands
 
@@ -46,14 +46,14 @@ cargo fmt
 
 - **`src/lib.rs`** - Library root, exports public API
 - **`src/main.rs`** - CLI entry point using clap for argument parsing
-- **`src/sources/`** - Plugin-based architecture with ~26 research sources
+- **`src/sources/`** - Plugin-based architecture with 28 research sources
 - **`src/mcp/`** - MCP protocol server implementation
 - **`src/models/`** - Core data structures (Paper, SearchQuery, etc.)
 - **`src/utils/`** - HTTP client, deduplication, PDF extraction
 
 ### Source Plugin System
 
-All sources implement the [`Source`](src/sources/mod.rs:133) trait from `src/sources/mod.rs`. Key aspects:
+All sources implement the [`Source`](src/sources/mod.rs:138) trait from `src/sources/mod.rs`. Key aspects:
 
 1. **Capability-based design**: Each source declares capabilities via `SourceCapabilities` bitflags (SEARCH, DOWNLOAD, READ, CITATIONS, DOI_LOOKUP, AUTHOR_SEARCH)
 
@@ -115,3 +115,42 @@ Paper ID formats are auto-detected in `unified_tools.rs`:
 - `hal-xxxxxxx` → HAL
 - `xxxx/xxxx` (single slash) → IACR
 - `10.xxxx/xxxxxx` → DOI lookup (Semantic Scholar preferred)
+
+## Research Sources (28 total)
+
+| Source | Capabilities | Description |
+|--------|-------------|-------------|
+| arXiv | Search, Download | Preprint papers in physics, math, CS, and more |
+| PubMed | Search, Citations | Biomedical literature from NIH/NLM |
+| bioRxiv | Search, Download | Biology preprints |
+| Semantic Scholar | Search, Citations, Download | AI-powered academic search |
+| OpenAlex | Search, Citations | Open scholarly knowledge graph |
+| CrossRef | Search, DOI Lookup | DOI registration metadata |
+| IACR | Search, Download | Cryptology research papers |
+| PMC | Search, Download | PubMed Central open access papers |
+| HAL | Search, Download | French open archive |
+| DBLP | Search | Computer science bibliography |
+| SSRN | Search, Download | Social science research network |
+| Dimensions | Search | Research discovery platform |
+| IEEE Xplore | Search, Download | Engineering and technology papers |
+| Europe PMC | Search, Citations | European PMC mirror |
+| CORE | Search | Open access research papers |
+| Zenodo | Search, Download | CERN-backed research repository |
+| Unpaywall | DOI Lookup | Find open access versions of papers |
+| MDPI | Search, Download | Open access publisher |
+| JSTOR | Search | Humanities and social sciences |
+| SciSpace | Search, Citations | Scientific research platform |
+| ACM | Search, Download | Computing literature |
+| Connected Papers | Citations | Find related papers |
+| DOAJ | Search | Directory of open access journals |
+| WorldWideScience | Search | Global science portal |
+| OSF | Search, Download | Open Science Framework preprints |
+| BASE | Search | Bielefeld Academic Search Engine |
+| Springer | Search, Download | Springer/Nature publications |
+| Google Scholar | Search | Web search for scholarly literature |
+
+### Convenience Feature Groups
+
+- `core` - arxiv, pubmed, semantic
+- `preprints` - arxiv, biorxiv
+- `full` - All sources (default, excludes google_scholar)
