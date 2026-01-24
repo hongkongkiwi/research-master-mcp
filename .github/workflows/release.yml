@@ -116,36 +116,42 @@ jobs:
         with:
           path: binaries
           pattern: binary-*
-          merge-multiple: true
+          merge-multiple: false
+
+      - name: Determine version
+        id: version
+        run: |
+          VERSION_RAW="${{ github.event.inputs.version || github.ref_name }}"
+          VERSION="${VERSION_RAW#v}"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
 
       - name: Prepare release assets
         run: |
+          VERSION="${{ steps.version.outputs.version }}"
           mkdir -p release
           for dir in binaries/binary-*; do
             target=$(basename "$dir" | sed 's/binary-//')
-            cp "$dir"/* "release/research-master-mcp-${target}" 2>/dev/null || true
-          done
-
-          # Create tarballs for Linux/macOS
-          cd release
-          for f in research-master-mcp-*; do
-            case "$f" in
-              *.gz|*.zip) continue ;;
-              *linux*|*darwin*)
-                if [ -f "$f" ] && [ ! -f "${f}.gz" ]; then
-                  gzip -c "$f" > "${f}.gz" && rm "$f"
+            case "$target" in
+              x86_64-pc-windows-msvc)
+                if [ -f "$dir/research-master-mcp.exe" ]; then
+                  (cd "$dir" && zip -r "$GITHUB_WORKSPACE/release/research-master-mcp-v${VERSION}-${target}.zip" research-master-mcp.exe)
+                fi
+                ;;
+              *)
+                if [ -f "$dir/research-master-mcp" ]; then
+                  tmpdir=$(mktemp -d)
+                  cp "$dir/research-master-mcp" "$tmpdir/research-master-mcp"
+                  if [ -f "research-master.example.toml" ]; then
+                    cp "research-master.example.toml" "$tmpdir/research-master.example.toml"
+                  fi
+                  tar -C "$tmpdir" -czf "release/research-master-mcp-v${VERSION}-${target}.tar.gz" .
+                  rm -rf "$tmpdir"
                 fi
                 ;;
             esac
           done
 
-          # Create zip for Windows
-          if [ -f "research-master-mcp-x86_64-pc-windows-msvc" ]; then
-            zip -r research-master-mcp-windows.zip research-master-mcp-x86_64-pc-windows-msvc
-            rm research-master-mcp-x86_64-pc-windows-msvc
-          fi
-
-          ls -la
+          ls -la release
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2.5.0
@@ -153,6 +159,8 @@ jobs:
           draft: false
           prerelease: false
           generate_release_notes: true
+          tag_name: v${{ steps.version.outputs.version }}
+          name: v${{ steps.version.outputs.version }}
           files: release/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -526,37 +534,30 @@ jobs:
       - publish-docker
     runs-on: ubuntu-latest
     steps:
-      - name: Download all binaries for checksums
+      - name: Download release assets
         uses: actions/download-artifact@v4
         with:
-          path: release-binaries
-          pattern: binary-*
-          merge-multiple: true
+          name: release
+          path: release-assets
 
-      - name: List downloaded binaries
+      - name: List downloaded assets
         run: |
-          echo "=== release-binaries contents ==="
-          find release-binaries -type f -exec ls -la {} \;
+          echo "=== release-assets contents ==="
+          find release-assets -type f -exec ls -la {} \;
 
       - name: Download all packages
         uses: actions/download-artifact@v4
         with:
           path: packages
           pattern: research-master-mcp.*
-          merge-multiple: true
+          merge-multiple: false
 
       - name: Prepare release assets
         run: |
           mkdir -p release-packages
 
-          # Copy and flatten release binaries (artifacts are files, not directories)
-          for artifact in release-binaries/*; do
-            if [ -f "$artifact" ]; then
-              cp "$artifact" release-packages/
-            elif [ -d "$artifact" ]; then
-              cp -r "$artifact"/* release-packages/ 2>/dev/null || true
-            fi
-          done
+          # Copy release assets
+          cp -r release-assets/* release-packages/ 2>/dev/null || true
 
           # Copy platform packages
           for dir in packages/*; do
@@ -637,10 +638,17 @@ jobs:
         id: sha256
         run: |
           # Extract SHA256 for each platform (files include version prefix like v0.1.32)
-          SHA256_X86_64_DARWIN=$(grep 'research-master-mcp-.*-x86_64-apple-darwin.gz' homebrew-tmp/SHA256SUMS.txt | awk '{print $1}')
-          SHA256_AARCH64_DARWIN=$(grep 'research-master-mcp-.*-aarch64-apple-darwin.gz' homebrew-tmp/SHA256SUMS.txt | awk '{print $1}')
-          SHA256_X86_64_LINUX=$(grep 'research-master-mcp-.*-x86_64-unknown-linux-gnu.gz' homebrew-tmp/SHA256SUMS.txt | awk '{print $1}')
-          SHA256_AARCH64_LINUX=$(grep 'research-master-mcp-.*-aarch64-unknown-linux-gnu.gz' homebrew-tmp/SHA256SUMS.txt | awk '{print $1}')
+          SHA256_X86_64_DARWIN=$(grep -E 'research-master-mcp-.*-x86_64-apple-darwin\\.tar\\.gz' homebrew-tmp/SHA256SUMS.txt | awk '{print $1}')
+          SHA256_AARCH64_DARWIN=$(grep -E 'research-master-mcp-.*-aarch64-apple-darwin\\.tar\\.gz' homebrew-tmp/SHA256SUMS.txt | awk '{print $1}')
+          SHA256_X86_64_LINUX=$(grep -E 'research-master-mcp-.*-x86_64-unknown-linux-gnu\\.tar\\.gz' homebrew-tmp/SHA256SUMS.txt | awk '{print $1}')
+          SHA256_AARCH64_LINUX=$(grep -E 'research-master-mcp-.*-aarch64-unknown-linux-gnu\\.tar\\.gz' homebrew-tmp/SHA256SUMS.txt | awk '{print $1}')
+
+          for value in "$SHA256_X86_64_DARWIN" "$SHA256_AARCH64_DARWIN" "$SHA256_X86_64_LINUX" "$SHA256_AARCH64_LINUX"; do
+            if [ -z "$value" ]; then
+              echo "Missing SHA256 checksum for one or more platforms" >&2
+              exit 1
+            fi
+          done
 
           {
             echo "sha256_x86_64_darwin=${SHA256_X86_64_DARWIN}"
@@ -655,7 +663,8 @@ jobs:
 
       - name: Update Homebrew formula
         run: |
-          VERSION=$(echo '${{ github.ref_name }}' | sed 's/v//')
+          VERSION_RAW='${{ github.event.inputs.version || github.ref_name }}'
+          VERSION="${VERSION_RAW#v}"
           SHA256_X86_64_DARWIN="${{ steps.sha256.outputs.sha256_x86_64_darwin }}"
           SHA256_AARCH64_DARWIN="${{ steps.sha256.outputs.sha256_aarch64_darwin }}"
           SHA256_X86_64_LINUX="${{ steps.sha256.outputs.sha256_x86_64_linux }}"
@@ -694,15 +703,15 @@ jobs:
 
             def install
               bin.install "research-master-mcp"
-              etc.install "research-master.example.toml"
+              if (buildpath/"research-master.example.toml").exist?
+                etc.install "research-master.example.toml"
+              end
             end
 
             def caveats
               <<~EOS
-                Configuration file installed at:
-                  #{etc}/research-master/research-master.example.toml
-
-                Copy it to #{etc}/research-master/research-master.toml to customize.
+                Configuration file path:
+                  #{etc}/research-master/research-master.toml
 
                 To use with Claude Desktop, add to your MCP config:
                   {
@@ -727,8 +736,10 @@ jobs:
       - name: Commit and push changes
         working-directory: ./homebrew-tap
         run: |
+          VERSION_RAW='${{ github.event.inputs.version || github.ref_name }}'
+          VERSION="${VERSION_RAW#v}"
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add Formula/research-master-mcp.rb
-          git commit -m "Update research-master-mcp to v${{ github.ref_name }}"
+          git commit -m "Update research-master-mcp to v${VERSION}"
           git push
