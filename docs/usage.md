@@ -318,6 +318,39 @@ research-master clear --downloads
 | `--downloads` | Clear downloaded papers |
 | `-a, --all` | Clear everything (cache, history, downloads) |
 
+### Cite Command (`cite`)
+
+Format a paper citation in various styles (APA, MLA, Chicago, BibTeX).
+
+```bash
+# Get citation in APA format (default)
+research-master cite 10.48550/arXiv.2301.12345
+
+# Get citation in MLA format
+research-master cite 2301.12345 --style mla
+
+# Get citation in Chicago format
+research-master cite 2301.12345 --style chicago
+
+# Get BibTeX entry
+research-master cite 10.1038/nature12373 --style bibtex
+
+# Output as JSON
+research-master cite 10.1038/nature12373 --format json
+
+# Specify source explicitly
+research-master cite 2301.12345 --source arxiv --style apa
+```
+
+**Options:**
+
+| Option | Description |
+|--------|-------------|
+| `<PAPER_ID>` (required) | Paper ID (DOI, arXiv ID, PMC ID, etc.) |
+| `--style <STYLE>` | Citation style: `apa`, `mla`, `chicago`, `bibtex` (default: apa) |
+| `--source <SOURCE>` | Source to search (auto-detected if not specified) |
+| `--format <FORMAT>` | Output format: `text`, `bibtex`, `json` (default: text) |
+
 ## Global Options
 
 | Option | Description |
@@ -327,8 +360,34 @@ research-master clear --downloads
 | `-o, --output <FORMAT>` | Output format: `auto`, `table`, `json`, `plain` (default: auto) |
 | `--config <PATH>` | Path to configuration file |
 | `--timeout <SECONDS>` | Request timeout in seconds (default: 30) |
+| `--http-proxy <URL>` | HTTP proxy URL (e.g., http://proxy:8080) |
+| `--https-proxy <URL>` | HTTPS proxy URL (e.g., https://proxy:8080) |
+| `--no-proxy <HOSTS>` | Comma-separated list of hosts to bypass proxy |
 | `--env` | Show all environment variables and exit |
 | `--no-cache` | Disable caching for this command |
+
+## Proxy Configuration
+
+Proxy settings can be configured via CLI flags, environment variables, or config file:
+
+```bash
+# Using CLI flags
+research-master search "transformer" --http-proxy http://proxy:8080 --https-proxy https://proxy:8080
+
+# Using environment variables
+export HTTP_PROXY=http://proxy:8080
+export HTTPS_PROXY=https://proxy:8080
+export NO_PROXY=localhost,127.0.0.1
+research-master search "transformer"
+
+# Using config file (~/.config/research-master/config.toml)
+# [proxy]
+# http = "http://proxy:8080"
+# https = "https://proxy:8080"
+# no_proxy = "localhost,127.0.0.1"
+```
+
+CLI flags take precedence over environment variables, which take precedence over config file settings.
 
 ## Available Sources
 
@@ -423,6 +482,12 @@ research-master references 1706.03762
 
 # Get related papers
 research-master related 1706.03762 --source connected_papers
+
+# Format citation in APA style
+research-master cite 10.1038/nature12373 --style apa
+
+# Format citation in BibTeX
+research-master cite 10.1038/nature12373 --style bibtex
 
 # List all sources with capabilities
 research-master sources --detailed --with-capability download

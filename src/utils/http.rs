@@ -37,6 +37,28 @@ pub struct ProxyConfig {
     pub no_proxy: Option<Vec<String>>,
 }
 
+impl ProxyConfig {
+    /// Merge CLI-provided proxy settings with this config
+    /// CLI settings take precedence over existing config values
+    pub fn with_cli_args(
+        mut self,
+        http_proxy: Option<String>,
+        https_proxy: Option<String>,
+        no_proxy: Option<String>,
+    ) -> Self {
+        if http_proxy.is_some() {
+            self.http_proxy = http_proxy;
+        }
+        if https_proxy.is_some() {
+            self.https_proxy = https_proxy;
+        }
+        if let Some(no_proxy_str) = no_proxy {
+            self.no_proxy = Some(no_proxy_str.split(',').map(|s| s.trim().to_string()).collect());
+        }
+        self
+    }
+}
+
 /// Create proxy configuration from environment variables
 pub fn create_proxy_config() -> ProxyConfig {
     let http_proxy = std::env::var(HTTP_PROXY_ENV_VAR).ok();
@@ -58,6 +80,31 @@ pub fn create_proxy_config() -> ProxyConfig {
         http_proxy,
         https_proxy,
         no_proxy,
+    }
+}
+
+/// Create proxy configuration from CLI arguments
+/// CLI args take precedence over environment variables
+pub fn create_proxy_config_from_cli(
+    http_proxy: Option<String>,
+    https_proxy: Option<String>,
+    no_proxy: Option<String>,
+) -> ProxyConfig {
+    let env_config = create_proxy_config();
+    env_config.with_cli_args(http_proxy, https_proxy, no_proxy)
+}
+
+/// Apply CLI proxy arguments to environment variables
+/// This allows sources to pick up the proxy settings via their normal env var reading
+pub fn apply_cli_proxy_args(http_proxy: Option<String>, https_proxy: Option<String>, no_proxy: Option<String>) {
+    if let Some(http) = http_proxy {
+        std::env::set_var(HTTP_PROXY_ENV_VAR, http);
+    }
+    if let Some(https) = https_proxy {
+        std::env::set_var(HTTPS_PROXY_ENV_VAR, https);
+    }
+    if let Some(no_proxy_val) = no_proxy {
+        std::env::set_var(NO_PROXY_ENV_VAR, no_proxy_val);
     }
 }
 

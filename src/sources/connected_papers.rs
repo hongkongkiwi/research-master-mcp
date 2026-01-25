@@ -116,6 +116,14 @@ impl Source for ConnectedPapersSource {
                     &query.query,
                 ));
             }
+            Err(SourceError::Network(_)) => {
+                tracing::debug!("Connected Papers network error - returning empty results");
+                return Ok(SearchResponse::new(
+                    vec![],
+                    "Connected Papers",
+                    &query.query,
+                ));
+            }
             Err(e) => return Err(e),
         };
 

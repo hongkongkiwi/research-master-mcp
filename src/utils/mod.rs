@@ -44,6 +44,7 @@ mod dedup;
 mod display;
 mod history;
 mod http;
+mod cite;
 mod pdf;
 mod progress;
 mod retry;
@@ -66,7 +67,7 @@ pub use display::{
     Terminal,
 };
 pub use history::{HistoryEntry, HistoryEntryType, HistoryService};
-pub use http::{get_user_agent, HttpClient, RateLimitedRequestBuilder, USER_AGENT_ENV_VAR};
+pub use http::{apply_cli_proxy_args, create_proxy_config_from_cli, get_user_agent, HttpClient, RateLimitedRequestBuilder, ProxyConfig, USER_AGENT_ENV_VAR};
 pub use pdf::{
     extract_text, extract_text_simple, get_extraction_info, has_poppler, has_tesseract,
     ExtractionInfo, ExtractionMethod, PdfExtractError,
@@ -85,3 +86,4 @@ pub use update::{
 pub use validate::{
     sanitize_filename, sanitize_paper_id, validate_doi, validate_url, ValidationError,
 };
+pub use cite::{format_citation, get_structured_citation, CitationStyle, StructuredCitation};

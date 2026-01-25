@@ -1,6 +1,7 @@
 use anyhow::Result;
 use clap::{Parser, Subcommand, ValueEnum};
 use clap_complete::shells::{Bash, Elvish, Fish, PowerShell, Zsh};
+use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use research_master::config::{find_config_file, get_config, load_config};
 use research_master::mcp::server::McpServer;
 use research_master::models::{
@@ -8,9 +9,9 @@ use research_master::models::{
 };
 use research_master::sources::{SourceCapabilities, SourceRegistry};
 use research_master::utils::{
-    deduplicate_papers, find_duplicates, format_authors, format_source, format_title, format_year,
-    get_paper_table_columns, is_terminal, terminal_width, CacheService, DuplicateStrategy,
-    HistoryService,
+    apply_cli_proxy_args, deduplicate_papers, find_duplicates, format_authors, format_source,
+    format_title, format_year, get_paper_table_columns, is_terminal, terminal_width, CacheService,
+    DuplicateStrategy, HistoryService,
 };
 use std::io::IsTerminal;
 use std::path::PathBuf;
@@ -114,6 +115,18 @@ struct Cli {
     /// Log to a file instead of stderr
     #[arg(long, global = true, value_name = "FILE")]
     log_file: Option<PathBuf>,
+
+    /// HTTP proxy URL (e.g., http://proxy:8080)
+    #[arg(long, global = true, value_name = "URL")]
+    http_proxy: Option<String>,
+
+    /// HTTPS proxy URL (e.g., https://proxy:8080)
+    #[arg(long, global = true, value_name = "URL")]
+    https_proxy: Option<String>,
+
+    /// Comma-separated list of hosts to bypass proxy
+    #[arg(long, global = true, value_name = "HOSTS")]
+    no_proxy: Option<String>,
 
     #[command(subcommand)]
     command: Option<Commands>,
@@ -671,6 +684,48 @@ enum Commands {
         #[arg(long, short = 'a')]
         all: bool,
     },
+
+    /// Format a paper citation in various styles
+    Cite {
+        /// Paper ID (arXiv ID, DOI, PMC ID, etc.)
+        paper_id: String,
+
+        /// Citation style
+        #[arg(long, value_enum, default_value_t = CitationStyle::Apa)]
+        style: CitationStyle,
+
+        /// Source of the paper (auto-detected if not specified)
+        #[arg(long, value_enum)]
+        source: Option<Source>,
+
+        /// Output format
+        #[arg(long, value_enum, default_value_t = CitationOutputFormat::Text)]
+        format: CitationOutputFormat,
+    },
+}
+
+/// Citation style for formatting
+#[derive(ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]
+enum CitationStyle {
+    /// APA 7th edition
+    Apa,
+    /// MLA 9th edition
+    Mla,
+    /// Chicago 17th edition (author-date)
+    Chicago,
+    /// BibTeX
+    Bibtex,
+}
+
+/// Output format for citations
+#[derive(ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]
+enum CitationOutputFormat {
+    /// Plain text (default)
+    Text,
+    /// BibTeX format
+    Bibtex,
+    /// JSON format
+    Json,
 }
 
 #[derive(Subcommand, Debug)]
@@ -751,27 +806,30 @@ fn print_env_vars() {
 async fn main() -> Result<()> {
     let cli = Cli::parse();
 
+    // Apply CLI proxy arguments to environment variables
+    // This allows sources to pick up the proxy settings via their normal env var reading
+    apply_cli_proxy_args(cli.http_proxy, cli.https_proxy, cli.no_proxy);
+
     // Show environment variables and exit if requested
     if cli.env {
         print_env_vars();
     }
 
-    // Initialize tracing based on verbosity
-    // Default to "warn" to reduce noise from source registration and rate limiting messages
-    let log_level = match cli.verbose {
-        0 => "warn",
-        1 => "info",
-        2 => "debug",
-        _ => "trace",
-    };
+    // Use simplified logging format (not JSON) for stderr to reduce noise
+    // Default to 'warn' level to reduce noise, 'info' shows too much
+    let env_filter = if cli.quiet { "error" } else { "warn" };
 
-    let env_filter = if cli.quiet { "error" } else { log_level };
+    let fmt_layer = tracing_subscriber::fmt::layer()
+        .with_level(false)  // Don't show log level
+        .with_target(false)  // Don't show target
+        .with_thread_ids(false)
+        .compact();
 
     let subscriber = tracing_subscriber::registry()
         .with(tracing_subscriber::EnvFilter::new(
             std::env::var("RUST_LOG").unwrap_or_else(|_| format!("research_master={}", env_filter)),
         ))
-        .with(tracing_subscriber::fmt::layer());
+        .with(fmt_layer);
 
     // Add file logging if requested
     if let Some(log_path) = &cli.log_file {
@@ -789,7 +847,7 @@ async fn main() -> Result<()> {
         subscriber.with(file_layer).init();
         tracing::info!("Logging to file: {}", log_path.display());
     } else {
-        subscriber.with(tracing_subscriber::fmt::layer()).init();
+        subscriber.init();
     }
 
     // Set timeout
@@ -857,98 +915,162 @@ async fn main() -> Result<()> {
             // Create a vector to hold all spawned tasks
             let mut handles = Vec::new();
 
+            // Set up interactive progress display
+            let mp = if !quiet && is_terminal() {
+                Some(MultiProgress::new())
+            } else {
+                None
+            };
+
+            // Style for progress bars
+            let spinner_style = ProgressStyle::with_template("{prefix:.bold.dim} {spinner} {wide_msg}")
+                .unwrap()
+                .tick_chars("⠁⠂⠄⡀⢀⠠⠐⠈ ");
+
             for src in sources {
+                let src_id = src.id().to_string();
                 let src = Arc::clone(src);
                 let search_query = search_query.clone();
-                let cache = cache.clone();
+                let cache_inner = cache.clone();
+                let mp = mp.clone();
+
+                // Create progress bar for this source
+                let pb = mp.as_ref().map(|m| {
+                    let pb = m.add(ProgressBar::new(100));
+                    pb.set_style(spinner_style.clone());
+                    pb.set_prefix(format!("{:>15}", src_id));
+                    pb
+                });
+                let pb_for_handle = pb.clone();
+
+                // Clone values for the async block
+                let src_id_for_handle = src_id.clone();
+                let cache_for_handle = cache_inner.clone();
 
                 // Spawn a task for each source
                 let handle = tokio::spawn(async move {
-                    let source_id = src.id();
-                    let mut papers = Vec::new();
                     let start = std::time::Instant::now();
+                    let cache = cache_for_handle;
+                    let pb = pb_for_handle;
 
-                    // Check cache first
-                    if let Some(ref cache_service) = cache {
-                        match cache_service.get_search(&search_query, source_id) {
+                    // Check cache first - if we have both cache and progress bar
+                    if let (Some(cache_service), Some(pb)) = (cache.as_ref(), pb.as_ref()) {
+                        match cache_service.get_search(&search_query, &src_id_for_handle) {
                             research_master::utils::CacheResult::Hit(response) => {
                                 let elapsed = start.elapsed();
-                                if !quiet {
-                                    eprintln!(
-                                        "[CACHE HIT] {} papers from {} ({:.2}s)",
-                                        response.papers.len(),
-                                        source_id,
-                                        elapsed.as_secs_f64()
-                                    );
-                                }
+                                let msg = format!(
+                                    "{} papers ({:.1}s) [cached]",
+                                    response.papers.len(),
+                                    elapsed.as_secs_f64()
+                                );
+                                let style = ProgressStyle::with_template("{prefix:.bold.dim} {msg}")
+                                    .unwrap();
+                                pb.set_style(style);
+                                pb.set_message(msg);
+                                pb.finish();
                                 return response.papers;
                             }
                             research_master::utils::CacheResult::Expired => {
-                                if !quiet {
-                                    eprintln!(
-                                        "[CACHE EXPIRED] Fetching fresh results from {}",
-                                        source_id
-                                    );
+                                pb.set_message("refreshing...");
+                                // Make API call with cache_service and pb
+                                match src.search(&search_query).await {
+                                    Ok(response) => {
+                                        let elapsed = start.elapsed();
+                                        cache_service.set_search(&src_id_for_handle, &search_query, &response);
+                                        let msg = format!("{} papers ({:.1}s)", response.papers.len(), elapsed.as_secs_f64());
+                                        let style = ProgressStyle::with_template("{prefix:.bold.dim} {msg}").unwrap();
+                                        pb.set_style(style);
+                                        pb.set_message(msg);
+                                        pb.finish();
+                                        return response.papers;
+                                    }
+                                    Err(e) => {
+                                        let elapsed = start.elapsed();
+                                        let msg = format!("error after {:.1}s: {}", elapsed.as_secs_f64(), e.to_string().lines().next().unwrap_or("unknown error"));
+                                        let style = ProgressStyle::with_template("{prefix:.bold.dim} {msg}").unwrap();
+                                        pb.set_style(style);
+                                        pb.set_message(msg);
+                                        pb.finish();
+                                        return Vec::new();
+                                    }
                                 }
                             }
                             research_master::utils::CacheResult::Miss => {
-                                if !quiet {
-                                    eprintln!("[CACHE MISS] Fetching from {}...", source_id);
+                                pb.set_message("searching...");
+                                match src.search(&search_query).await {
+                                    Ok(response) => {
+                                        let elapsed = start.elapsed();
+                                        cache_service.set_search(&src_id_for_handle, &search_query, &response);
+                                        let msg = format!("{} papers ({:.1}s)", response.papers.len(), elapsed.as_secs_f64());
+                                        let style = ProgressStyle::with_template("{prefix:.bold.dim} {msg}").unwrap();
+                                        pb.set_style(style);
+                                        pb.set_message(msg);
+                                        pb.finish();
+                                        return response.papers;
+                                    }
+                                    Err(e) => {
+                                        let elapsed = start.elapsed();
+                                        let msg = format!("error after {:.1}s: {}", elapsed.as_secs_f64(), e.to_string().lines().next().unwrap_or("unknown error"));
+                                        let style = ProgressStyle::with_template("{prefix:.bold.dim} {msg}").unwrap();
+                                        pb.set_style(style);
+                                        pb.set_message(msg);
+                                        pb.finish();
+                                        return Vec::new();
+                                    }
                                 }
                             }
                         }
                     }
 
-                    // Fetch from API
+                    // No cache or no progress bar
                     match src.search(&search_query).await {
                         Ok(response) => {
                             let elapsed = start.elapsed();
-                            if !quiet {
-                                eprintln!(
-                                    "{} papers from {} ({:.2}s)",
-                                    response.papers.len(),
-                                    source_id,
-                                    elapsed.as_secs_f64()
-                                );
+                            if let Some(cache_service) = cache {
+                                cache_service.set_search(&src_id_for_handle, &search_query, &response);
                             }
-                            // Cache the result
-                            if let Some(ref cache_service) = cache {
-                                cache_service.set_search(source_id, &search_query, &response);
+                            if let Some(pb) = pb {
+                                let msg = format!("{} papers ({:.1}s)", response.papers.len(), elapsed.as_secs_f64());
+                                let style = ProgressStyle::with_template("{prefix:.bold.dim} {msg}").unwrap();
+                                pb.set_style(style);
+                                pb.set_message(msg);
+                                pb.finish();
                             }
-                            papers = response.papers;
+                            response.papers
                         }
                         Err(e) => {
                             let elapsed = start.elapsed();
-                            if !quiet {
-                                eprintln!(
-                                    "Error from {} after {:.2}s: {}",
-                                    source_id,
-                                    elapsed.as_secs_f64(),
-                                    e
-                                );
+                            if let Some(pb) = pb {
+                                let msg = format!("error after {:.1}s: {}", elapsed.as_secs_f64(), e.to_string().lines().next().unwrap_or("unknown error"));
+                                let style = ProgressStyle::with_template("{prefix:.bold.dim} {msg}").unwrap();
+                                pb.set_style(style);
+                                pb.set_message(msg);
+                                pb.finish();
                             }
+                            Vec::new()
                         }
                     }
-
-                    papers
                 });
 
-                handles.push(handle);
+                handles.push((src_id, handle, pb));
             }
 
             // Wait for all tasks to complete and collect results
-            for handle in handles {
+            for (source_id, handle, _pb) in handles {
                 match handle.await {
                     Ok(papers) => {
                         let mut all_papers = all_papers.lock().unwrap();
                         all_papers.extend(papers);
                     }
                     Err(e) => {
-                        if !quiet {
-                            eprintln!("Task error: {}", e);
-                        }
+                        tracing::warn!("Task error for {}: {}", source_id, e);
                     }
                 }
+            }
+
+            // Clear the progress display
+            if let Some(ref m) = mp {
+                m.clear().unwrap();
             }
 
             // Get the collected papers
@@ -984,61 +1106,96 @@ async fn main() -> Result<()> {
             // Create a vector to hold all spawned tasks
             let mut handles = Vec::new();
 
+            // Set up interactive progress display
+            let mp = if !quiet && is_terminal() {
+                Some(MultiProgress::new())
+            } else {
+                None
+            };
+
+            // Style for progress bars
+            let spinner_style = ProgressStyle::with_template("{prefix:.bold.dim} {spinner} {wide_msg}")
+                .unwrap()
+                .tick_chars("⠁⠂⠄⡀⢀⠠⠐⠈ ");
+
             for src in sources {
+                let src_id = src.id().to_string();
                 let src = Arc::clone(src);
                 let author = author.clone();
                 let year = year.clone();
+                let mp = mp.clone();
+
+                // Create progress bar for this source
+                let pb = mp.as_ref().map(|m| {
+                    let pb = m.add(ProgressBar::new(100));
+                    pb.set_style(spinner_style.clone());
+                    pb.set_prefix(format!("{:>15}", src_id));
+                    pb
+                });
+                let pb_for_handle = pb.clone();
 
                 // Spawn a task for each source
                 let handle = tokio::spawn(async move {
                     let start = std::time::Instant::now();
+                    let pb = pb_for_handle;
                     match src
                         .search_by_author(&author, max_results, year.as_deref())
                         .await
                     {
                         Ok(response) => {
                             let elapsed = start.elapsed();
-                            if !quiet {
-                                eprintln!(
-                                    "{} papers from {} ({:.2}s)",
+                            if let Some(ref pb) = pb {
+                                let msg = format!(
+                                    "{} papers ({:.1}s)",
                                     response.papers.len(),
-                                    src.id(),
                                     elapsed.as_secs_f64()
                                 );
+                                let style = ProgressStyle::with_template("{prefix:.bold.dim} {msg}")
+                                    .unwrap();
+                                pb.set_style(style);
+                                pb.set_message(msg);
+                                pb.finish();
                             }
                             response.papers
                         }
                         Err(e) => {
                             let elapsed = start.elapsed();
-                            if !quiet {
-                                eprintln!(
-                                    "Error from {} after {:.2}s: {}",
-                                    src.id(),
+                            if let Some(ref pb) = pb {
+                                let msg = format!(
+                                    "error after {:.1}s: {}",
                                     elapsed.as_secs_f64(),
-                                    e
+                                    e.to_string().lines().next().unwrap_or("unknown error")
                                 );
+                                let style = ProgressStyle::with_template("{prefix:.bold.dim} {msg}")
+                                    .unwrap();
+                                pb.set_style(style);
+                                pb.set_message(msg);
+                                pb.finish();
                             }
                             Vec::new()
                         }
                     }
                 });
 
-                handles.push(handle);
+                handles.push((src_id, handle, pb));
             }
 
             // Wait for all tasks to complete and collect results
-            for handle in handles {
+            for (source_id, handle, _pb) in handles {
                 match handle.await {
                     Ok(papers) => {
                         let mut all_papers = all_papers.lock().unwrap();
                         all_papers.extend(papers);
                     }
                     Err(e) => {
-                        if !quiet {
-                            eprintln!("Task error: {}", e);
-                        }
+                        tracing::warn!("Task error for {}: {}", source_id, e);
                     }
                 }
+            }
+
+            // Clear the progress display
+            if let Some(ref m) = mp {
+                m.clear().unwrap();
             }
 
             // Get the collected papers
@@ -2068,6 +2225,97 @@ directory = "~/.cache/research-master"
             }
         }
 
+        Some(Commands::Cite {
+            paper_id,
+            style,
+            source: _,
+            format,
+        }) => {
+            use research_master::utils::{format_citation, get_structured_citation, CitationStyle as UtilsCitationStyle};
+            use research_master::sources::Source;
+
+            let config = get_config();
+            let cache = CacheService::new();
+            let registry = SourceRegistry::new();
+
+            // Get all sources that support DOI lookup
+            let sources_vec: Vec<&Arc<dyn Source>> = registry.with_capability(
+                research_master::sources::SourceCapabilities::DOI_LOOKUP
+            );
+
+            // Try to find the paper
+            let mut paper_opt = None;
+
+            // First, try DOI lookup if it looks like a DOI
+            if paper_id.contains("10.") && paper_id.contains("/") {
+                for source in &sources_vec {
+                    if source.supports_doi_lookup() {
+                        match source.get_by_doi(&paper_id).await {
+                            Ok(paper) => {
+                                paper_opt = Some(paper);
+                                break;
+                            }
+                            Err(e) => {
+                                tracing::debug!("DOI lookup failed for {}: {}", source.id(), e);
+                            }
+                        }
+                    }
+                }
+            }
+
+            // If not found by DOI, try search as fallback
+            if paper_opt.is_none() {
+                // Get sources that support search
+                let search_sources: Vec<&Arc<dyn Source>> = registry.with_capability(
+                    research_master::sources::SourceCapabilities::SEARCH
+                );
+
+                for source in &search_sources {
+                    let search_query = SearchQuery {
+                        query: paper_id.clone(),
+                        max_results: 1,
+                        year: None,
+                        sort_by: None,
+                        sort_order: None,
+                        filters: std::collections::HashMap::new(),
+                        author: None,
+                        category: None,
+                        fetch_details: true,
+                    };
+                    match source.search(&search_query).await {
+                        Ok(response) => {
+                            if !response.papers.is_empty() {
+                                paper_opt = Some(response.papers[0].clone());
+                                break;
+                            }
+                        }
+                        Err(e) => tracing::debug!("Search failed for {}: {}", source.id(), e),
+                    }
+                }
+            }
+
+            let paper = paper_opt.ok_or_else(|| anyhow::anyhow!("Paper not found: {}", paper_id))?;
+
+            // Convert CLI CitationStyle to utils CitationStyle
+            let utils_style = match style {
+                CitationStyle::Apa => UtilsCitationStyle::Apa,
+                CitationStyle::Mla => UtilsCitationStyle::Mla,
+                CitationStyle::Chicago => UtilsCitationStyle::Chicago,
+                CitationStyle::Bibtex => UtilsCitationStyle::Bibtex,
+            };
+
+            match format {
+                CitationOutputFormat::Text | CitationOutputFormat::Bibtex => {
+                    let citation = format_citation(&paper, utils_style);
+                    println!("{}", citation);
+                }
+                CitationOutputFormat::Json => {
+                    let structured = get_structured_citation(&paper, utils_style);
+                    println!("{}", serde_json::to_string_pretty(&structured).unwrap());
+                }
+            }
+        }
+
         None => {
             // No command provided - show help
             println!("No command provided. Use --help for usage information.");
@@ -2078,6 +2326,7 @@ directory = "~/.cache/research-master"
             println!("  sources          - List available sources");
             println!("  history          - Show search/download history");
             println!("  clear            - Clear cache, history, or downloads");
+            println!("  cite <id>        - Format paper citation (APA, MLA, Chicago, BibTeX)");
             println!("  mcp              - Run MCP server");
         }
     }
@@ -2144,6 +2393,14 @@ fn source_to_id(source: Source) -> &'static str {
         Source::GoogleScholar => "google_scholar",
         Source::All => unreachable!(),
     }
+}
+
+/// Helper function to check if a string starts with a specific prefix (case-insensitive)
+fn paper_id_upper_start(paper_id: &str, prefix: &str) -> bool {
+    if paper_id.len() < prefix.len() {
+        return false;
+    }
+    paper_id[..prefix.len()].to_uppercase() == prefix
 }
 
 fn output_papers(papers: &[research_master::models::Paper], format: OutputFormat) {

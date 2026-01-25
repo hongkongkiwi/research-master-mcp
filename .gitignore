@@ -71,3 +71,7 @@ lcov.info
 
 # Debug
 *.debug
+
+# Git merge conflicts
+*.orig
+*.rej

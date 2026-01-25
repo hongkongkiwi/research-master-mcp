@@ -83,11 +83,18 @@ impl BiorxivMedrxivSource {
         cursor: &str,
         max_results: usize,
     ) -> Result<Vec<Paper>, SourceError> {
+        // Use a date range that covers recent papers (last 5 years to today)
+        let today = chrono::Local::now();
+        let five_years_ago = today - chrono::Duration::days(365 * 5);
+        let from_date = five_years_ago.format("%Y-%m-%d").to_string();
+        let to_date = today.format("%Y-%m-%d").to_string();
+
         let url = format!(
-            "{}/details/{}/*/{}/{}",
+            "{}/details/{}/{}/{}/{}",
             self.server_type.api_url(),
             self.server_type.name(),
-            max_results,
+            from_date,
+            to_date,
             cursor
         );
 
@@ -155,37 +162,35 @@ impl BiorxivMedrxivSource {
 
         let mut papers = Vec::new();
 
-        for collection in json.collection {
-            for paper in collection.papers {
-                let authors = paper.authors.unwrap_or_default().clone().join("; ");
+        for paper in json.collection {
+            let authors = paper.authors.clone().unwrap_or_default();
 
-                let categories = paper.category.unwrap_or_default().clone();
+            let categories = paper.category.unwrap_or_default().clone();
 
-                let published_date = paper.date.clone();
+            let published_date = paper.date.clone();
 
-                let doi = paper.doi.clone().unwrap_or_default();
+            let doi = paper.doi.clone().unwrap_or_default();
 
-                let url = paper
-                    .server_url
-                    .clone()
-                    .unwrap_or_else(|| format!("https://doi.org/{}", doi));
+            let url = paper
+                .server_url
+                .clone()
+                .unwrap_or_else(|| format!("https://doi.org/{}", doi));
 
-                papers.push(
-                    PaperBuilder::new(
-                        doi.clone(),
-                        paper.title,
-                        url,
-                        self.server_type.source_type(),
-                    )
-                    .authors(authors)
-                    .abstract_text(paper.r#abstract.unwrap_or_default())
-                    .doi(doi.clone())
-                    .published_date(published_date)
-                    .categories(categories)
-                    .pdf_url(self.server_type.pdf_url(&doi))
-                    .build(),
-                );
-            }
+            papers.push(
+                PaperBuilder::new(
+                    doi.clone(),
+                    paper.title,
+                    url,
+                    self.server_type.source_type(),
+                )
+                .authors(authors)
+                .abstract_text(paper.r#abstract.unwrap_or_default())
+                .doi(doi.clone())
+                .published_date(published_date)
+                .categories(categories)
+                .pdf_url(self.server_type.pdf_url(&doi))
+                .build(),
+            );
         }
 
         Ok(papers)
@@ -348,41 +353,34 @@ impl Source for BiorxivMedrxivSource {
 #[derive(Debug, Deserialize)]
 struct ApiResponse {
     #[serde(rename = "collection")]
-    collection: Vec<Collection>,
+    collection: Vec<Article>,
     #[allow(dead_code)]
     messages: Vec<Message>,
 }
 
 #[derive(Debug, Deserialize)]
-struct Collection {
-    #[serde(rename = "Articles")]
-    papers: Vec<Article>,
-}
-
-#[derive(Debug, Deserialize)]
 struct Article {
-    #[serde(rename = "title")]
+    #[serde(default)]
     title: String,
-    #[serde(rename = "authors")]
-    authors: Option<Vec<String>>,
-    #[serde(rename = "abstract")]
+    #[serde(default)]
+    authors: Option<String>,
+    #[serde(default)]
     r#abstract: Option<String>,
-    #[serde(rename = "date")]
+    #[serde(default)]
     date: String,
-    #[serde(rename = "category")]
+    #[serde(default)]
     category: Option<String>,
-    #[serde(rename = "doi")]
+    #[serde(default)]
     doi: Option<String>,
-    #[serde(rename = "server")]
+    #[serde(default)]
     server_url: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
 #[allow(dead_code)]
 struct Message {
-    #[serde(rename = "text")]
-    #[allow(dead_code)]
-    text: String,
+    #[serde(default)]
+    text: Option<String>,
 }
 
 /// bioRxiv research source

@@ -133,7 +133,8 @@ impl SemanticScholarSource {
         let paper_id = data
             .paper_id
             .clone()
-            .unwrap_or_else(|| format!("CorpusId:{}", data.corpus_id));
+            .or(data.corpus_id.clone())
+            .unwrap_or_default();
 
         let pdf_url = data
             .open_access_pdf
@@ -259,10 +260,22 @@ impl Source for SemanticScholarSource {
                 // Record success
                 circuit_breaker.record_success();
 
-                response
-                    .json()
+                // Capture response text first for better error messages
+                let response_text = response
+                    .text()
                     .await
-                    .map_err(|e| SourceError::Parse(format!("Failed to parse JSON: {}", e)))
+                    .unwrap_or_else(|_| "Failed to read response body".to_string());
+
+                serde_json::from_str::<S2SearchResponse>(&response_text)
+                    .map_err(|e| {
+                        // Log the first 500 chars of response for debugging
+                        let preview = response_text.chars().take(500).collect::<String>();
+                        tracing::warn!(
+                            "Semantic Scholar parse error (first 500 chars): {}",
+                            preview
+                        );
+                        SourceError::Parse(format!("Failed to parse JSON: {}. Response preview: {}", e, preview))
+                    })
             }
         })
         .await;
@@ -334,10 +347,17 @@ impl Source for SemanticScholarSource {
                     .await
                     .map_err(|e| SourceError::Network(format!("Failed to search author: {}", e)))?;
 
-                response
-                    .json()
+                let response_text = response
+                    .text()
                     .await
-                    .map_err(|e| SourceError::Parse(format!("Failed to parse JSON: {}", e)))
+                    .unwrap_or_else(|_| "Failed to read response body".to_string());
+
+                serde_json::from_str::<AuthorSearchResponse>(&response_text)
+                    .map_err(|e| {
+                        let preview = response_text.chars().take(500).collect::<String>();
+                        tracing::warn!("Semantic Scholar author search parse error: {}", preview);
+                        SourceError::Parse(format!("Failed to parse JSON: {}. Response: {}", e, preview))
+                    })
             }
         })
         .await?;
@@ -369,10 +389,17 @@ impl Source for SemanticScholarSource {
                     SourceError::Network(format!("Failed to fetch author papers: {}", e))
                 })?;
 
-                response
-                    .json()
+                let response_text = response
+                    .text()
                     .await
-                    .map_err(|e| SourceError::Parse(format!("Failed to parse JSON: {}", e)))
+                    .unwrap_or_else(|_| "Failed to read response body".to_string());
+
+                serde_json::from_str::<PapersResponse>(&response_text)
+                    .map_err(|e| {
+                        let preview = response_text.chars().take(500).collect::<String>();
+                        tracing::warn!("Semantic Scholar papers parse error: {}", preview);
+                        SourceError::Parse(format!("Failed to parse JSON: {}. Response: {}", e, preview))
+                    })
             }
         })
         .await?;
@@ -403,10 +430,17 @@ impl Source for SemanticScholarSource {
             )));
         }
 
-        let data: PaperResponse = response
-            .json()
+        let response_text = response
+            .text()
             .await
-            .map_err(|e| SourceError::Parse(format!("Failed to parse JSON: {}", e)))?;
+            .unwrap_or_else(|_| "Failed to read response body".to_string());
+
+        let data: PaperResponse = serde_json::from_str(&response_text)
+            .map_err(|e| {
+                let preview = response_text.chars().take(500).collect::<String>();
+                tracing::warn!("Semantic Scholar paper details parse error: {}", preview);
+                SourceError::Parse(format!("Failed to parse JSON: {}. Response: {}", e, preview))
+            })?;
 
         let pdf_url = data
             .data
@@ -481,10 +515,17 @@ impl Source for SemanticScholarSource {
             .await
             .map_err(|e| SourceError::Network(format!("Failed to fetch citations: {}", e)))?;
 
-        let data: CitationsResponse = response
-            .json()
+        let response_text = response
+            .text()
             .await
-            .map_err(|e| SourceError::Parse(format!("Failed to parse JSON: {}", e)))?;
+            .unwrap_or_else(|_| "Failed to read response body".to_string());
+
+        let data: CitationsResponse = serde_json::from_str(&response_text)
+            .map_err(|e| {
+                let preview = response_text.chars().take(500).collect::<String>();
+                tracing::warn!("Semantic Scholar citations parse error: {}", preview);
+                SourceError::Parse(format!("Failed to parse JSON: {}. Response: {}", e, preview))
+            })?;
 
         let papers: Result<Vec<Paper>, SourceError> = data
             .data
@@ -515,10 +556,17 @@ impl Source for SemanticScholarSource {
             .await
             .map_err(|e| SourceError::Network(format!("Failed to fetch references: {}", e)))?;
 
-        let data: ReferencesResponse = response
-            .json()
+        let response_text = response
+            .text()
             .await
-            .map_err(|e| SourceError::Parse(format!("Failed to parse JSON: {}", e)))?;
+            .unwrap_or_else(|_| "Failed to read response body".to_string());
+
+        let data: ReferencesResponse = serde_json::from_str(&response_text)
+            .map_err(|e| {
+                let preview = response_text.chars().take(500).collect::<String>();
+                tracing::warn!("Semantic Scholar references parse error: {}", preview);
+                SourceError::Parse(format!("Failed to parse JSON: {}. Response: {}", e, preview))
+            })?;
 
         let papers: Result<Vec<Paper>, SourceError> = data
             .data
@@ -546,10 +594,17 @@ impl Source for SemanticScholarSource {
             .await
             .map_err(|e| SourceError::Network(format!("Failed to fetch related: {}", e)))?;
 
-        let data: RelatedResponse = response
-            .json()
+        let response_text = response
+            .text()
             .await
-            .map_err(|e| SourceError::Parse(format!("Failed to parse JSON: {}", e)))?;
+            .unwrap_or_else(|_| "Failed to read response body".to_string());
+
+        let data: RelatedResponse = serde_json::from_str(&response_text)
+            .map_err(|e| {
+                let preview = response_text.chars().take(500).collect::<String>();
+                tracing::warn!("Semantic Scholar related parse error: {}", preview);
+                SourceError::Parse(format!("Failed to parse JSON: {}. Response: {}", e, preview))
+            })?;
 
         let papers: Result<Vec<Paper>, SourceError> = data
             .data
@@ -574,10 +629,17 @@ impl Source for SemanticScholarSource {
             .await
             .map_err(|e| SourceError::Network(format!("Failed to search DOI: {}", e)))?;
 
-        let data: S2SearchResponse = response
-            .json()
+        let response_text = response
+            .text()
             .await
-            .map_err(|e| SourceError::Parse(format!("Failed to parse JSON: {}", e)))?;
+            .unwrap_or_else(|_| "Failed to read response body".to_string());
+
+        let data: S2SearchResponse = serde_json::from_str(&response_text)
+            .map_err(|e| {
+                let preview = response_text.chars().take(500).collect::<String>();
+                tracing::warn!("Semantic Scholar DOI parse error: {}", preview);
+                SourceError::Parse(format!("Failed to parse JSON: {}. Response: {}", e, preview))
+            })?;
 
         data.data
             .first()
@@ -593,12 +655,13 @@ struct S2Paper {
     #[serde(rename = "paperId")]
     paper_id: Option<String>,
     #[serde(rename = "corpusId")]
-    corpus_id: String,
+    corpus_id: Option<String>,
     title: String,
     r#abstract: Option<String>,
     year: Option<i32>,
     #[serde(rename = "citationCount")]
     citation_count: Option<i32>,
+    #[serde(default)]
     authors: Vec<S2Author>,
     doi: Option<String>,
     url: Option<String>,

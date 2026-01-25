@@ -117,34 +117,46 @@ impl Source for CrossRefSource {
             Err(e) => return Err(e),
         };
 
-        let data: CRResponse = response
-            .json()
+        // Capture response text for better error messages
+        let response_text = response
+            .text()
             .await
-            .map_err(|e| SourceError::Parse(format!("Failed to parse JSON: {}", e)))?;
+            .unwrap_or_else(|_| "Failed to read response body".to_string());
+
+        let data: CRResponse = serde_json::from_str(&response_text)
+            .map_err(|e| {
+                let preview = response_text.chars().take(500).collect::<String>();
+                tracing::warn!("CrossRef parse error: {}", preview);
+                SourceError::Parse(format!("Failed to parse JSON: {}. Response: {}", e, preview))
+            })?;
 
         let papers: Vec<Paper> = data
             .message
             .items
             .into_iter()
             .filter_map(|item| {
-                let title = item.title.clone().unwrap_or_default();
+                let title = item.get("title").and_then(|v| v.as_str()).unwrap_or_default().to_string();
 
-                let authors = item
-                    .author
-                    .iter()
-                    .filter_map(|a| a.given.as_ref())
-                    .map(|s| s.as_str())
-                    .collect::<Vec<_>>()
-                    .join("; ");
+                let authors = item.get("author")
+                    .and_then(|v| v.as_array())
+                    .map(|authors| {
+                        authors.iter()
+                            .filter_map(|a| a.get("given").and_then(|g| g.as_str()))
+                            .collect::<Vec<_>>()
+                            .join("; ")
+                    })
+                    .unwrap_or_default();
 
-                let doi = item.doi.clone().unwrap_or_default();
+                let doi = item.get("doi").and_then(|v| v.as_str()).unwrap_or_default().to_string();
 
-                let url = item.url.clone().unwrap_or_default();
+                let url = item.get("url").and_then(|v| v.as_str()).unwrap_or_default().to_string();
 
-                let published_date = item
-                    .published_print
-                    .as_ref()
-                    .and_then(|d| d.date.clone())
+                let published_date = item.get("published-print")
+                    .and_then(|v| v.get("date-parts"))
+                    .and_then(|v| v.as_array())
+                    .and_then(|dates| dates.first())
+                    .and_then(|d| d.as_i64())
+                    .map(|y| y.to_string())
                     .unwrap_or_default();
 
                 if title.is_empty() {
@@ -153,9 +165,9 @@ impl Source for CrossRefSource {
 
                 Some(
                     PaperBuilder::new(doi.clone(), title, url, SourceType::CrossRef)
-                        .authors(authors)
-                        .doi(doi)
-                        .published_date(published_date)
+                        .authors(&authors)
+                        .doi(&doi)
+                        .published_date(&published_date)
                         .build(),
                 )
             })
@@ -179,10 +191,18 @@ impl Source for CrossRefSource {
             return Err(SourceError::NotFound("DOI not found".to_string()));
         }
 
-        let data: CRResponse = response
-            .json()
+        // Capture response text for better error messages
+        let response_text = response
+            .text()
             .await
-            .map_err(|e| SourceError::Parse(format!("Failed to parse JSON: {}", e)))?;
+            .unwrap_or_else(|_| "Failed to read response body".to_string());
+
+        let data: CRResponse = serde_json::from_str(&response_text)
+            .map_err(|e| {
+                let preview = response_text.chars().take(500).collect::<String>();
+                tracing::warn!("CrossRef DOI parse error: {}", preview);
+                SourceError::Parse(format!("Failed to parse JSON: {}. Response: {}", e, preview))
+            })?;
 
         let item = data
             .message
@@ -190,31 +210,35 @@ impl Source for CrossRefSource {
             .first()
             .ok_or_else(|| SourceError::NotFound("DOI not found".to_string()))?;
 
-        let title = item.title.clone().unwrap_or_default();
+        let title = item.get("title").and_then(|v| v.as_str()).unwrap_or_default().to_string();
 
-        let authors = item
-            .author
-            .iter()
-            .filter_map(|a| a.given.as_ref())
-            .map(|s| s.as_str())
-            .collect::<Vec<_>>()
-            .join("; ");
+        let authors = item.get("author")
+            .and_then(|v| v.as_array())
+            .map(|authors| {
+                authors.iter()
+                    .filter_map(|a| a.get("given").and_then(|g| g.as_str()))
+                    .collect::<Vec<_>>()
+                    .join("; ")
+            })
+            .unwrap_or_default();
 
-        let doi = item.doi.clone().unwrap_or_default();
+        let doi = item.get("doi").and_then(|v| v.as_str()).unwrap_or_default().to_string();
 
-        let url = item.url.clone().unwrap_or_default();
+        let url = item.get("url").and_then(|v| v.as_str()).unwrap_or_default().to_string();
 
-        let published_date = item
-            .published_print
-            .as_ref()
-            .and_then(|d| d.date.clone())
+        let published_date = item.get("published-print")
+            .and_then(|v| v.get("date-parts"))
+            .and_then(|v| v.as_array())
+            .and_then(|dates| dates.first())
+            .and_then(|d| d.as_i64())
+            .map(|y| y.to_string())
             .unwrap_or_default();
 
         Ok(
             PaperBuilder::new(doi.clone(), title, url, SourceType::CrossRef)
-                .authors(authors)
-                .doi(doi)
-                .published_date(published_date)
+                .authors(&authors)
+                .doi(&doi)
+                .published_date(&published_date)
                 .build(),
         )
     }
@@ -231,23 +255,7 @@ struct CRResponse {
 struct CRMessage {
     #[serde(rename = "total-results")]
     total_results: usize,
-    items: Vec<CRItem>,
-}
-
-#[derive(Debug, Deserialize)]
-struct CRIter {
-    #[serde(rename = "given")]
-    given: Option<String>,
-}
-
-#[derive(Debug, Deserialize)]
-struct CRItem {
-    title: Option<String>,
-    doi: Option<String>,
-    url: Option<String>,
-    author: Vec<CRIter>,
-    #[serde(rename = "published-print")]
-    published_print: Option<CRDate>,
+    items: Vec<serde_json::Value>,
 }
 
 #[derive(Debug, Deserialize)]

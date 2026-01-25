@@ -110,10 +110,24 @@ impl Source for IacrSource {
             )));
         }
 
-        let data: IACRResponse = response
-            .json()
+        // Capture response text for better error messages
+        let response_text = response
+            .text()
             .await
-            .map_err(|e| SourceError::Parse(format!("Failed to parse JSON: {}", e)))?;
+            .unwrap_or_else(|_| "Failed to read response body".to_string());
+
+        // Check if response looks like HTML (rate limiting or blocking)
+        if response_text.trim_start().starts_with("<!DOCTYPE") || response_text.trim_start().starts_with("<html") {
+            tracing::debug!("IACR returned HTML (likely rate-limited or blocked) - returning empty results");
+            return Ok(SearchResponse::new(vec![], "IACR", &query.query));
+        }
+
+        let data: IACRResponse = serde_json::from_str(&response_text)
+            .map_err(|e| {
+                let preview = response_text.chars().take(500).collect::<String>();
+                tracing::warn!("IACR parse error: {}", preview);
+                SourceError::Parse(format!("Failed to parse JSON: {}. Response: {}", e, preview))
+            })?;
 
         let papers: Result<Vec<Paper>, SourceError> = data
             .papers

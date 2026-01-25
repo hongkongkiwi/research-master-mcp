@@ -141,6 +141,10 @@ impl Source for DimensionsSource {
                 tracing::debug!("Dimensions API blocked - returning empty results");
                 return Ok(SearchResponse::new(vec![], "Dimensions", &query.query));
             }
+            Err(SourceError::Network(_)) => {
+                tracing::debug!("Dimensions network error - returning empty results");
+                return Ok(SearchResponse::new(vec![], "Dimensions", &query.query));
+            }
             Err(e) => return Err(e),
         };
 

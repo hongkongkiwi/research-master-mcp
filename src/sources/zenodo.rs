@@ -102,9 +102,18 @@ impl Source for ZenodoSource {
                     return Err(SourceError::Api("Zenodo rate-limited".to_string()));
                 }
 
-                let json: ZenodoResponse = response.json().await.map_err(|e| {
-                    SourceError::Parse(format!("Failed to parse Zenodo response: {}", e))
-                })?;
+                // Capture response text for better error messages
+                let response_text = response
+                    .text()
+                    .await
+                    .unwrap_or_else(|_| "Failed to read response body".to_string());
+
+                let json: ZenodoResponse = serde_json::from_str(&response_text)
+                    .map_err(|e| {
+                        let preview = response_text.chars().take(500).collect::<String>();
+                        tracing::warn!("Zenodo parse error: {}", preview);
+                        SourceError::Parse(format!("Failed to parse Zenodo response: {}. Response: {}", e, preview))
+                    })?;
 
                 Ok(json)
             }
@@ -121,7 +130,10 @@ impl Source for ZenodoSource {
             Err(e) => return Err(e),
         };
 
-        let total = response.hits.total.value;
+        let total = match response.hits.total {
+            ZenodoTotal::Struct { value } => value,
+            ZenodoTotal::Integer(n) => n,
+        };
         let papers: Result<Vec<Paper>, SourceError> = response
             .hits
             .hits
@@ -168,9 +180,17 @@ impl Source for ZenodoSource {
                     )));
                 }
 
-                response.json().await.map_err(|e| {
-                    SourceError::Parse(format!("Failed to parse Zenodo response: {}", e))
-                })
+                // Capture response text for better error messages
+                let response_text = response.text().await.map_err(|e| {
+                    SourceError::Network(format!("Failed to read Zenodo response: {}", e))
+                })?;
+
+                serde_json::from_str::<ZenodoResponse>(&response_text)
+                    .map_err(|e| {
+                        let preview = response_text.chars().take(500).collect::<String>();
+                        tracing::warn!("Zenodo DOI parse error: {}", preview);
+                        SourceError::Parse(format!("Failed to parse Zenodo response: {}. Response: {}", e, preview))
+                    })
             }
         })
         .await?;
@@ -229,14 +249,23 @@ struct ZenodoResponse {
 }
 
 #[derive(Debug, Deserialize)]
-struct ZenodoHits {
-    total: ZenodoTotal,
-    hits: Vec<ZenodoHit>,
+#[serde(untagged)]
+enum ZenodoTotal {
+    Struct { value: usize },
+    Integer(usize),
+}
+
+impl Default for ZenodoTotal {
+    fn default() -> Self {
+        ZenodoTotal::Integer(0)
+    }
 }
 
 #[derive(Debug, Deserialize)]
-struct ZenodoTotal {
-    value: usize,
+struct ZenodoHits {
+    #[serde(default)]
+    total: ZenodoTotal,
+    hits: Vec<ZenodoHit>,
 }
 
 #[derive(Debug, Deserialize)]
