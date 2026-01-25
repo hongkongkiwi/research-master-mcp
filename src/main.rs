@@ -12,6 +12,7 @@ use research_master::utils::{
 };
 use std::io::IsTerminal;
 use std::path::PathBuf;
+use terminal_size::terminal_size;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
@@ -716,9 +717,11 @@ async fn main() -> Result<()> {
     }
 
     // Initialize tracing based on verbosity
+    // Default to "warn" to reduce noise from source registration and rate limiting messages
     let log_level = match cli.verbose {
-        0 => "info",
-        1 => "debug",
+        0 => "warn",
+        1 => "info",
+        2 => "debug",
         _ => "trace",
     };
 
@@ -823,16 +826,19 @@ async fn main() -> Result<()> {
                 let handle = tokio::spawn(async move {
                     let source_id = src.id();
                     let mut papers = Vec::new();
+                    let start = std::time::Instant::now();
 
                     // Check cache first
                     if let Some(ref cache_service) = cache {
                         match cache_service.get_search(&search_query, source_id) {
                             research_master::utils::CacheResult::Hit(response) => {
+                                let elapsed = start.elapsed();
                                 if !quiet {
                                     eprintln!(
-                                        "[CACHE HIT] Found {} papers from {}",
+                                        "[CACHE HIT] {} papers from {} ({:.2}s)",
                                         response.papers.len(),
-                                        source_id
+                                        source_id,
+                                        elapsed.as_secs_f64()
                                     );
                                 }
                                 return response.papers;
@@ -847,7 +853,7 @@ async fn main() -> Result<()> {
                             }
                             research_master::utils::CacheResult::Miss => {
                                 if !quiet {
-                                    eprintln!("[CACHE MISS] Fetching from {}", source_id);
+                                    eprintln!("[CACHE MISS] Fetching from {}...", source_id);
                                 }
                             }
                         }
@@ -856,11 +862,13 @@ async fn main() -> Result<()> {
                     // Fetch from API
                     match src.search(&search_query).await {
                         Ok(response) => {
+                            let elapsed = start.elapsed();
                             if !quiet {
                                 eprintln!(
-                                    "Found {} papers from {}",
+                                    "{} papers from {} ({:.2}s)",
                                     response.papers.len(),
-                                    source_id
+                                    source_id,
+                                    elapsed.as_secs_f64()
                                 );
                             }
                             // Cache the result
@@ -870,8 +878,14 @@ async fn main() -> Result<()> {
                             papers = response.papers;
                         }
                         Err(e) => {
+                            let elapsed = start.elapsed();
                             if !quiet {
-                                eprintln!("Error searching {}: {}", source_id, e);
+                                eprintln!(
+                                    "Error from {} after {:.2}s: {}",
+                                    source_id,
+                                    elapsed.as_secs_f64(),
+                                    e
+                                );
                             }
                         }
                     }
@@ -937,23 +951,32 @@ async fn main() -> Result<()> {
 
                 // Spawn a task for each source
                 let handle = tokio::spawn(async move {
+                    let start = std::time::Instant::now();
                     match src
                         .search_by_author(&author, max_results, year.as_deref())
                         .await
                     {
                         Ok(response) => {
+                            let elapsed = start.elapsed();
                             if !quiet {
                                 eprintln!(
-                                    "Found {} papers from {}",
+                                    "{} papers from {} ({:.2}s)",
                                     response.papers.len(),
-                                    src.id()
+                                    src.id(),
+                                    elapsed.as_secs_f64()
                                 );
                             }
                             response.papers
                         }
                         Err(e) => {
+                            let elapsed = start.elapsed();
                             if !quiet {
-                                eprintln!("Error searching author in {}: {}", src.id(), e);
+                                eprintln!(
+                                    "Error from {} after {:.2}s: {}",
+                                    src.id(),
+                                    elapsed.as_secs_f64(),
+                                    e
+                                );
                             }
                             Vec::new()
                         }
@@ -1994,23 +2017,35 @@ fn output_papers(papers: &[research_master::models::Paper], format: OutputFormat
             use comfy_table::{Attribute, Cell, Table};
             let mut table = Table::new();
             table.load_preset(comfy_table::presets::UTF8_FULL);
-            table.set_header(vec!["Title", "Authors", "Source", "Year"]);
+
+            // Set up dynamic column widths based on terminal size
+            let term_width = terminal_size().map(|(w, _)| w.0 as usize).unwrap_or(100);
+            // Allocate: Title=50%, Authors=30%, Source=12%, Year=8%
+            let title_width = (term_width as f64 * 0.50).max(30.0).min(80.0) as usize;
+            let authors_width = (term_width as f64 * 0.30).max(20.0).min(50.0) as usize;
+
+            table.set_header(vec![
+                Cell::new("Title").add_attribute(Attribute::Bold),
+                Cell::new("Authors").add_attribute(Attribute::Bold),
+                Cell::new("Source").add_attribute(Attribute::Bold),
+                Cell::new("Year").add_attribute(Attribute::Bold),
+            ]);
 
             for paper in papers {
                 let year = paper
                     .published_date
                     .as_ref()
                     .map(|d| d.chars().take(4).collect::<String>())
-                    .unwrap_or_default();
+                    .unwrap_or_else(|| "?".to_string());
 
-                let title = if paper.title.len() > 50 {
-                    format!("{}...", &paper.title[..47])
+                let title = if paper.title.len() > title_width + 3 {
+                    format!("{}...", &paper.title[..title_width.saturating_sub(3)])
                 } else {
                     paper.title.clone()
                 };
 
-                let authors = if paper.authors.len() > 30 {
-                    format!("{}...", &paper.authors[..27])
+                let authors = if paper.authors.len() > authors_width + 3 {
+                    format!("{}...", &paper.authors[..authors_width.saturating_sub(3)])
                 } else {
                     paper.authors.clone()
                 };
