@@ -17,6 +17,7 @@ pub mod config;
 pub mod mcp;
 pub mod models;
 pub mod sources;
+pub mod ui;
 pub mod utils;
 
 // Re-export commonly used types

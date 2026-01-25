@@ -42,6 +42,7 @@ mod cache;
 mod circuit_breaker;
 mod dedup;
 mod display;
+mod history;
 mod http;
 mod pdf;
 mod progress;
@@ -58,6 +59,13 @@ pub use streaming::{
 pub use cache::{CacheResult, CacheService, CacheStats};
 pub use circuit_breaker::{CircuitBreaker, CircuitBreakerManager, CircuitResult, CircuitState};
 pub use dedup::{deduplicate_papers, fast_deduplicate_papers, find_duplicates, DuplicateStrategy};
+pub use display::{
+    calculate_column_widths, calculate_dynamic_column_widths, format_authors, format_source,
+    format_title, format_year, get_paper_table_columns, is_terminal, terminal_height,
+    terminal_info, terminal_width, truncate_at_word, truncate_with_ellipsis, ColumnConfig,
+    Terminal,
+};
+pub use history::{HistoryEntry, HistoryEntryType, HistoryService};
 pub use http::{HttpClient, RateLimitedRequestBuilder};
 pub use pdf::{
     extract_text, extract_text_simple, get_extraction_info, has_poppler, has_tesseract,
@@ -76,10 +84,4 @@ pub use update::{
 };
 pub use validate::{
     sanitize_filename, sanitize_paper_id, validate_doi, validate_url, ValidationError,
-};
-pub use display::{
-    calculate_column_widths, format_authors, format_source, format_title, format_year,
-    get_paper_table_columns, terminal_info, terminal_width, terminal_height, is_terminal,
-    truncate_at_word, truncate_with_ellipsis, calculate_dynamic_column_widths, ColumnConfig,
-    Terminal,
 };

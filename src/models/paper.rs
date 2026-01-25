@@ -337,6 +337,36 @@ impl PaperBuilder {
     }
 }
 
+impl std::fmt::Display for Paper {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let year = self
+            .published_date
+            .as_ref()
+            .map(|d| d.chars().take(4).collect::<String>())
+            .unwrap_or_else(|| "????".to_string());
+
+        // Truncate title if too long (keep 50 chars)
+        let title_display = if self.title.len() > 50 {
+            format!("{}...", &self.title[..47])
+        } else {
+            self.title.clone()
+        };
+
+        // Truncate authors if too long (keep 40 chars)
+        let authors_display = if self.authors.len() > 40 {
+            format!("{}...", &self.authors[..37])
+        } else {
+            self.authors.clone()
+        };
+
+        write!(
+            f,
+            "{} | {} | {} | {}",
+            title_display, authors_display, self.source, year
+        )
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

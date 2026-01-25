@@ -147,7 +147,10 @@ pub fn truncate_at_word(text: &str, max_width: usize) -> String {
     if let Some(last_space) = text[..width_for_ellipsis.min(text.len())].rfind(' ') {
         let candidate = &text[..last_space];
         // Check if this candidate fits
-        let candidate_width: usize = candidate.chars().map(|c| unicode_width::UnicodeWidthChar::width(c).unwrap_or(1)).sum();
+        let candidate_width: usize = candidate
+            .chars()
+            .map(|c| unicode_width::UnicodeWidthChar::width(c).unwrap_or(1))
+            .sum();
         if candidate_width <= width_for_ellipsis {
             return format!("{}...", candidate.trim_end());
         }
@@ -471,7 +474,10 @@ mod tests {
     #[test]
     fn test_calculate_column_widths_basic() {
         // Two columns, 50 width terminal
-        let cols = [(10usize, 30usize, 40usize, 1), (10usize, 30usize, 40usize, 1)];
+        let cols = [
+            (10usize, 30usize, 40usize, 1),
+            (10usize, 30usize, 40usize, 1),
+        ];
         let widths = calculate_column_widths::<2>(50, &cols);
         assert_eq!(widths.len(), 2);
         // Should sum to <= 50 (minus separator)
@@ -481,7 +487,10 @@ mod tests {
     #[test]
     fn test_calculate_column_widths_min_exceeded() {
         // Two columns with minimums summing to more than terminal width
-        let cols = [(30usize, 30usize, usize::MAX, 1), (30usize, 30usize, usize::MAX, 1)];
+        let cols = [
+            (30usize, 30usize, usize::MAX, 1),
+            (30usize, 30usize, usize::MAX, 1),
+        ];
         let widths = calculate_column_widths::<2>(50, &cols);
         assert_eq!(widths, [30, 30]); // Should be minimums
     }

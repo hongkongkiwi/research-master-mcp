@@ -85,6 +85,11 @@ comfy-table = "7.1"
 terminal_size = "0.3"
 unicode-width = "0.1"
 
+# Modern CLI UI
+owo-colors = "4"
+indicatif = "0.17"
+tabled = "0.20"
+
 # PDF extraction (poppler for best results, lopdf as fallback)
 pdf-extract = "0.7"
 lopdf = "0.34"

@@ -8,9 +8,9 @@ use research_master::models::{
 };
 use research_master::sources::{SourceCapabilities, SourceRegistry};
 use research_master::utils::{
-    deduplicate_papers, find_duplicates, CacheService, DuplicateStrategy,
-    format_authors, format_source, format_title, format_year, get_paper_table_columns,
-    is_terminal, terminal_width,
+    deduplicate_papers, find_duplicates, format_authors, format_source, format_title, format_year,
+    get_paper_table_columns, is_terminal, terminal_width, CacheService, DuplicateStrategy,
+    HistoryService,
 };
 use std::io::IsTerminal;
 use std::path::PathBuf;
@@ -1949,6 +1949,125 @@ directory = "~/.cache/research-master"
             }
         }
 
+        Some(Commands::History {
+            limit,
+            searches,
+            downloads,
+            clear,
+        }) => {
+            use research_master::utils::HistoryEntryType;
+
+            let history = HistoryService::new();
+
+            if clear {
+                history.clear()?;
+                println!("History cleared.");
+                return Ok(());
+            }
+
+            let entries = history.read_entries(limit)?;
+
+            let entries: Vec<_> = if searches {
+                history.filter_entries(&entries, HistoryEntryType::Search)
+            } else if downloads {
+                history.filter_entries(&entries, HistoryEntryType::Download)
+            } else {
+                entries
+            };
+
+            if entries.is_empty() {
+                println!("No history entries found.");
+                return Ok(());
+            }
+
+            println!("Recent History:");
+            println!("{}", "=".repeat(80));
+
+            for (i, entry) in entries.iter().enumerate() {
+                let timestamp = chrono::DateTime::from_timestamp(entry.timestamp as i64, 0)
+                    .map(|dt| dt.format("%Y-%m-%d %H:%M").to_string())
+                    .unwrap_or_else(|| "unknown".to_string());
+
+                match &entry.entry_type {
+                    HistoryEntryType::Search => {
+                        println!("{}. [{}] SEARCH: {}", i + 1, timestamp, entry.query);
+                        if let Some(source) = &entry.source {
+                            println!("   Source: {}", source);
+                        }
+                    }
+                    HistoryEntryType::Download => {
+                        println!("{}. [{}] DOWNLOAD: {}", i + 1, timestamp, entry.query);
+                        if let Some(title) = &entry.title {
+                            println!("   Title: {}", title);
+                        }
+                        if let Some(source) = &entry.source {
+                            println!("   Source: {}", source);
+                        }
+                        if let Some(path) = &entry.details {
+                            println!("   Saved to: {}", path);
+                        }
+                    }
+                    HistoryEntryType::View => {
+                        println!("{}. [{}] VIEW: {}", i + 1, timestamp, entry.query);
+                        if let Some(title) = &entry.title {
+                            println!("   Title: {}", title);
+                        }
+                    }
+                }
+                println!();
+            }
+        }
+
+        Some(Commands::Clear {
+            cache,
+            history,
+            downloads,
+            all,
+        }) => {
+            use research_master::utils::{CacheService, HistoryService};
+            use std::fs;
+
+            let config = get_config();
+            let downloads_path = config.downloads.default_path.clone();
+
+            if all || (cache && history && downloads) {
+                // Clear everything
+                let cache_service = CacheService::new();
+                cache_service.clear_all()?;
+                println!("Cleared all cache data.");
+                let history = HistoryService::new();
+                history.clear()?;
+                println!("Cleared history.");
+                if downloads_path.exists() {
+                    fs::remove_dir_all(&downloads_path)?;
+                    println!("Cleared downloads directory.");
+                }
+                println!("All cleared.");
+            } else {
+                if cache {
+                    let cache_service = CacheService::new();
+                    cache_service.clear_all()?;
+                    println!("Cleared cache.");
+                }
+                if history {
+                    let history = HistoryService::new();
+                    history.clear()?;
+                    println!("Cleared history.");
+                }
+                if downloads {
+                    if downloads_path.exists() {
+                        fs::remove_dir_all(&downloads_path)?;
+                        println!("Cleared downloads directory.");
+                    } else {
+                        println!("Downloads directory does not exist.");
+                    }
+                }
+                if !cache && !history && !downloads {
+                    println!("Nothing to clear. Use --cache, --history, --downloads, or --all.");
+                }
+            }
+        }
+
         None => {
             // No command provided - show help
             println!("No command provided. Use --help for usage information.");
@@ -1957,6 +2076,8 @@ directory = "~/.cache/research-master"
             println!("  author <name>    - Search by author");
             println!("  download <id>    - Download a paper");
             println!("  sources          - List available sources");
+            println!("  history          - Show search/download history");
+            println!("  clear            - Clear cache, history, or downloads");
             println!("  mcp              - Run MCP server");
         }
     }
@@ -2054,18 +2175,23 @@ fn output_papers(papers: &[research_master::models::Paper], format: OutputFormat
             }
         }
         OutputFormat::Table => {
-            use comfy_table::{
-                Attribute, Cell, ColumnConstraint, Table, Width,
-            };
+            use comfy_table::{Attribute, Cell, ColumnConstraint, Table, Width};
+            use owo_colors::OwoColorize;
+
+            if papers.is_empty() {
+                println!("{}", "No papers found.".yellow());
+                return;
+            }
 
             // Use our robust terminal width detection with fallback
             let width = if is_terminal() && terminal_width() > 0 {
                 terminal_width()
             } else {
-                100 // Fallback for non-terminal or unknown size
+                100
             };
 
-            let (title_width, authors_width, source_width, year_width) = get_paper_table_columns(width);
+            let (title_width, authors_width, source_width, year_width) =
+                get_paper_table_columns(width);
 
             let mut table = Table::new();
             table.load_preset(comfy_table::presets::UTF8_FULL);
@@ -2087,7 +2213,9 @@ fn output_papers(papers: &[research_master::models::Paper], format: OutputFormat
 
             for paper in papers {
                 let year = format_year(
-                    paper.published_date.as_ref()
+                    paper
+                        .published_date
+                        .as_ref()
                         .map(|d| d.as_str())
                         .unwrap_or("?"),
                 );
