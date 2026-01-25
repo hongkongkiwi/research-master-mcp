@@ -3805,7 +3805,7 @@ dependencies = [
 
 [[package]]
 name = "research-master"
-version = "0.1.39"
+version = "0.1.40"
 dependencies = [
  "anyhow",
  "async-stream",
