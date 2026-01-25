@@ -726,8 +726,7 @@ async fn main() -> Result<()> {
 
     let subscriber = tracing_subscriber::registry()
         .with(tracing_subscriber::EnvFilter::new(
-            std::env::var("RUST_LOG")
-                .unwrap_or_else(|_| format!("research_master={}", env_filter)),
+            std::env::var("RUST_LOG").unwrap_or_else(|_| format!("research_master={}", env_filter)),
         ))
         .with(tracing_subscriber::fmt::layer());
 
@@ -1576,8 +1575,7 @@ async fn main() -> Result<()> {
                                         && path
                                             .file_name()
                                             .map(|n| {
-                                                n.to_string_lossy()
-                                                    .starts_with("research-master")
+                                                n.to_string_lossy().starts_with("research-master")
                                             })
                                             .unwrap_or(false)
                                     {
@@ -1750,8 +1748,12 @@ directory = "~/.cache/research-master"
                 "Export command - format: {:?}, input: {:?}, output: {:?}",
                 format, input, output
             );
-            println!("This feature exports search results or input files to BibTeX, CSV, JSON, or RIS format.");
-            println!("Example: research-master export --input papers.json --format bibtex -O output.bib");
+            println!(
+                "Example: research-master export --input papers.json --format bibtex -O output.bib"
+            );
+            println!(
+                "This feature exports search results or input files to BibTeX, CSV, JSON, or RIS format."
+            );
         }
 
         Some(Commands::BulkDownload {
@@ -1865,7 +1867,10 @@ directory = "~/.cache/research-master"
                 Shell::Fish => {
                     println!("  # Fish handles completions automatically when placed in:");
                     println!("  mkdir -p ~/.config/fish/completions/");
-                    println!("  {} completions fish > ~/.config/fish/completions/research-master.fish", bin_name);
+                    println!(
+                        "  {} completions fish > ~/.config/fish/completions/research-master.fish",
+                        bin_name
+                    );
                 }
                 Shell::PowerShell => {
                     println!("  # Add to your PowerShell profile:");

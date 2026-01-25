@@ -448,7 +448,8 @@ pub fn cleanup_temp_files(files: Vec<PathBuf>) {
 /// Fetch and verify SHA256 checksum for a file
 pub async fn fetch_and_verify_sha256(asset_name: &str, _temp_dir: &Path) -> Result<String> {
     let client = reqwest::Client::new();
-    let checksums_url = "https://github.com/hongkongkiwi/research-master/releases/download/latest/SHA256SUMS.txt";
+    let checksums_url =
+        "https://github.com/hongkongkiwi/research-master/releases/download/latest/SHA256SUMS.txt";
 
     eprintln!("Downloading SHA256 checksums...");
     let response = client

@@ -169,7 +169,11 @@ impl Source for SemanticScholarSource {
             tracing::warn!(
                 "Semantic Scholar: circuit is open (too many failures) - skipping request"
             );
-            return Ok(SearchResponse::new(vec![], "Semantic Scholar", &query.query));
+            return Ok(SearchResponse::new(
+                vec![],
+                "Semantic Scholar",
+                &query.query,
+            ));
         }
 
         // Clone values for retry closure
@@ -249,7 +253,9 @@ impl Source for SemanticScholarSource {
                     &query.query,
                 ));
             }
-            Err(SourceError::Api(msg)) if msg.contains("unavailable") || msg.contains("circuit") => {
+            Err(SourceError::Api(msg))
+                if msg.contains("unavailable") || msg.contains("circuit") =>
+            {
                 tracing::warn!("Semantic Scholar: unavailable - returning empty results");
                 return Ok(SearchResponse::new(
                     vec![],
