@@ -43,8 +43,15 @@ openalex_email = "your@email.com"
 
 # Source filtering (same as environment variables)
 [sources]
+# Sources to enable (if set, only these are used)
 enabled_sources = "arxiv,pubmed,semantic"
+
+# Sources to always disable (takes precedence over enabled_sources)
 disabled_sources = "dblp,jstor"
+
+# Sources to disable by default (slow/high-latency sources)
+# Set to empty string "" to enable all sources by default
+default_disabled_sources = "biorxiv,pmc,pubmed"
 ```
 
 ## Environment Variables
@@ -55,26 +62,42 @@ All settings can be overridden using environment variables with the `RESEARCH_MA
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `RESEARCH_MASTER_ENABLED_SOURCES` | Comma-separated list of sources to enable | (all enabled) |
-| `RESEARCH_MASTER_DISABLED_SOURCES` | Comma-separated list of sources to disable | (none disabled) |
+| `RESEARCH_MASTER_ENABLED_SOURCES` | Comma-separated list of sources to enable | (not set) |
+| `RESEARCH_MASTER_DISABLED_SOURCES` | Comma-separated list of sources to always disable | (none) |
+| `RESEARCH_MASTER_DEFAULT_DISABLED_SOURCES` | Sources disabled by default (slow/high-latency) | `biorxiv,pmc,pubmed` |
 
-**Logic:**
-- If only `ENABLED` is set: only those sources are enabled
-- If only `DISABLED` is set: all sources except those are enabled
-- If both are set: enabled sources **minus** disabled sources (authoritative list)
-- If neither is set: all sources enabled
+**Slow Sources (disabled by default):**
+The following sources are disabled by default due to high latency (3-15 seconds per request):
+- `biorxiv` - ~15 seconds
+- `pmc` - ~5 seconds
+- `pubmed` - ~3 seconds
 
-**Example:**
+**Priority Logic:**
+1. `DISABLED_SOURCES` always takes precedence - those sources are never used
+2. If `ENABLED_SOURCES` is set: only those sources are used (unless also in `DISABLED_SOURCES`)
+3. If `ENABLED_SOURCES` is not set: all sources except those in `DEFAULT_DISABLED_SOURCES` are used
+4. `DEFAULT_DISABLED_SOURCES` only applies when `ENABLED_SOURCES` is not set
+
+**Examples:**
 ```bash
-# Only enable arXiv, PubMed, and Semantic Scholar
-export RESEARCH_MASTER_ENABLED_SOURCES="arxiv,pubmed,semantic"
+# Default behavior - slow sources disabled automatically
+# (no action needed)
 
-# Enable all sources except DBLP and JSTOR
-export RESEARCH_MASTER_DISABLED_SOURCES="dblp,jstor"
+# Enable slow sources explicitly
+export RESEARCH_MASTER_ENABLED_SOURCES="arxiv,semantic,openalex,biorxiv,pmc,pubmed"
 
-# Enable only arxiv and semantic, but disable semantic (result: only arxiv)
+# Disable a fast source you don't need
+export RESEARCH_MASTER_DISABLED_SOURCES="jstor,dblp"
+
+# Use specific sources only
 export RESEARCH_MASTER_ENABLED_SOURCES="arxiv,semantic"
-export RESEARCH_MASTER_DISABLED_SOURCES="semantic"
+
+# Enable ALL sources (disable default behavior)
+export RESEARCH_MASTER_DEFAULT_DISABLED_SOURCES=""
+
+# Combine: specific sources plus slow ones
+export RESEARCH_MASTER_ENABLED_SOURCES="arxiv,semantic,openalex"
+export RESEARCH_MASTER_DEFAULT_DISABLED_SOURCES="biorxiv,pmc,pubmed"
 ```
 
 **Available source IDs:**

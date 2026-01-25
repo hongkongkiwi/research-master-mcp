@@ -126,6 +126,12 @@ pub struct SourceConfig {
     #[serde(default)]
     pub disabled_sources: Option<String>,
 
+    /// Comma-separated list of source IDs to disable by default (e.g., "biorxiv,pmc,pubmed")
+    /// These sources are slow or have high latency and are disabled unless explicitly enabled
+    /// Maps to RESEARCH_MASTER_DEFAULT_DISABLED_SOURCES environment variable
+    #[serde(default)]
+    pub default_disabled_sources: Option<String>,
+
     /// Per-source HTTP proxy configuration
     /// Format: source_id:proxy_url (e.g., "arxiv:http://proxy:8080")
     #[serde(default)]
@@ -151,9 +157,15 @@ impl Default for SourceConfig {
 
 impl SourceConfig {
     fn from_env() -> Self {
+        // Default disabled sources (slow sources that take 3+ seconds per request)
+        const DEFAULT_DISABLED_SOURCES: &str = "biorxiv,pmc,pubmed";
+
         Self {
             enabled_sources: std::env::var("RESEARCH_MASTER_ENABLED_SOURCES").ok(),
             disabled_sources: std::env::var("RESEARCH_MASTER_DISABLED_SOURCES").ok(),
+            default_disabled_sources: std::env::var("RESEARCH_MASTER_DEFAULT_DISABLED_SOURCES")
+                .ok()
+                .or(Some(DEFAULT_DISABLED_SOURCES.to_string())),
             proxy_http: std::env::var("RESEARCH_MASTER_PROXY_HTTP").ok(),
             proxy_https: std::env::var("RESEARCH_MASTER_PROXY_HTTPS").ok(),
             rate_limits: std::env::var("RESEARCH_MASTER_RATE_LIMITS").ok(),
@@ -164,6 +176,7 @@ impl SourceConfig {
         Self {
             enabled_sources: None,
             disabled_sources: None,
+            default_disabled_sources: None,
             proxy_http: None,
             proxy_https: None,
             rate_limits: None,

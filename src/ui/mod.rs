@@ -307,6 +307,144 @@ pub fn format_file_size(bytes: u64) -> String {
     }
 }
 
+/// Multi-source search spinner with animated progress
+pub struct MultiSourceSpinner {
+    spinner: indicatif::ProgressBar,
+    targets: Vec<String>,
+    completed: usize,
+}
+
+impl MultiSourceSpinner {
+    /// Create a new multi-source spinner for tracking parallel searches
+    pub fn new(sources: &[&str]) -> Self {
+        let targets = sources.iter().map(|s| s.to_string()).collect();
+        let count = sources.len();
+
+        let pb = indicatif::ProgressBar::new(count as u64);
+        pb.set_style(
+            indicatif::ProgressStyle::with_template(
+                "{msg}\n{spinner:.cyan} {wide_bar:.cyan/blue} {pos}/{len}",
+            )
+            .unwrap()
+            .tick_chars("⠁⠂⠄⡀⢀⠠⠐⠈ ")
+            .progress_chars("█   "),
+        );
+
+        let mut msg = "🔬 Searching sources".to_string();
+        if !sources.is_empty() {
+            msg.push_str(&format!(" ({})", sources.join(", ")));
+        }
+        pb.set_message(msg);
+
+        Self {
+            spinner: pb,
+            targets,
+            completed: 0,
+        }
+    }
+
+    /// Mark a source as completed
+    pub fn complete(&mut self, _source: &str) {
+        self.completed += 1;
+        self.spinner.inc(1);
+
+        // Update message with completed source
+        let completed: Vec<String> = self.targets[..self.completed]
+            .iter()
+            .map(|s| format!("✓{}", s))
+            .collect();
+        let pending: Vec<String> = self.targets[self.completed..]
+            .iter()
+            .map(|s| format!("○{}", s))
+            .collect();
+
+        let mut status_parts = completed;
+        status_parts.extend(pending);
+
+        let msg = format!("🔬 Searching [{}]", status_parts.join(" "));
+        self.spinner.set_message(msg);
+    }
+
+    /// Finish with success
+    pub fn finish_with_success(&self, total_results: usize) {
+        self.spinner.set_style(
+            indicatif::ProgressStyle::with_template("{spinner:.green} {msg}")
+                .unwrap()
+                .tick_chars("✓"),
+        );
+        self.spinner
+            .finish_with_message(format!("✓ Found {} papers", total_results));
+    }
+
+    /// Finish with error
+    pub fn finish_with_error(&self, msg: &str) {
+        self.spinner.set_style(
+            indicatif::ProgressStyle::with_template("{spinner:.red} {msg}")
+                .unwrap()
+                .tick_chars("✗"),
+        );
+        self.spinner.finish_with_message(format!("✗ {}", msg));
+    }
+}
+
+/// Scientific loading spinner with themed animation
+pub struct ScientificSpinner {
+    pb: indicatif::ProgressBar,
+}
+
+impl ScientificSpinner {
+    /// Create a new scientific-themed spinner
+    pub fn new(msg: &str) -> Self {
+        let pb = indicatif::ProgressBar::new_spinner();
+        pb.set_style(
+            indicatif::ProgressStyle::with_template("{spinner} {msg}")
+                .unwrap()
+                .tick_chars("🔬 ⚗️ 🧪 🧫 🔭 📡 🧬 ⚛️ "),
+        );
+        pb.set_message(msg.to_string());
+        pb.enable_steady_tick(Duration::from_millis(150));
+
+        Self { pb }
+    }
+
+    /// Set a new message
+    pub fn set_message(&self, msg: &str) {
+        self.pb.set_message(msg.to_string());
+    }
+
+    /// Update to a sub-operation
+    pub fn update(&self, current: usize, total: usize) {
+        let percent = if total > 0 { (current * 100 / total).min(100) } else { 0 };
+        let msg = format!("({}/{}) {}%", current, total, percent);
+        self.pb.set_message(msg);
+    }
+
+    /// Finish with success
+    pub fn finish_with_success(&self, msg: &str) {
+        self.pb.set_style(
+            indicatif::ProgressStyle::with_template("{spinner:.green} {msg}")
+                .unwrap()
+                .tick_chars("✓"),
+        );
+        self.pb.finish_with_message(msg.to_string());
+    }
+
+    /// Finish with error
+    pub fn finish_with_error(&self, msg: &str) {
+        self.pb.set_style(
+            indicatif::ProgressStyle::with_template("{spinner:.red} {msg}")
+                .unwrap()
+                .tick_chars("✗"),
+        );
+        self.pb.finish_with_message(msg.to_string());
+    }
+
+    /// Finish the spinner
+    pub fn finish(&self) {
+        self.pb.finish();
+    }
+}
+
 /// Print a loading spinner with message.
 pub struct Spinner {
     pb: indicatif::ProgressBar,

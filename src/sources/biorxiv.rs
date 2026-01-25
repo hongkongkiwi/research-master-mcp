@@ -81,7 +81,7 @@ impl BiorxivMedrxivSource {
     async fn get_papers(
         &self,
         cursor: &str,
-        max_results: usize,
+        _max_results: usize,
     ) -> Result<Vec<Paper>, SourceError> {
         // Use a date range that covers recent papers (last 5 years to today)
         let today = chrono::Local::now();

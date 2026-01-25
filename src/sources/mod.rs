@@ -2,7 +2,8 @@
 //!
 //! This module defines the [`Source`] trait that all research sources implement.
 //! New sources can be added by implementing this trait and registering them with
-//! the [`SourceRegistry`].
+//! the [`SourceRegistry`]. Also, sources can be selectively enabled or disabled at
+//! runtime using environment variables or a configuration file.
 //!
 //! # Feature Flags
 //!
@@ -42,17 +43,59 @@
 //! - `preprints` - arxiv, biorxiv
 //! - `full` - All sources (default)
 //!
-//! # Examples
+//! # Runtime Source Configuration
+//!
+//! All sources are compiled in by default. Use these environment variables to control which
+//! sources are used at runtime:
+//!
+//! ## Default Disabled Sources (Slow Sources)
+//!
+//! Some sources are disabled by default due to high latency. Set this to enable them:
+//!
+//! - `RESEARCH_MASTER_DEFAULT_DISABLED_SOURCES` - Comma-separated list of slow sources to disable by default
+//!   (e.g., "biorxiv,pmc,pubmed")
+//!
+//!   **Default**: "biorxiv,pmc,pubmed" (these sources take 3-15 seconds per request)
+//!
+//! ## Explicit Enable/Disable
+//!
+//! - `RESEARCH_MASTER_ENABLED_SOURCES` - Only use these sources (e.g., "arxiv,semantic,openalex")
+//! - `RESEARCH_MASTER_DISABLED_SOURCES` - Never use these sources (e.g., "dblp,jstor")
+//!
+//! ## Priority Rules
+//!
+//! 1. If `ENABLED_SOURCES` is set, only those sources are used
+//! 2. If `ENABLED_SOURCES` is not set, sources in `DEFAULT_DISABLED_SOURCES` are excluded
+//! 3. `DISABLED_SOURCES` always takes precedence - those sources are never used
+//!
+//! ## Examples
 //!
 //! ```bash
-//! # Build with only core sources
-//! cargo build --no-default-features --features core
+//! # Use only fast sources (default behavior)
+//! export RESEARCH_MASTER_DEFAULT_DISABLED_SOURCES="biorxiv,pmc,pubmed"
 //!
-//! # Build with specific sources
-//! cargo build --no-default-features --features arxiv,semantic
+//! # Enable slow sources explicitly
+//! export RESEARCH_MASTER_ENABLED_SOURCES="arxiv,semantic,openalex,biorxiv,pmc,pubmed"
 //!
-//! # Build with all sources except dblp
-//! cargo build --features -dblp
+//! # Disable a fast source you don't need
+//! export RESEARCH_MASTER_DISABLED_SOURCES="jstor,dblp"
+//!
+//! # Use specific sources only
+//! export RESEARCH_MASTER_ENABLED_SOURCES="arxiv,semantic"
+//! ```
+//!
+//! # Compile-Time vs Runtime
+//!
+//! Use **compile-time features** to reduce binary size by excluding sources entirely.
+//! Use **runtime configuration** to keep all sources compiled but control which are used.
+//!
+//! ```bash
+//! # Compile-time: exclude slow sources from binary
+//! cargo build --no-default-features --features "core,openalex,crossref,arxiv"
+//!
+//! # Runtime: include all sources but disable slow ones by default
+//! cargo build
+//! export RESEARCH_MASTER_DEFAULT_DISABLED_SOURCES="biorxiv,pmc,pubmed"
 //! ```
 
 #[cfg(feature = "source-acm")]

@@ -277,7 +277,6 @@ fn format_bibtex(paper: &Paper) -> String {
     };
 
     let year = extract_year(paper.published_date.as_deref());
-    let doi = paper.doi.as_deref().unwrap_or("");
 
     format!("@article{{{},\n  author = {{{}}},\n  title = {{{}}},\n  journal = {{{}}},\n  year = {{{}}},\n  url = {{{}}}\n}}",
         key, bibtex_authors, paper.title, paper.source.name(), year, paper.url)

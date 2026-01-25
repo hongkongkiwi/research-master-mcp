@@ -2234,8 +2234,6 @@ directory = "~/.cache/research-master"
             use research_master::utils::{format_citation, get_structured_citation, CitationStyle as UtilsCitationStyle};
             use research_master::sources::Source;
 
-            let config = get_config();
-            let cache = CacheService::new();
             let registry = SourceRegistry::new();
 
             // Get all sources that support DOI lookup
@@ -2393,14 +2391,6 @@ fn source_to_id(source: Source) -> &'static str {
         Source::GoogleScholar => "google_scholar",
         Source::All => unreachable!(),
     }
-}
-
-/// Helper function to check if a string starts with a specific prefix (case-insensitive)
-fn paper_id_upper_start(paper_id: &str, prefix: &str) -> bool {
-    if paper_id.len() < prefix.len() {
-        return false;
-    }
-    paper_id[..prefix.len()].to_uppercase() == prefix
 }
 
 fn output_papers(papers: &[research_master::models::Paper], format: OutputFormat) {

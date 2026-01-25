@@ -71,6 +71,8 @@ struct SourceFilter {
     enabled: Option<HashSet<String>>,
     /// Set of explicitly disabled sources (None means none are disabled)
     disabled: Option<HashSet<String>>,
+    /// Set of sources disabled by default (slow sources that require opt-in)
+    default_disabled: Option<HashSet<String>>,
 }
 
 impl SourceFilter {
@@ -102,30 +104,54 @@ impl SourceFilter {
             })
             .filter(|set| !set.is_empty());
 
-        Self { enabled, disabled }
+        let default_disabled = config
+            .default_disabled_sources
+            .as_ref()
+            .filter(|s| !s.is_empty())
+            .map(|value| {
+                value
+                    .split(',')
+                    .map(|s| s.trim().to_lowercase())
+                    .filter(|s| !s.is_empty())
+                    .collect::<HashSet<_>>()
+            })
+            .filter(|set| !set.is_empty());
+
+        Self {
+            enabled,
+            disabled,
+            default_disabled,
+        }
     }
 
     /// Check if a source should be enabled based on the filter
     ///
     /// Logic:
-    /// - If ENABLE is set and DISABLE is not: only enabled sources
-    /// - If DISABLE is set and ENABLE is not: all except disabled sources
-    /// - If both are set: enabled sources minus disabled sources
-    /// - If neither is set: all sources enabled
+    /// - If ENABLE is set: only enabled sources (unless also in disabled)
+    /// - If ENABLE is not set but default_disabled is set: all except default_disabled and disabled
+    /// - If DISABLE is set: all except disabled sources
+    /// - If neither ENABLE nor DISABLE is set: all sources enabled (unless in default_disabled)
     fn is_enabled(&self, source_id: &str) -> bool {
         let id_lower = source_id.to_lowercase();
 
-        match (&self.enabled, &self.disabled) {
-            // Both specified: enabled minus disabled
-            (Some(enabled), Some(disabled)) => {
-                enabled.contains(&id_lower) && !disabled.contains(&id_lower)
+        // First check if explicitly disabled
+        if let Some(disabled) = &self.disabled {
+            if disabled.contains(&id_lower) {
+                return false;
             }
-            // Only enabled specified: must be in enabled set
-            (Some(enabled), None) => enabled.contains(&id_lower),
-            // Only disabled specified: must not be in disabled set
-            (None, Some(disabled)) => !disabled.contains(&id_lower),
-            // Neither specified: all enabled
-            (None, None) => true,
+        }
+
+        match &self.enabled {
+            // Explicit enable list: must be in the list
+            Some(enabled) => enabled.contains(&id_lower),
+            // No explicit enable: check if it's in default_disabled
+            None => {
+                if let Some(default_disabled) = &self.default_disabled {
+                    !default_disabled.contains(&id_lower)
+                } else {
+                    true
+                }
+            }
         }
     }
 }
@@ -388,14 +414,19 @@ mod tests {
     }
 
     /// Helper to set up env vars for tests with proper isolation
-    fn with_source_env_vars<F>(enabled: Option<&str>, disabled: Option<&str>, test: F)
-    where
+    fn with_source_env_vars<F>(
+        enabled: Option<&str>,
+        disabled: Option<&str>,
+        default_disabled: Option<&str>,
+        test: F,
+    ) where
         F: FnOnce(),
     {
         let _guard = env_lock().lock().expect("env lock poisoned");
         // Save original values
         let orig_enabled = std::env::var("RESEARCH_MASTER_ENABLED_SOURCES").ok();
         let orig_disabled = std::env::var("RESEARCH_MASTER_DISABLED_SOURCES").ok();
+        let orig_default_disabled = std::env::var("RESEARCH_MASTER_DEFAULT_DISABLED_SOURCES").ok();
 
         // Set new values
         match enabled {
@@ -405,6 +436,10 @@ mod tests {
         match disabled {
             Some(v) => std::env::set_var("RESEARCH_MASTER_DISABLED_SOURCES", v),
             None => std::env::remove_var("RESEARCH_MASTER_DISABLED_SOURCES"),
+        }
+        match default_disabled {
+            Some(v) => std::env::set_var("RESEARCH_MASTER_DEFAULT_DISABLED_SOURCES", v),
+            None => std::env::remove_var("RESEARCH_MASTER_DEFAULT_DISABLED_SOURCES"),
         }
 
         // Run test
@@ -419,12 +454,16 @@ mod tests {
             Some(v) => std::env::set_var("RESEARCH_MASTER_DISABLED_SOURCES", v),
             None => std::env::remove_var("RESEARCH_MASTER_DISABLED_SOURCES"),
         }
+        match orig_default_disabled {
+            Some(v) => std::env::set_var("RESEARCH_MASTER_DEFAULT_DISABLED_SOURCES", v),
+            None => std::env::remove_var("RESEARCH_MASTER_DEFAULT_DISABLED_SOURCES"),
+        }
     }
 
     #[test]
     fn test_source_filter_only_enabled() {
-        // Test: ENABLE only - only enabled sources
-        with_source_env_vars(Some("arxiv,pubmed"), None, || {
+        // Test: ENABLE only - only enabled sources (disable default_disabled to test explicitly)
+        with_source_env_vars(Some("arxiv,pubmed"), None, Some(""), || {
             let config = crate::config::get_config().sources;
             let filter = SourceFilter::from_config(&config);
             assert!(filter.is_enabled("arxiv"));
@@ -436,8 +475,8 @@ mod tests {
 
     #[test]
     fn test_source_filter_only_disabled() {
-        // Test: DISABLE only - all except disabled
-        with_source_env_vars(None, Some("dblp,jstor"), || {
+        // Test: DISABLE only - all except disabled (but default_disabled still applies)
+        with_source_env_vars(None, Some("dblp,jstor"), Some(""), || {
             let config = crate::config::get_config().sources;
             let filter = SourceFilter::from_config(&config);
             assert!(filter.is_enabled("arxiv"));
@@ -450,8 +489,8 @@ mod tests {
 
     #[test]
     fn test_source_filter_both_enabled_and_disabled() {
-        // Test: Both ENABLE and DISABLE - enabled minus disabled
-        with_source_env_vars(Some("arxiv,pubmed,semantic,dblp"), Some("dblp"), || {
+        // Test: Both ENABLE and DISABLE - enabled minus disabled (but default_disabled still applies)
+        with_source_env_vars(Some("arxiv,pubmed,semantic,dblp"), Some("dblp"), Some(""), || {
             let config = crate::config::get_config().sources;
             let filter = SourceFilter::from_config(&config);
             assert!(filter.is_enabled("arxiv"));
@@ -462,22 +501,52 @@ mod tests {
     }
 
     #[test]
-    fn test_source_filter_neither() {
-        // Test: Neither set - all enabled
-        with_source_env_vars(None, None, || {
+    fn test_source_filter_default_disabled() {
+        // Test: DEFAULT_DISABLED - sources in list are disabled unless explicitly enabled
+        with_source_env_vars(None, None, Some("biorxiv,pmc,pubmed"), || {
             let config = crate::config::get_config().sources;
             let filter = SourceFilter::from_config(&config);
+            assert!(filter.is_enabled("arxiv")); // Not in default_disabled
+            assert!(!filter.is_enabled("biorxiv")); // In default_disabled
+            assert!(!filter.is_enabled("pmc")); // In default_disabled
+            assert!(!filter.is_enabled("pubmed")); // In default_disabled
+            assert!(filter.is_enabled("semantic")); // Not in default_disabled
+        });
+    }
+
+    #[test]
+    fn test_source_filter_default_disabled_with_explicit_enable() {
+        // Test: DEFAULT_DISABLED + ENABLE - explicitly enabled overrides default_disabled
+        with_source_env_vars(Some("biorxiv,pubmed"), None, Some("biorxiv,pmc,pubmed"), || {
+            let config = crate::config::get_config().sources;
+            let filter = SourceFilter::from_config(&config);
+            assert!(filter.is_enabled("biorxiv")); // Explicitly enabled overrides default
+            assert!(filter.is_enabled("pubmed")); // Explicitly enabled overrides default
+            assert!(!filter.is_enabled("pmc")); // In default_disabled, not explicitly enabled
+        });
+    }
+
+    #[test]
+    fn test_source_filter_neither() {
+        // Test: Neither set - all enabled (but default_disabled is set by default)
+        with_source_env_vars(None, None, None, || {
+            let config = crate::config::get_config().sources;
+            let filter = SourceFilter::from_config(&config);
+            // With default_disabled set to "biorxiv,pmc,pubmed", these should be disabled
             assert!(filter.is_enabled("arxiv"));
-            assert!(filter.is_enabled("pubmed"));
             assert!(filter.is_enabled("semantic"));
             assert!(filter.is_enabled("dblp"));
+            // biorxiv, pmc, pubmed should be disabled by default
+            assert!(!filter.is_enabled("biorxiv"));
+            assert!(!filter.is_enabled("pmc"));
+            assert!(!filter.is_enabled("pubmed"));
         });
     }
 
     #[test]
     fn test_source_filter_empty_values() {
         // Test: Empty values should be treated as not set
-        with_source_env_vars(Some(""), Some(""), || {
+        with_source_env_vars(Some(""), Some(""), Some(""), || {
             let config = crate::config::get_config().sources;
             let filter = SourceFilter::from_config(&config);
             // Empty strings should result in all sources enabled

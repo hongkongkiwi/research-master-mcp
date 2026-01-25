@@ -16,6 +16,8 @@ fn setup_api_keys() {
     std::env::set_var("MDPI_API_KEY", "test_key_for_integration_tests");
     std::env::set_var("IEEE_XPLORE_API_KEY", "test_key_for_integration_tests");
     std::env::set_var("JSTOR_API_KEY", "test_key_for_integration_tests");
+    // Disable default disabled sources so all sources are available for testing
+    std::env::set_var("RESEARCH_MASTER_DEFAULT_DISABLED_SOURCES", "");
 }
 
 /// Clean up API key environment variables after tests
@@ -25,6 +27,7 @@ fn cleanup_api_keys() {
     std::env::remove_var("MDPI_API_KEY");
     std::env::remove_var("IEEE_XPLORE_API_KEY");
     std::env::remove_var("JSTOR_API_KEY");
+    std::env::remove_var("RESEARCH_MASTER_DEFAULT_DISABLED_SOURCES");
 }
 
 /// Wrapper to run tests with API keys set

@@ -188,7 +188,7 @@ impl PubMedSource {
         #[allow(non_snake_case)]
         struct AbstractText {
             #[serde(rename = "Label")]
-            label: Option<String>,
+            _label: Option<String>,
             #[serde(rename = "$text")]
             text: Option<String>,
         }

@@ -260,7 +260,7 @@ struct CRMessage {
 
 #[derive(Debug, Deserialize)]
 struct CRDate {
-    date: Option<String>,
+    _date: Option<String>,
 }
 
 #[cfg(test)]
