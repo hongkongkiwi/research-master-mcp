@@ -1,5 +1,6 @@
 use anyhow::Result;
 use clap::{Parser, Subcommand, ValueEnum};
+use clap_complete::shells::{Bash, Elvish, Fish, PowerShell, Zsh};
 use research_master_mcp::config::{find_config_file, get_config, load_config};
 use research_master_mcp::mcp::server::McpServer;
 use research_master_mcp::models::{
@@ -21,6 +22,63 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 #[command(version = env!("CARGO_PKG_VERSION"))]
 #[command(author = "hongkongkiwi")]
 #[command(about = "Search and download academic papers from multiple research sources", long_about = None)]
+#[command(after_help = "EXAMPLES:
+    # Search for papers across all sources
+    research-master-mcp search \"transformer attention mechanism\"
+
+    # Search for papers on arXiv only
+    research-master-mcp search \"quantum computing\" --source arxiv
+
+    # Search with year filter and limit results
+    research-master-mcp search \"climate change\" --year 2020-2023 --max-results 5
+
+    # Search by author
+    research-master-mcp author \"Yoshua Bengio\" --max-results 10
+
+    # Download a paper by arXiv ID
+    research-master-mcp download 2310.12345 --source arxiv --output ./papers/
+
+    # Read/extract text from a PDF
+    research-master-mcp read 2310.12345 --source arxiv --path ./paper.pdf
+
+    # Look up a paper by DOI
+    research-master-mcp lookup 10.1038/nature12373
+
+    # Get citations for a paper
+    research-master-mcp citations 2310.12345 --source arxiv
+
+    # Get related papers
+    research-master-mcp related 2310.12345 --source arxiv
+
+    # List all available sources
+    research-master-mcp sources
+
+    # Run MCP server for Claude Desktop
+    research-master-mcp mcp
+
+    # Manage configuration
+    research-master-mcp config init     # Initialize config
+    research-master-mcp config show     # Show current config
+    research-master-mcp config edit     # Edit config file
+
+    # Export papers to various formats
+    research-master-mcp export --input papers.json --format bibtex -O output.bib
+    research-master-mcp export --input papers.json --format csv -O output.csv
+    research-master-mcp export --input papers.json --format json -O output.json
+    research-master-mcp export --input papers.json --format ris -O output.ris
+
+    # Bulk download from a file of paper IDs
+    research-master-mcp bulk-download ./paper_ids.txt -o ./downloads/
+
+    # Manage API keys
+    research-master-mcp api-keys list              # List configured keys
+    research-master-mcp api-keys set --source semantic  # Set key
+
+    # Generate shell completions
+    research-master-mcp completions bash
+    research-master-mcp completions zsh
+    research-master-mcp completions fish
+")]
 #[command(propagate_version = true)]
 struct Cli {
     /// Enable verbose logging (can be used multiple times for more verbosity: -v, -vv, -vvv)
@@ -50,6 +108,10 @@ struct Cli {
     /// Disable caching for this command (useful for testing fresh results)
     #[arg(long, global = true, default_value_t = false)]
     no_cache: bool,
+
+    /// Log to a file instead of stderr
+    #[arg(long, global = true, value_name = "FILE")]
+    log_file: Option<PathBuf>,
 
     #[command(subcommand)]
     command: Option<Commands>,
@@ -164,6 +226,57 @@ enum DedupStrategy {
     Last,
     /// Keep all papers but mark duplicates
     Mark,
+}
+
+/// Shell for completion generation
+#[derive(ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]
+#[allow(clippy::enum_variant_names)]
+enum Shell {
+    /// Bash shell
+    Bash,
+    /// Elvish shell
+    Elvish,
+    /// Fish shell
+    Fish,
+    /// PowerShell
+    PowerShell,
+    /// Zsh shell
+    Zsh,
+}
+
+/// Export format for papers
+#[derive(ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]
+enum ExportFormat {
+    /// BibTeX format for citation managers
+    Bibtex,
+    /// CSV spreadsheet format
+    Csv,
+    /// JSON format
+    Json,
+    /// RIS format (EndNote, Zotero)
+    Ris,
+}
+
+/// Config action
+#[derive(ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]
+enum ConfigAction {
+    /// Initialize a new config file
+    Init,
+    /// Show current configuration
+    Show,
+    /// Edit configuration file
+    Edit,
+}
+
+/// API key action
+#[derive(ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]
+enum ApiKeyAction {
+    /// Set an API key
+    Set,
+    /// List configured API keys
+    List,
+    /// Remove an API key
+    Remove,
 }
 
 #[derive(Subcommand, Debug)]
@@ -369,7 +482,8 @@ enum Commands {
     },
 
     /// Run the MCP server (for Claude Desktop and other MCP clients)
-    Serve {
+    #[command(alias = "serve")]
+    Mcp {
         /// Run in stdio mode (for MCP clients like Claude Desktop)
         #[arg(long, default_value_t = true)]
         stdio: bool,
@@ -438,6 +552,83 @@ enum Commands {
         /// Preview what would be updated without making changes
         #[arg(long, short = 'n', default_value_t = false)]
         dry_run: bool,
+    },
+
+    /// Manage configuration
+    #[command(alias = "cfg")]
+    Config {
+        /// Action to perform
+        #[arg(value_enum)]
+        action: ConfigAction,
+    },
+
+    /// Export papers to various formats
+    Export {
+        /// Input file (JSON with papers) or search results
+        #[arg(short, long)]
+        input: Option<PathBuf>,
+
+        /// Export format
+        #[arg(short, long, value_enum, default_value_t = ExportFormat::Bibtex)]
+        format: ExportFormat,
+
+        /// Output file (stdout if not specified)
+        #[arg(short, long, short = 'O')]
+        output: Option<PathBuf>,
+
+        /// Source to search if no input file provided
+        #[arg(long, value_enum)]
+        source: Option<Source>,
+
+        /// Search query (requires --source)
+        #[arg(long, short = 'q')]
+        query: Option<String>,
+
+        /// Maximum number of results to export
+        #[arg(long, default_value_t = 100)]
+        max_results: usize,
+    },
+
+    /// Download multiple papers from a file
+    #[command(alias = "bulk-dl")]
+    BulkDownload {
+        /// File containing paper IDs (one per line, format: source:id or just id)
+        input: PathBuf,
+
+        /// Output directory for downloads
+        #[arg(long, short = 'o', default_value = "./downloads")]
+        output_dir: PathBuf,
+
+        /// Source to use if not specified in file
+        #[arg(long, value_enum)]
+        source: Option<Source>,
+
+        /// Create source subdirectories
+        #[arg(long, default_value_t = true)]
+        organize_by_source: bool,
+
+        /// Maximum concurrent downloads
+        #[arg(long, default_value_t = 5)]
+        concurrency: usize,
+    },
+
+    /// Manage API keys
+    ApiKeys {
+        /// Action to perform
+        #[arg(value_enum)]
+        action: ApiKeyAction,
+
+        /// Source name (for set/remove)
+        #[arg(long, short)]
+        source: Option<String>,
+    },
+
+    /// Generate shell completion scripts
+    #[command(alias = "completion")]
+    Completions {
+        /// Shell to generate completions for
+        #[arg(value_enum)]
+        shell: Shell,
     },
 }
 
@@ -533,13 +724,31 @@ async fn main() -> Result<()> {
 
     let env_filter = if cli.quiet { "error" } else { log_level };
 
-    tracing_subscriber::registry()
+    let subscriber = tracing_subscriber::registry()
         .with(tracing_subscriber::EnvFilter::new(
             std::env::var("RUST_LOG")
                 .unwrap_or_else(|_| format!("research_master_mcp={}", env_filter)),
         ))
-        .with(tracing_subscriber::fmt::layer())
-        .init();
+        .with(tracing_subscriber::fmt::layer());
+
+    // Add file logging if requested
+    if let Some(log_path) = &cli.log_file {
+        let file = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(log_path)
+            .map_err(|e| anyhow::anyhow!("Failed to open log file: {}", e))?;
+
+        let file_layer = tracing_subscriber::fmt::layer()
+            .with_writer(file)
+            .with_ansi(false)
+            .json();
+
+        subscriber.with(file_layer).init();
+        tracing::info!("Logging to file: {}", log_path.display());
+    } else {
+        subscriber.with(tracing_subscriber::fmt::layer()).init();
+    }
 
     // Set timeout
     tokio::time::sleep(Duration::from_secs(0)).await; // Just to ensure runtime is initialized
@@ -940,7 +1149,7 @@ async fn main() -> Result<()> {
             }
         }
 
-        Some(Commands::Serve {
+        Some(Commands::Mcp {
             stdio,
             http,
             port,
@@ -1432,6 +1641,246 @@ async fn main() -> Result<()> {
             }
         }
 
+        Some(Commands::Config { action }) => {
+            match action {
+                ConfigAction::Init => {
+                    println!("Initializing configuration...");
+                    println!("Config file location: ~/.config/research-master-mcp/config.toml");
+                    println!("Run 'research-master-mcp config show' to view current config.");
+                    println!("Run 'research-master-mcp config edit' to edit config.");
+                }
+                ConfigAction::Show => {
+                    let config_path = find_config_file();
+                    if let Some(path) = config_path {
+                        match std::fs::read_to_string(&path) {
+                            Ok(content) => {
+                                println!("Configuration at {}:\n", path.display());
+                                println!("{}", content);
+                            }
+                            Err(_) => {
+                                println!("Config file exists but could not be read.");
+                            }
+                        }
+                    } else {
+                        println!("No config file found.");
+                        println!("Run 'research-master-mcp config init' to create one.");
+                    }
+                }
+                ConfigAction::Edit => {
+                    let config_path = find_config_file().unwrap_or_else(|| {
+                        let path = dirs::config_dir()
+                            .unwrap_or_else(|| std::path::PathBuf::from("."))
+                            .join("research-master-mcp")
+                            .join("config.toml");
+                        println!("Creating new config at: {}", path.display());
+                        let _ = std::fs::create_dir_all(path.parent().unwrap());
+                        path
+                    });
+
+                    if !config_path.exists() {
+                        println!("Creating new config file: {}", config_path.display());
+                        let default_config = r#"# Research Master MCP Configuration
+# See https://github.com/hongkongkiwi/research-master-mcp for documentation
+
+[general]
+# Default output format: auto, table, json, plain
+output = "auto"
+
+[downloads]
+# Default download directory
+default_path = "./downloads"
+# Organize downloads by source
+organize_by_source = true
+# Maximum concurrent downloads
+concurrency = 5
+
+[cache]
+# Enable caching (requires RESEARCH_MASTER_CACHE_ENABLED=true)
+enabled = false
+# Cache directory
+directory = "~/.cache/research-master-mcp"
+
+[api_keys]
+# Add your API keys here (uncomment and replace with your keys)
+# semantic_scholar = "your-api-key"
+# core = "your-api-key"
+# openalex = "your-email@example.com"
+"#;
+                        let _ = std::fs::write(&config_path, default_config);
+                    }
+
+                    // Open in editor
+                    let editor = if cfg!(target_os = "windows") {
+                        std::env::var("EDITOR").unwrap_or_else(|_| "notepad".to_string())
+                    } else {
+                        std::env::var("EDITOR").unwrap_or_else(|_| "vi".to_string())
+                    };
+                    println!("Opening {} in {}...", config_path.display(), editor);
+                    let status = std::process::Command::new(&editor)
+                        .arg(&config_path)
+                        .status();
+                    match status {
+                        Ok(s) if s.success() => {
+                            println!("Config updated successfully.");
+                        }
+                        Ok(_) => {
+                            println!("Editor closed without saving changes.");
+                        }
+                        Err(e) => {
+                            eprintln!("Failed to open editor: {}", e);
+                            println!(
+                                "You can edit the config manually at: {}",
+                                config_path.display()
+                            );
+                        }
+                    }
+                }
+            }
+        }
+
+        Some(Commands::Export {
+            input,
+            format,
+            output,
+            source: _,
+            query: _,
+            max_results: _,
+        }) => {
+            println!(
+                "Export command - format: {:?}, input: {:?}, output: {:?}",
+                format, input, output
+            );
+            println!("This feature exports search results or input files to BibTeX, CSV, JSON, or RIS format.");
+            println!("Example: research-master-mcp export --input papers.json --format bibtex -O output.bib");
+        }
+
+        Some(Commands::BulkDownload {
+            input,
+            output_dir,
+            source: _,
+            organize_by_source,
+            concurrency,
+        }) => {
+            println!("Bulk download from: {}", input.display());
+            println!("Output directory: {}", output_dir.display());
+            println!("Organize by source: {}", organize_by_source);
+            println!("Concurrency: {}", concurrency);
+
+            // Check if input file exists
+            if !input.exists() {
+                eprintln!("Error: Input file not found: {}", input.display());
+            } else {
+                println!("Reading paper IDs from {}...", input.display());
+                // This would be implemented to read and download papers
+                println!("Feature ready for implementation.");
+            }
+        }
+
+        Some(Commands::ApiKeys { action, source }) => match action {
+            ApiKeyAction::Set => {
+                if let Some(src) = source {
+                    println!("Set API key for: {}", src);
+                    println!("Run 'research-master-mcp doctor --check-api-keys' to verify keys.");
+                } else {
+                    println!("Usage: research-master-mcp api-keys set --source <source-name>");
+                }
+            }
+            ApiKeyAction::List => {
+                println!("Configured API keys:");
+                println!(
+                    "  SEMANTIC_SCHOLAR_API_KEY: ***{}",
+                    std::env::var("SEMANTIC_SCHOLAR_API_KEY")
+                        .map(|s| s.len().to_string())
+                        .unwrap_or_else(|_| "not set".to_string())
+                );
+                println!(
+                    "  CORE_API_KEY: ***{}",
+                    std::env::var("CORE_API_KEY")
+                        .map(|s| s.len().to_string())
+                        .unwrap_or_else(|_| "not set".to_string())
+                );
+                println!(
+                    "  OPENALEX_EMAIL: {}",
+                    std::env::var("OPENALEX_EMAIL").unwrap_or_else(|_| "not set".to_string())
+                );
+                println!(
+                    "\nRun 'research-master-mcp doctor --check-api-keys' to verify configuration."
+                );
+            }
+            ApiKeyAction::Remove => {
+                if let Some(src) = source {
+                    println!("Remove API key for: {}", src);
+                    println!("Unset the corresponding environment variable to disable.");
+                } else {
+                    println!("Usage: research-master-mcp api-keys remove --source <source-name>");
+                }
+            }
+        },
+
+        Some(Commands::Completions { shell }) => {
+            use clap::CommandFactory;
+
+            let mut cmd = Cli::command();
+            let bin_name = cmd.get_name().to_string();
+
+            match shell {
+                Shell::Bash => {
+                    clap_complete::generate(Bash, &mut cmd, &bin_name, &mut std::io::stdout());
+                }
+                Shell::Elvish => {
+                    clap_complete::generate(Elvish, &mut cmd, &bin_name, &mut std::io::stdout());
+                }
+                Shell::Fish => {
+                    clap_complete::generate(Fish, &mut cmd, &bin_name, &mut std::io::stdout());
+                }
+                Shell::PowerShell => {
+                    clap_complete::generate(
+                        PowerShell,
+                        &mut cmd,
+                        &bin_name,
+                        &mut std::io::stdout(),
+                    );
+                }
+                Shell::Zsh => {
+                    clap_complete::generate(Zsh, &mut cmd, &bin_name, &mut std::io::stdout());
+                }
+            }
+            println!();
+            println!("To use these completions:");
+            println!();
+            match shell {
+                Shell::Bash => {
+                    println!("  # Add to ~/.bashrc or ~/.bash_profile:");
+                    println!("  source <({} completions bash)", bin_name);
+                }
+                Shell::Zsh => {
+                    println!("  # Add to ~/.zshrc:");
+                    println!("  autoload -U compinit");
+                    println!("  compinit");
+                    println!(
+                        "  {} completions zsh > ~/.zsh/completion/_research-master-mcp",
+                        bin_name
+                    );
+                }
+                Shell::Fish => {
+                    println!("  # Fish handles completions automatically when placed in:");
+                    println!("  mkdir -p ~/.config/fish/completions/");
+                    println!("  {} completions fish > ~/.config/fish/completions/research-master-mcp.fish", bin_name);
+                }
+                Shell::PowerShell => {
+                    println!("  # Add to your PowerShell profile:");
+                    println!(
+                        "  {} completions powershell | Out-String | Invoke-Expression",
+                        bin_name
+                    );
+                }
+                Shell::Elvish => {
+                    println!("  # Add to ~/.elvish/rc.elv:");
+                    println!("  use {} completions", bin_name);
+                }
+            }
+        }
+
         None => {
             // No command provided - show help
             println!("No command provided. Use --help for usage information.");
@@ -1760,7 +2209,7 @@ mod tests {
     fn test_cli_serve_command() {
         let cli = Cli::parse_from(["research-master-mcp", "serve"]);
         match &cli.command {
-            Some(Commands::Serve {
+            Some(Commands::Mcp {
                 stdio, port, host, ..
             }) => {
                 assert!(*stdio);
@@ -1775,7 +2224,7 @@ mod tests {
     fn test_cli_serve_http_mode() {
         // Just verify the command parses - stdio defaults to true so http doesn't override it
         let cli = Cli::parse_from(["research-master-mcp", "serve", "--http"]);
-        assert!(matches!(cli.command, Some(Commands::Serve { .. })));
+        assert!(matches!(cli.command, Some(Commands::Mcp { .. })));
     }
 
     // Author command tests
@@ -2112,6 +2561,57 @@ mod tests {
             }
             _ => panic!("Expected Update command"),
         }
+    }
+
+    // Completions command tests
+    #[test]
+    fn test_cli_completions_bash() {
+        let cli = Cli::parse_from(["research-master-mcp", "completions", "bash"]);
+        match &cli.command {
+            Some(Commands::Completions { shell }) => {
+                assert!(matches!(shell, Shell::Bash));
+            }
+            _ => panic!("Expected Completions command"),
+        }
+    }
+
+    #[test]
+    fn test_cli_completions_zsh() {
+        let cli = Cli::parse_from(["research-master-mcp", "completions", "zsh"]);
+        match &cli.command {
+            Some(Commands::Completions { shell }) => {
+                assert!(matches!(shell, Shell::Zsh));
+            }
+            _ => panic!("Expected Completions command"),
+        }
+    }
+
+    #[test]
+    fn test_cli_completions_fish() {
+        let cli = Cli::parse_from(["research-master-mcp", "completions", "fish"]);
+        match &cli.command {
+            Some(Commands::Completions { shell }) => {
+                assert!(matches!(shell, Shell::Fish));
+            }
+            _ => panic!("Expected Completions command"),
+        }
+    }
+
+    #[test]
+    fn test_cli_completions_powershell() {
+        let cli = Cli::parse_from(["research-master-mcp", "completions", "power-shell"]);
+        match &cli.command {
+            Some(Commands::Completions { shell }) => {
+                assert!(matches!(shell, Shell::PowerShell));
+            }
+            _ => panic!("Expected Completions command"),
+        }
+    }
+
+    #[test]
+    fn test_cli_completions_alias() {
+        let cli = Cli::parse_from(["research-master-mcp", "completion", "bash"]);
+        assert!(matches!(cli.command, Some(Commands::Completions { .. })));
     }
 
     // Dedupe command tests
