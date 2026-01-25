@@ -22,7 +22,8 @@ const SEMANTIC_SCHOLAR_RATE_LIMIT_ENV: &str = "SEMANTIC_SCHOLAR_RATE_LIMIT";
 const DEFAULT_SEMANTIC_RATE_LIMIT: u32 = 1;
 
 /// Environment variable for Semantic Scholar circuit breaker failure threshold
-const SEMANTIC_SCHOLAR_CIRCUIT_BREAKER_THRESHOLD_ENV: &str = "SEMANTIC_SCHOLAR_CIRCUIT_BREAKER_THRESHOLD";
+const SEMANTIC_SCHOLAR_CIRCUIT_BREAKER_THRESHOLD_ENV: &str =
+    "SEMANTIC_SCHOLAR_CIRCUIT_BREAKER_THRESHOLD";
 
 /// Default circuit breaker failure threshold for Semantic Scholar
 const DEFAULT_SEMANTIC_CIRCUIT_BREAKER_THRESHOLD: usize = 10;

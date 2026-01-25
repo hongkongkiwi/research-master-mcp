@@ -66,7 +66,7 @@ pub use display::{
     Terminal,
 };
 pub use history::{HistoryEntry, HistoryEntryType, HistoryService};
-pub use http::{HttpClient, RateLimitedRequestBuilder};
+pub use http::{get_user_agent, HttpClient, RateLimitedRequestBuilder, USER_AGENT_ENV_VAR};
 pub use pdf::{
     extract_text, extract_text_simple, get_extraction_info, has_poppler, has_tesseract,
     ExtractionInfo, ExtractionMethod, PdfExtractError,

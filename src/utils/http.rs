@@ -177,11 +177,20 @@ impl RateLimitedRequestBuilder {
     }
 }
 
+/// Environment variable for custom user agent
+pub const USER_AGENT_ENV_VAR: &str = "RESEARCH_MASTER_USER_AGENT";
+
+/// Get user agent from environment or use default
+pub fn get_user_agent() -> String {
+    std::env::var(USER_AGENT_ENV_VAR).unwrap_or_else(|_| {
+        format!("{}/{}", env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION"))
+    })
+}
+
 impl HttpClient {
     /// Create a new HTTP client with default settings and rate limiting
     pub fn new() -> Result<Self, SourceError> {
-        let user_agent = concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION"));
-        Self::with_user_agent(user_agent)
+        Self::with_user_agent(&get_user_agent())
     }
 
     /// Create a new HTTP client with a custom user agent

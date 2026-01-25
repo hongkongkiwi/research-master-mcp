@@ -107,6 +107,18 @@ Sources use `SourceError` enum with conversion implementations from `reqwest::Er
 - **API Keys**: Optional for most sources (rate limits apply). Keys via environment variables (e.g., `SEMANTIC_SCHOLAR_API_KEY`)
 - **Poppler**: Required for PDF text extraction (`brew install poppler` on macOS, `apt-get install libpoppler-cpp-dev` on Ubuntu)
 
+### Environment Variables
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `RESEARCH_MASTER_USER_AGENT` | Custom User-Agent header for all HTTP requests | `research-master/{version}` |
+| `SEMANTIC_SCHOLAR_API_KEY` | API key for higher rate limits | None |
+| `SEMANTIC_SCHOLAR_RATE_LIMIT` | Rate limit (requests/second) | 1 |
+| `SEMANTIC_SCHOLAR_CIRCUIT_BREAKER_THRESHOLD` | Failures before opening circuit | 10 |
+| `DIMENSIONS_API_KEY` | API key for Dimensions API | None |
+| `GOOGLE_SCHOLAR_ENABLED` | Enable Google Scholar feature | false |
+| `RESEARCH_MASTER_RATE_LIMITS_DEFAULT_REQUESTS_PER_SECOND` | Global rate limit | 5 |
+
 ## Source Auto-Detection
 
 Paper ID formats are auto-detected in `unified_tools.rs`:

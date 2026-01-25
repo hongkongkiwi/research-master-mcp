@@ -64,7 +64,10 @@ impl Source for IacrSource {
                 client
                     .get(&format!("{}{}", IACR_SEARCH_URL, url))
                     .header("Accept", "application/json")
-                    .header("User-Agent", concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION")))
+                    .header(
+                        "User-Agent",
+                        concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION")),
+                    )
                     .send()
                     .await
                     .map_err(|e| SourceError::Network(format!("Failed to search IACR: {}", e)))

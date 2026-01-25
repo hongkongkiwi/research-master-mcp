@@ -261,6 +261,63 @@ research-master dedupe papers.json --show
 | `-s, --strategy <STRAT>` | Deduplication strategy: first, last, mark (default: first) |
 | `--show` | Show duplicate groups without removing |
 
+### History Command (`history` or `hist`)
+
+Show search and download history.
+
+```bash
+# Show recent history (default: 20 entries)
+research-master history
+
+# Show only searches
+research-master history --searches
+
+# Show only downloads
+research-master history --downloads
+
+# Limit to 10 entries
+research-master history --limit 10
+
+# Clear history
+research-master history --clear
+```
+
+**Options:**
+
+| Option | Description |
+|--------|-------------|
+| `-l, --limit <N>` | Maximum entries to show (default: 20) |
+| `--searches` | Show only search history |
+| `--downloads` | Show only download history |
+| `--clear` | Clear all history |
+
+### Clear Command (`clear`)
+
+Clear cache, history, or downloads.
+
+```bash
+# Clear everything
+research-master clear --all
+
+# Clear only cache
+research-master clear --cache
+
+# Clear only history
+research-master clear --history
+
+# Clear only downloads
+research-master clear --downloads
+```
+
+**Options:**
+
+| Option | Description |
+|--------|-------------|
+| `--cache` | Clear all cached data |
+| `--history` | Clear search and download history |
+| `--downloads` | Clear downloaded papers |
+| `-a, --all` | Clear everything (cache, history, downloads) |
+
 ## Global Options
 
 | Option | Description |
@@ -375,6 +432,12 @@ research-master doctor --check-connectivity
 
 # Deduplicate papers
 research-master dedupe papers.json --strategy first
+
+# Show search/download history
+research-master history
+
+# Clear cache, history, and downloads
+research-master clear --all
 
 # Show all environment variables
 research-master --env
