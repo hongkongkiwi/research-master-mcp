@@ -9,7 +9,7 @@ This guide covers CLI commands and MCP server usage.
 For integration with Claude Desktop or other MCP clients:
 
 ```bash
-research-master-mcp serve --stdio
+research-master serve --stdio
 ```
 
 ### HTTP/SSE Mode
@@ -17,7 +17,7 @@ research-master-mcp serve --stdio
 For clients that support HTTP-based MCP connections:
 
 ```bash
-research-master-mcp serve --port 3000 --host 0.0.0.0
+research-master serve --port 3000 --host 0.0.0.0
 ```
 
 Then configure your client to connect to `http://localhost:3000/sse`.
@@ -29,7 +29,7 @@ Then configure your client to connect to `http://localhost:3000/sse`.
 Search for papers across all available research sources.
 
 ```bash
-research-master-mcp search "transformer architecture" --year 2020-
+research-master search "transformer architecture" --year 2020-
 ```
 
 **Options:**
@@ -53,7 +53,7 @@ research-master-mcp search "transformer architecture" --year 2020-
 Search for papers by a specific author.
 
 ```bash
-research-master-mcp author "Geoffrey Hinton" --source semantic
+research-master author "Geoffrey Hinton" --source semantic
 ```
 
 **Options:**
@@ -74,7 +74,7 @@ research-master-mcp author "Geoffrey Hinton" --source semantic
 Download a paper PDF to your local filesystem.
 
 ```bash
-research-master-mcp download 2301.12345 --source arxiv --output ./papers
+research-master download 2301.12345 --source arxiv --output ./papers
 ```
 
 **Options:**
@@ -93,7 +93,7 @@ research-master-mcp download 2301.12345 --source arxiv --output ./papers
 Read and extract text from a paper's PDF.
 
 ```bash
-research-master-mcp read 2301.12345 --source arxiv --output extracted.txt
+research-master read 2301.12345 --source arxiv --output extracted.txt
 ```
 
 **Options:**
@@ -114,7 +114,7 @@ research-master-mcp read 2301.12345 --source arxiv --output extracted.txt
 Get papers that cite a specific paper.
 
 ```bash
-research-master-mcp citations 2301.12345 --source arxiv --max-results 20
+research-master citations 2301.12345 --source arxiv --max-results 20
 ```
 
 **Options:**
@@ -130,7 +130,7 @@ research-master-mcp citations 2301.12345 --source arxiv --max-results 20
 Get papers referenced by a specific paper.
 
 ```bash
-research-master-mcp references 1706.03762 --source semantic
+research-master references 1706.03762 --source semantic
 ```
 
 **Options:**
@@ -146,7 +146,7 @@ research-master-mcp references 1706.03762 --source semantic
 Get related/similar papers.
 
 ```bash
-research-master-mcp related 1706.03762 --source connected_papers
+research-master related 1706.03762 --source connected_papers
 ```
 
 **Options:**
@@ -162,7 +162,7 @@ research-master-mcp related 1706.03762 --source connected_papers
 Look up a paper by its DOI.
 
 ```bash
-research-master-mcp lookup 10.48550/arXiv.2301.12345
+research-master lookup 10.48550/arXiv.2301.12345
 ```
 
 **Options:**
@@ -180,7 +180,7 @@ research-master-mcp lookup 10.48550/arXiv.2301.12345
 List available sources and their capabilities.
 
 ```bash
-research-master-mcp sources --detailed
+research-master sources --detailed
 ```
 
 **Options:**
@@ -196,16 +196,16 @@ Manage local cache.
 
 ```bash
 # Show cache status
-research-master-mcp cache status
+research-master cache status
 
 # Clear all cached data
-research-master-mcp cache clear
+research-master cache clear
 
 # Clear only search cache
-research-master-mcp cache clear-searches
+research-master cache clear-searches
 
 # Clear only citation cache
-research-master-mcp cache clear-citations
+research-master cache clear-citations
 ```
 
 ### Doctor Command (`doctor` or `diag`)
@@ -214,16 +214,16 @@ Check configuration and source health.
 
 ```bash
 # Basic check
-research-master-mcp doctor
+research-master doctor
 
 # Check connectivity to all sources
-research-master-mcp doctor --check-connectivity
+research-master doctor --check-connectivity
 
 # Check API keys
-research-master-mcp doctor --check-api-keys
+research-master doctor --check-api-keys
 
 # Verbose output
-research-master-mcp doctor --check-connectivity --check-api-keys --verbose
+research-master doctor --check-connectivity --check-api-keys --verbose
 ```
 
 ### Update Command (`update`)
@@ -232,13 +232,13 @@ Update to the latest version.
 
 ```bash
 # Check for updates
-research-master-mcp update
+research-master update
 
 # Force update even if already at latest
-research-master-mcp update --force
+research-master update --force
 
 # Preview what would be updated
-research-master-mcp update --dry-run
+research-master update --dry-run
 ```
 
 ### Dedupe Command (`dedupe`)
@@ -246,10 +246,10 @@ research-master-mcp update --dry-run
 Remove duplicate papers from a JSON file.
 
 ```bash
-research-master-mcp dedupe papers.json --strategy first --output deduplicated.json
+research-master dedupe papers.json --strategy first --output deduplicated.json
 
 # Just show duplicates without removing
-research-master-mcp dedupe papers.json --show
+research-master dedupe papers.json --show
 ```
 
 **Options:**
@@ -313,7 +313,7 @@ research-master-mcp dedupe papers.json --show
 Automatically chooses between table and plain text based on terminal:
 
 ```bash
-research-master-mcp search "transformer" --output auto
+research-master search "transformer" --output auto
 ```
 
 ### Table Format
@@ -321,7 +321,7 @@ research-master-mcp search "transformer" --output auto
 Tabular output for easy reading:
 
 ```bash
-research-master-mcp search "transformer" --output table
+research-master search "transformer" --output table
 ```
 
 ### JSON Format
@@ -329,7 +329,7 @@ research-master-mcp search "transformer" --output table
 Machine-readable JSON output:
 
 ```bash
-research-master-mcp search "transformer" --output json
+research-master search "transformer" --output json
 ```
 
 ### Plain Format
@@ -337,50 +337,50 @@ research-master-mcp search "transformer" --output json
 Simple line-by-line output:
 
 ```bash
-research-master-mcp search "transformer" --output plain
+research-master search "transformer" --output plain
 ```
 
 ## Quick Examples
 
 ```bash
 # Search for papers
-research-master-mcp search "transformer architecture" --year 2020-
+research-master search "transformer architecture" --year 2020-
 
 # Search by author
-research-master-mcp author "Geoffrey Hinton"
+research-master author "Geoffrey Hinton"
 
 # Download a paper
-research-master-mcp download 2301.12345 --source arxiv --output ./papers
+research-master download 2301.12345 --source arxiv --output ./papers
 
 # Read extracted text from a PDF
-research-master-mcp read 2301.12345 --source arxiv --output extracted.txt
+research-master read 2301.12345 --source arxiv --output extracted.txt
 
 # Look up by DOI
-research-master-mcp lookup 10.48550/arXiv.2301.12345
+research-master lookup 10.48550/arXiv.2301.12345
 
 # Get citations
-research-master-mcp citations 2301.12345 --source arxiv
+research-master citations 2301.12345 --source arxiv
 
 # Get references
-research-master-mcp references 1706.03762
+research-master references 1706.03762
 
 # Get related papers
-research-master-mcp related 1706.03762 --source connected_papers
+research-master related 1706.03762 --source connected_papers
 
 # List all sources with capabilities
-research-master-mcp sources --detailed --with-capability download
+research-master sources --detailed --with-capability download
 
 # Check system health
-research-master-mcp doctor --check-connectivity
+research-master doctor --check-connectivity
 
 # Deduplicate papers
-research-master-mcp dedupe papers.json --strategy first
+research-master dedupe papers.json --strategy first
 
 # Show all environment variables
-research-master-mcp --env
+research-master --env
 
 # Start MCP server
-research-master-mcp serve --stdio
+research-master serve --stdio
 ```
 
 ## Next Steps

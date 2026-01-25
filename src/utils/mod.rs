@@ -16,7 +16,7 @@
 //! # Deduplication
 //!
 //! ```
-//! use research_master_mcp::utils::DuplicateStrategy;
+//! use research_master::utils::DuplicateStrategy;
 //!
 //! // Example: deduplicate_papers takes papers and a strategy
 //! let strategy = DuplicateStrategy::First;
@@ -32,7 +32,7 @@
 //! # Retry with Backoff
 //!
 //! ```rust
-//! use research_master_mcp::utils::RetryConfig;
+//! use research_master::utils::RetryConfig;
 //!
 //! let config = RetryConfig::default();
 //! assert_eq!(config.max_attempts, 3);

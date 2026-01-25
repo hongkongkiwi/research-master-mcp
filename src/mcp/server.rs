@@ -43,7 +43,7 @@ impl McpServer {
     /// Build the MCP server with tool handlers (internal implementation)
     fn build_server_impl(tools: ToolRegistry) -> Result<Server, pmcp::Error> {
         let mut builder = Server::builder()
-            .name("research-master-mcp")
+            .name("research-master")
             .version(env!("CARGO_PKG_VERSION"))
             .capabilities(ServerCapabilities::default());
 

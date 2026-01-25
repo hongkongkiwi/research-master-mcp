@@ -49,7 +49,7 @@ just help
 ## Project Structure
 
 ```
-research-master-mcp/
+research-master/
 ├── Cargo.toml
 ├── justfile                     # Development commands
 ├── README.md

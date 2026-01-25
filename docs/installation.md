@@ -1,18 +1,18 @@
 # Installation
 
-This guide covers all methods for installing Research Master MCP.
+This guide covers all methods for installing Research Master.
 
 ## Quick Install (macOS with Homebrew)
 
 ```bash
 # Add the custom tap
-brew tap hongkongkiwi/research-master-mcp
+brew tap hongkongkiwi/research-master
 
-# Install research-master-mcp
-brew install research-master-mcp
+# Install research-master
+brew install research-master
 
 # Start the MCP server
-research-master-mcp serve --stdio
+research-master serve --stdio
 ```
 
 ## Packages & Images Summary
@@ -30,41 +30,41 @@ research-master-mcp serve --stdio
 
 ## GitHub Releases (Binaries)
 
-Download prebuilt binaries from the [GitHub Releases page](https://github.com/hongkongkiwi/research-master-mcp/releases). Assets include:
+Download prebuilt binaries from the [GitHub Releases page](https://github.com/hongkongkiwi/research-master/releases). Assets include:
 
-- **Linux (glibc)**: `research-master-mcp-x86_64-unknown-linux-gnu.gz`, `research-master-mcp-aarch64-unknown-linux-gnu.gz`
-- **macOS**: `research-master-mcp-x86_64-apple-darwin.gz`, `research-master-mcp-aarch64-apple-darwin.gz`
-- **Windows**: `research-master-mcp-windows.zip`
+- **Linux (glibc)**: `research-master-x86_64-unknown-linux-gnu.gz`, `research-master-aarch64-unknown-linux-gnu.gz`
+- **macOS**: `research-master-x86_64-apple-darwin.gz`, `research-master-aarch64-apple-darwin.gz`
+- **Windows**: `research-master-windows.zip`
 
 After downloading:
 
 ```bash
 # Linux/macOS example
-gunzip research-master-mcp-<target>.gz
-chmod +x research-master-mcp-<target>
-./research-master-mcp-<target> --version
+gunzip research-master-<target>.gz
+chmod +x research-master-<target>
+./research-master-<target> --version
 ```
 
 ## Homebrew (macOS)
 
 ```bash
 # Add the custom tap
-brew tap hongkongkiwi/research-master-mcp
+brew tap hongkongkiwi/research-master
 
-# Install research-master-mcp
-brew install research-master-mcp
+# Install research-master
+brew install research-master
 ```
 
 ## Linux (Debian/Ubuntu) - DEB Package
 
 ```bash
 # Download .deb package from GitHub Releases
-wget https://github.com/hongkongkiwi/research-master-mcp/releases/download/vx.x.x/research-master-mcp_x.x.x_amd64.deb
+wget https://github.com/hongkongkiwi/research-master/releases/download/vx.x.x/research-master_x.x.x_amd64.deb
 # Or arm64:
-# wget https://github.com/hongkongkiwi/research-master-mcp/releases/download/vx.x.x/research-master-mcp_x.x.x_arm64.deb
+# wget https://github.com/hongkongkiwi/research-master/releases/download/vx.x.x/research-master_x.x.x_arm64.deb
 
 # Install the package
-sudo dpkg -i research-master-mcp_x.x.x_amd64.deb
+sudo dpkg -i research-master_x.x.x_amd64.deb
 
 # Install dependencies if needed
 sudo apt-get install -f
@@ -75,35 +75,35 @@ sudo apt-get install -f
 ```bash
 # Download .apk package from GitHub Releases (see asset names/paths)
 # Example (x86_64):
-# wget https://github.com/hongkongkiwi/research-master-mcp/releases/download/vx.x.x/x86_64/research-master-mcp-x.x.x-r0.apk
+# wget https://github.com/hongkongkiwi/research-master/releases/download/vx.x.x/x86_64/research-master-x.x.x-r0.apk
 
 # Install the package
-sudo apk add --allow-untrusted research-master-mcp-x.x.x-r0.apk
+sudo apk add --allow-untrusted research-master-x.x.x-r0.apk
 ```
 
 ## Linux (RedHat/Fedora) - RPM Package
 
 ```bash
 # Download .rpm package from GitHub Releases
-wget https://github.com/hongkongkiwi/research-master-mcp/releases/download/vx.x.x/research-master-mcp-x.x.x-1.x86_64.rpm
+wget https://github.com/hongkongkiwi/research-master/releases/download/vx.x.x/research-master-x.x.x-1.x86_64.rpm
 # Or arm64:
-# wget https://github.com/hongkongkiwi/research-master-mcp/releases/download/vx.x.x/research-master-mcp-x.x.x-1.aarch64.rpm
+# wget https://github.com/hongkongkiwi/research-master/releases/download/vx.x.x/research-master-x.x.x-1.aarch64.rpm
 
 # Install the package
-sudo dnf install research-master-mcp-x.x.x-1.x86_64.rpm
+sudo dnf install research-master-x.x.x-1.x86_64.rpm
 ```
 
 ## Crates.io
 
 ```bash
-cargo install research-master-mcp
+cargo install research-master
 ```
 
 ## From Source
 
 ```bash
-git clone https://github.com/hongkongkiwi/research-master-mcp
-cd research-master-mcp
+git clone https://github.com/hongkongkiwi/research-master
+cd research-master
 cargo install --path .
 ```
 
@@ -204,23 +204,23 @@ Download and install from [poppler-windows](https://github.com/oschwartz10612/po
 
 ```bash
 # Build image
-docker build -t research-master-mcp .
+docker build -t research-master .
 
 # Run with stdio mode
-docker run --rm -i research-master-mcp serve --stdio
+docker run --rm -i research-master serve --stdio
 
 # Or use pre-built image (includes Poppler for PDF text extraction)
-docker run --rm -i ghcr.io/hongkongkiwi/research-master-mcp serve --stdio
+docker run --rm -i ghcr.io/hongkongkiwi/research-master serve --stdio
 ```
 
 ### OCR Variant (for scanned PDFs)
 
 ```bash
 # OCR variant (adds Tesseract for scanned PDFs)
-docker run --rm -i ghcr.io/hongkongkiwi/research-master-mcp-ocr serve --stdio
+docker run --rm -i ghcr.io/hongkongkiwi/research-master-ocr serve --stdio
 
 # Build OCR image with extra languages (e.g., English + German)
-docker build -f Dockerfile.ocr -t research-master-mcp-ocr --build-arg OCR_LANGS="eng deu" .
+docker build -f Dockerfile.ocr -t research-master-ocr --build-arg OCR_LANGS="eng deu" .
 ```
 
 ### With Persistent Configuration
@@ -229,20 +229,20 @@ docker build -f Dockerfile.ocr -t research-master-mcp-ocr --build-arg OCR_LANGS=
 docker run --rm -i \
   -v ~/.config/research-master:/root/.config/research-master \
   -v ./downloads:/downloads \
-  ghcr.io/hongkongkiwi/research-master-mcp serve --stdio
+  ghcr.io/hongkongkiwi/research-master serve --stdio
 ```
 
 ## Verifying Installation
 
 ```bash
 # Check version
-research-master-mcp --version
+research-master --version
 
 # Show all environment variables
-research-master-mcp --env
+research-master --env
 
 # Search for papers (test)
-research-master-mcp search "transformer architecture" --max-results 1
+research-master search "transformer architecture" --max-results 1
 ```
 
 ## Next Steps

@@ -1,6 +1,6 @@
 # MCP Client Integration
 
-Research Master MCP is compatible with any Model Context Protocol client. Below are setup instructions for popular MCP-compatible applications.
+Research Master is compatible with any Model Context Protocol client. Below are setup instructions for popular MCP-compatible applications.
 
 ## Claude Desktop
 
@@ -14,7 +14,7 @@ Research Master MCP is compatible with any Model Context Protocol client. Below 
 {
   "mcpServers": {
     "research-master": {
-      "command": "research-master-mcp",
+      "command": "research-master",
       "args": ["serve"]
     }
   }
@@ -30,7 +30,7 @@ Add to **project settings** (`.zed/settings.json`) or **global settings** (`~/.c
   "model_context_provider": {
     "servers": {
       "research-master": {
-        "command": "research-master-mcp",
+        "command": "research-master",
         "args": ["serve"]
       }
     }
@@ -54,7 +54,7 @@ Add to **Continue config** (`~/.continue/config.json` or project `.continue/conf
   ],
   "mcpServers": {
     "research-master": {
-      "command": "research-master-mcp",
+      "command": "research-master",
       "args": ["serve"]
     }
   }
@@ -73,7 +73,7 @@ Cursor is compatible with Claude Desktop config. Edit `~/.cursor/mcp.json`:
 {
   "mcpServers": {
     "research-master": {
-      "command": "research-master-mcp",
+      "command": "research-master",
       "args": ["serve"]
     }
   }
@@ -90,7 +90,7 @@ Goose uses the same config format as Claude Desktop. Edit `~/.config/goose/mcp_c
 {
   "mcpServers": {
     "research-master": {
-      "command": "research-master-mcp",
+      "command": "research-master",
       "args": ["serve"]
     }
   }
@@ -102,7 +102,7 @@ Ensure the binary is in your PATH or use absolute path:
 {
   "mcpServers": {
     "research-master": {
-      "command": "/usr/local/bin/research-master-mcp",
+      "command": "/usr/local/bin/research-master",
       "args": ["serve"]
     }
   }
@@ -117,7 +117,7 @@ Tabby supports MCP servers via its configuration. Edit `~/.tabby/mcp/servers.jso
 {
   "servers": {
     "research-master": {
-      "command": "research-master-mcp",
+      "command": "research-master",
       "args": ["serve"]
     }
   }
@@ -135,7 +135,7 @@ Use with any MCP proxy tool (e.g., `mcp-cli`, `glama-cli`):
 pip install mcp-cli
 
 # Run with proxy
-mcp-cli run --command "research-master-mcp" --args "serve"
+mcp-cli run --command "research-master" --args "serve"
 ```
 
 Or use with Smithery for easy MCP server discovery:
@@ -144,8 +144,8 @@ Or use with Smithery for easy MCP server discovery:
 # Install Smithery CLI
 npm install -g @smithery/cli
 
-# Add Research Master MCP
-smithery add research-master-mcp
+# Add Research Master
+smithery add research-master
 ```
 
 ## Homebrew Cask (macOS)
@@ -154,14 +154,14 @@ If installed via Homebrew cask, the binary is already in your PATH:
 
 ```bash
 # Using Homebrew to install
-brew tap hongkongkiwi/research-master-mcp
-brew install --cask research-master-mcp
+brew tap hongkongkiwi/research-master
+brew install --cask research-master
 
 # Verify installation
-research-master-mcp --version
+research-master --version
 ```
 
-The MCP server command in configs can simply be `"research-master-mcp"`.
+The MCP server command in configs can simply be `"research-master"`.
 
 ## Docker
 
@@ -169,19 +169,19 @@ Run via Docker for isolated execution:
 
 ```bash
 # Build image
-docker build -t research-master-mcp .
+docker build -t research-master .
 
 # Run with stdio mode
-docker run --rm -i research-master-mcp serve --stdio
+docker run --rm -i research-master serve --stdio
 
 # Or use pre-built image (includes Poppler for PDF text extraction)
-docker run --rm -i ghcr.io/hongkongkiwi/research-master-mcp serve --stdio
+docker run --rm -i ghcr.io/hongkongkiwi/research-master serve --stdio
 
 # OCR variant (adds Tesseract for scanned PDFs)
-docker run --rm -i ghcr.io/hongkongkiwi/research-master-mcp-ocr serve --stdio
+docker run --rm -i ghcr.io/hongkongkiwi/research-master-ocr serve --stdio
 
 # Build OCR image with extra languages (e.g., English + German)
-docker build -f Dockerfile.ocr -t research-master-mcp-ocr --build-arg OCR_LANGS="eng deu" .
+docker build -f Dockerfile.ocr -t research-master-ocr --build-arg OCR_LANGS="eng deu" .
 ```
 
 For persistent configuration, mount volumes:
@@ -189,7 +189,7 @@ For persistent configuration, mount volumes:
 docker run --rm -i \
   -v ~/.config/research-master:/root/.config/research-master \
   -v ./downloads:/downloads \
-  ghcr.io/hongkongkiwi/research-master-mcp serve --stdio
+  ghcr.io/hongkongkiwi/research-master serve --stdio
 ```
 
 ## Cline (VS Code / JetBrains)
@@ -200,7 +200,7 @@ Cline supports MCP servers via `~/.cline/mcp_servers.json` or project `.cline/mc
 {
   "mcpServers": {
     "research-master": {
-      "command": "research-master-mcp",
+      "command": "research-master",
       "args": ["serve"]
     }
   }
@@ -213,7 +213,7 @@ Cline supports MCP servers via `~/.cline/mcp_servers.json` or project `.cline/mc
 {
   "mcpServers": {
     "research-master": {
-      "command": "/usr/local/bin/research-master-mcp",
+      "command": "/usr/local/bin/research-master",
       "args": ["serve"]
     }
   }
@@ -228,7 +228,7 @@ Roo Code (formerly Rui) uses the same MCP config format as Claude Desktop. Edit 
 {
   "mcpServers": {
     "research-master": {
-      "command": "research-master-mcp",
+      "command": "research-master",
       "args": ["serve"]
     }
   }
@@ -246,7 +246,7 @@ Roo Code (formerly Rui) uses the same MCP config format as Claude Desktop. Edit 
 {
   "mcpServers": {
     "research-master": {
-      "command": "research-master-mcp",
+      "command": "research-master",
       "args": ["serve"],
       "env": {
         "RESEARCH_MASTER_ENABLED_SOURCES": "arxiv,semantic"
@@ -264,7 +264,7 @@ Kilo Code supports MCP in `~/.config/kilo/mcp.json`:
 {
   "mcpServers": {
     "research-master": {
-      "command": "research-master-mcp",
+      "command": "research-master",
       "args": ["serve"]
     }
   }
@@ -287,7 +287,7 @@ VS Code requires the **MCP for VS Code** extension or use with Continue extensio
 {
   "mcp.servers": {
     "research-master": {
-      "command": "research-master-mcp",
+      "command": "research-master",
       "args": ["serve"]
     }
   }
@@ -302,7 +302,7 @@ VS Code requires the **MCP for VS Code** extension or use with Continue extensio
 {
   "servers": {
     "research-master": {
-      "command": "research-master-mcp",
+      "command": "research-master",
       "args": ["serve"]
     }
   }
@@ -327,7 +327,7 @@ Codex CLI uses MCP configuration via `~/.config/codex/mcp.json`:
 {
   "mcpServers": {
     "research-master": {
-      "command": "research-master-mcp",
+      "command": "research-master",
       "args": ["serve"]
     }
   }
@@ -337,7 +337,7 @@ Codex CLI uses MCP configuration via `~/.config/codex/mcp.json`:
 **Or use environment variable:**
 
 ```bash
-export MCP_SERVERS='{"research-master": {"command": "research-master-mcp", "args": ["serve"]}}'
+export MCP_SERVERS='{"research-master": {"command": "research-master", "args": ["serve"]}}'
 ```
 
 ## Gemini CLI
@@ -348,7 +348,7 @@ Gemini CLI supports MCP via `~/.config/gemini/mcp.json`:
 {
   "mcpServers": {
     "research-master": {
-      "command": "research-master-mcp",
+      "command": "research-master",
       "args": ["serve"]
     }
   }
@@ -361,7 +361,7 @@ Gemini CLI supports MCP via `~/.config/gemini/mcp.json`:
 {
   "mcpServers": {
     "research-master": {
-      "command": "research-master-mcp",
+      "command": "research-master",
       "args": ["serve"],
       "env": {
         "SEMANTIC_SCHOLAR_API_KEY": "${SEMANTIC_SCHOLAR_API_KEY}",
@@ -380,7 +380,7 @@ OpenCode supports MCP servers. Configure via **Settings > MCP**:
 {
   "mcpServers": {
     "research-master": {
-      "command": "research-master-mcp",
+      "command": "research-master",
       "args": ["serve"]
     }
   }
@@ -394,7 +394,7 @@ OpenCode supports MCP servers. Configure via **Settings > MCP**:
   "servers": {
     "research-master": {
       "type": "stdio",
-      "command": "research-master-mcp",
+      "command": "research-master",
       "args": ["serve"]
     }
   }
@@ -403,13 +403,13 @@ OpenCode supports MCP servers. Configure via **Settings > MCP**:
 
 ## Other MCP Clients
 
-Research Master MCP works with any MCP-compatible client. General configuration pattern:
+Research Master works with any MCP-compatible client. General configuration pattern:
 
 ```json
 {
   "mcpServers": {
     "research-master": {
-      "command": "research-master-mcp",
+      "command": "research-master",
       "args": ["serve"]
     }
   }
@@ -425,7 +425,7 @@ Research Master MCP works with any MCP-compatible client. General configuration 
 For HTTP/SSE mode (alternative to stdio):
 
 ```bash
-research-master-mcp serve --port 3000 --host 0.0.0.0
+research-master serve --port 3000 --host 0.0.0.0
 ```
 
 Then configure with HTTP endpoint:
@@ -443,7 +443,7 @@ Then configure with HTTP endpoint:
 
 | Option | Description |
 |--------|-------------|
-| `command` | Binary name or full path to `research-master-mcp` |
+| `command` | Binary name or full path to `research-master` |
 | `args` | `["serve"]` for stdio mode, `["serve", "--port", "3000"]` for SSE |
 | `env` | Optional environment variables (API keys, rate limits) |
 
@@ -453,7 +453,7 @@ Then configure with HTTP endpoint:
 {
   "mcpServers": {
     "research-master": {
-      "command": "research-master-mcp",
+      "command": "research-master",
       "args": ["serve"],
       "env": {
         "RESEARCH_MASTER_ENABLED_SOURCES": "arxiv,semantic,openalex",
@@ -466,7 +466,7 @@ Then configure with HTTP endpoint:
 
 ## Related Documentation
 
-- [Installation](installation.md) - Installing Research Master MCP
+- [Installation](installation.md) - Installing Research Master
 - [Tools](tools.md) - Available MCP tools reference
 - [Usage](usage.md) - CLI commands and options
 - [Configuration](configuration.md) - Environment variables

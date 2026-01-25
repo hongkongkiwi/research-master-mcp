@@ -1,0 +1,48 @@
+# Lefthook configuration for Research Master MCP
+# https://github.com/evilmartians/lefthook
+
+# Run checks before commits
+[pre-commit]
+commands = {
+  # Check code formatting
+  fmt = {
+    run = "cargo fmt --all -- --check",
+    stage = true,
+    env = { RUST_LOG = "error" }
+  },
+
+  # Run clippy lints
+  clippy = {
+    run = "cargo clippy --all-targets --all-features -- -D warnings",
+    stage = true,
+    pass = ["fmt"]  # Only run if formatting passes
+  },
+
+  # Check GitHub Actions workflow files
+  actionlint = {
+    run = "actionlint",
+    pass = ["clippy"]  # Only run if clippy passes
+  }
+}
+
+# Run checks before pushes
+[pre-push]
+commands = {
+  # Run clippy
+  clippy = {
+    run = "cargo clippy --all-targets --all-features -- -D warnings",
+    pass = ["audit"]
+  },
+
+  # Check TOML formatting
+  "taplo-check" = {
+    run = "taplo fmt --check",
+    pass = ["clippy"]
+  },
+
+  # Security audit
+  audit = {
+    run = "cargo audit",
+    pass = ["taplo-check"]
+  }
+}

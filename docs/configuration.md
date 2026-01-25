@@ -18,7 +18,7 @@ The application searches for a configuration file in the following locations (in
 You can also specify a custom config file path using the `--config` CLI option:
 
 ```bash
-research-master-mcp --config /path/to/config.toml search "machine learning"
+research-master --config /path/to/config.toml search "machine learning"
 ```
 
 ## Configuration File Format (TOML)

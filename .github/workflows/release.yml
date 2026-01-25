@@ -56,7 +56,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: binary-${{ matrix.target }}
-          path: target/${{ matrix.target }}/release/research-master-mcp
+          path: target/${{ matrix.target }}/release/research-master
           retention-days: 5
 
   # Build binaries for non-Linux platforms
@@ -97,7 +97,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: binary-${{ matrix.target }}
-          path: target/${{ matrix.target }}/release/research-master-mcp${{ matrix.target == 'x86_64-pc-windows-msvc' && '.exe' || '' }}
+          path: target/${{ matrix.target }}/release/research-master${{ matrix.target == 'x86_64-pc-windows-msvc' && '.exe' || '' }}
           retention-days: 5
 
   # Create GitHub release
@@ -133,18 +133,18 @@ jobs:
             target=$(basename "$dir" | sed 's/binary-//')
             case "$target" in
               x86_64-pc-windows-msvc)
-                if [ -f "$dir/research-master-mcp.exe" ]; then
-                  (cd "$dir" && zip -r "$GITHUB_WORKSPACE/release/research-master-mcp-v${VERSION}-${target}.zip" research-master-mcp.exe)
+                if [ -f "$dir/research-master.exe" ]; then
+                  (cd "$dir" && zip -r "$GITHUB_WORKSPACE/release/research-master-v${VERSION}-${target}.zip" research-master.exe)
                 fi
                 ;;
               *)
-                if [ -f "$dir/research-master-mcp" ]; then
+                if [ -f "$dir/research-master" ]; then
                   tmpdir=$(mktemp -d)
-                  cp "$dir/research-master-mcp" "$tmpdir/research-master-mcp"
+                  cp "$dir/research-master" "$tmpdir/research-master"
                   if [ -f "research-master.example.toml" ]; then
                     cp "research-master.example.toml" "$tmpdir/research-master.example.toml"
                   fi
-                  tar -C "$tmpdir" -czf "release/research-master-mcp-v${VERSION}-${target}.tar.gz" .
+                  tar -C "$tmpdir" -czf "release/research-master-v${VERSION}-${target}.tar.gz" .
                   rm -rf "$tmpdir"
                 fi
                 ;;
@@ -232,9 +232,9 @@ jobs:
       - name: Prepare Docker binaries
         run: |
           mkdir -p docker-bin
-          mv docker-bin/amd64/research-master-mcp docker-bin/research-master-mcp-amd64
-          mv docker-bin/arm64/research-master-mcp docker-bin/research-master-mcp-arm64
-          chmod +x docker-bin/research-master-mcp-amd64 docker-bin/research-master-mcp-arm64
+          mv docker-bin/amd64/research-master docker-bin/research-master-amd64
+          mv docker-bin/arm64/research-master docker-bin/research-master-arm64
+          chmod +x docker-bin/research-master-amd64 docker-bin/research-master-arm64
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -339,7 +339,7 @@ jobs:
       - name: Upload .deb package
         uses: actions/upload-artifact@v4
         with:
-          name: research-master-mcp.deb-${{ matrix.arch }}
+          name: research-master.deb-${{ matrix.arch }}
           path: target/${{ matrix.target }}/debian/*_${{ matrix.deb_arch }}.deb
 
   build-rpm:
@@ -377,7 +377,7 @@ jobs:
         run: |
           VERSION="${{ github.event.inputs.version || github.ref_name }}"
           VERSION="${VERSION#v}"
-          pkgname="research-master-mcp"
+          pkgname="research-master"
           # Get current date for changelog (format: "Day Month DD YYYY")
           CHANGELOG_DATE=$(date '+%a %b %d %Y')
 
@@ -385,18 +385,18 @@ jobs:
 
           # Create tarball with proper directory structure (tarball name without .tar.gz must match extracted dir)
           mkdir -p "tmp-pkg-dir/${pkgname}-${VERSION}"
-          cp target/${{ matrix.target }}/release/research-master-mcp "tmp-pkg-dir/${pkgname}-${VERSION}/"
+          cp target/${{ matrix.target }}/release/research-master "tmp-pkg-dir/${pkgname}-${VERSION}/"
           tar -C tmp-pkg-dir -czf "rpmbuild/SOURCES/${pkgname}-${VERSION}.tar.gz" "${pkgname}-${VERSION}"
           rm -rf tmp-pkg-dir
 
           # Create spec file
-          cat > rpmbuild/SPECS/research-master-mcp.spec << EOF
+          cat > rpmbuild/SPECS/research-master.spec << EOF
           Name:           ${pkgname}
           Version:        ${VERSION}
           Release:        0%{?dist}
           Summary:        Model Context Protocol server for academic research sources
           License:        MIT
-          URL:            https://github.com/hongkongkiwi/research-master-mcp
+          URL:            https://github.com/hongkongkiwi/research-master
           Source0:        %{name}-%{version}.tar.gz
           BuildArch:      ${{ matrix.rpm_arch }}
           %description
@@ -414,20 +414,20 @@ jobs:
           %files
           /usr/bin/%{name}
           %changelog
-          * ${CHANGELOG_DATE} Research Master MCP <research-master-mcp@users.noreply.github.com> - ${VERSION}-0
+          * ${CHANGELOG_DATE} Research Master <research-master@users.noreply.github.com> - ${VERSION}-0
           - Version ${VERSION} release
           EOF
 
       - name: Build .rpm package
         run: |
           rpmbuild --define "_topdir $PWD/rpmbuild" \
-            -bb rpmbuild/SPECS/research-master-mcp.spec \
+            -bb rpmbuild/SPECS/research-master.spec \
             --target ${{ matrix.rpm_arch }}
 
       - name: Upload .rpm package
         uses: actions/upload-artifact@v4
         with:
-          name: research-master-mcp.rpm-${{ matrix.arch }}
+          name: research-master.rpm-${{ matrix.arch }}
           path: rpmbuild/RPMS/${{ matrix.rpm_arch }}/*.rpm
 
   build-apk:
@@ -474,13 +474,13 @@ jobs:
       - name: Create Alpine package structure
         run: |
           mkdir -p apk-build/bin
-          cp target/${{ matrix.target }}/release/research-master-mcp apk-build/bin/
+          cp target/${{ matrix.target }}/release/research-master apk-build/bin/
 
       - name: Upload Linux musl binary
         uses: actions/upload-artifact@v4
         with:
           name: binary-${{ matrix.target }}
-          path: target/${{ matrix.target }}/release/research-master-mcp
+          path: target/${{ matrix.target }}/release/research-master
           retention-days: 5
 
       - name: Create APKBUILD
@@ -488,13 +488,13 @@ jobs:
           VERSION="${{ github.event.inputs.version || github.ref_name }}"
           VERSION="${VERSION#v}"
           cat > apk-build/APKBUILD << 'EOF'
-          # Contributor: Research Master MCP <research-master-mcp@users.noreply.github.com>
-          # Maintainer: Research Master MCP <research-master-mcp@users.noreply.github.com>
-          pkgname=research-master-mcp
+          # Contributor: Research Master <research-master@users.noreply.github.com>
+          # Maintainer: Research Master <research-master@users.noreply.github.com>
+          pkgname=research-master
           pkgver=VERSION_PLACEHOLDER
           pkgrel=0
           pkgdesc="Model Context Protocol server for academic research sources"
-          url="https://github.com/hongkongkiwi/research-master-mcp"
+          url="https://github.com/hongkongkiwi/research-master"
           arch="${{ matrix.apk_arch }}"
           license="MIT"
           depends=""
@@ -508,7 +508,7 @@ jobs:
 
           package() {
             mkdir -p "$pkgdir"/usr/bin
-            install -m 755 "$startdir"/bin/research-master-mcp "$pkgdir"/usr/bin/research-master-mcp
+            install -m 755 "$startdir"/bin/research-master "$pkgdir"/usr/bin/research-master
           }
           EOF
           sed -i "s/VERSION_PLACEHOLDER/${VERSION}/" apk-build/APKBUILD
@@ -530,7 +530,7 @@ jobs:
       - name: Upload Alpine package
         uses: actions/upload-artifact@v4
         with:
-          name: research-master-mcp.apk-${{ matrix.arch }}
+          name: research-master.apk-${{ matrix.arch }}
           path: apk-packages/**/*.apk
 
   # Create release with all platform packages
@@ -559,7 +559,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: packages
-          pattern: research-master-mcp.*
+          pattern: research-master.*
           merge-multiple: false
 
       - name: Prepare release assets
@@ -635,10 +635,10 @@ jobs:
     needs: finalize-release
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout homebrew-research-master-mcp
+      - name: Checkout homebrew-research-master
         uses: actions/checkout@v4
         with:
-          repository: hongkongkiwi/homebrew-research-master-mcp
+          repository: hongkongkiwi/homebrew-research-master
           token: ${{ secrets.HOMEBREW_UPDATE_TOKEN }}
           path: homebrew-tap
 
@@ -685,39 +685,39 @@ jobs:
           SHA256_X86_64_LINUX="${{ steps.sha256.outputs.sha256_x86_64_linux }}"
           SHA256_AARCH64_LINUX="${{ steps.sha256.outputs.sha256_aarch64_linux }}"
 
-          cat > homebrew-tap/Formula/research-master-mcp.rb << EOF
-          class ResearchMasterMcp < Formula
+          cat > homebrew-tap/Formula/research-master.rb << EOF
+          class ResearchMaster < Formula
             desc "MCP server for searching and downloading academic papers"
-            homepage "https://github.com/hongkongkiwi/research-master-mcp"
+            homepage "https://github.com/hongkongkiwi/research-master"
             version "${VERSION}"
             license "MIT"
 
             on_macos do
               on_intel do
-                url "https://github.com/hongkongkiwi/research-master-mcp/releases/download/v${VERSION}/research-master-mcp-v${VERSION}-x86_64-apple-darwin.tar.gz"
+                url "https://github.com/hongkongkiwi/research-master/releases/download/v${VERSION}/research-master-v${VERSION}-x86_64-apple-darwin.tar.gz"
                 sha256 "${SHA256_X86_64_DARWIN}"
               end
 
               on_arm do
-                url "https://github.com/hongkongkiwi/research-master-mcp/releases/download/v${VERSION}/research-master-mcp-v${VERSION}-aarch64-apple-darwin.tar.gz"
+                url "https://github.com/hongkongkiwi/research-master/releases/download/v${VERSION}/research-master-v${VERSION}-aarch64-apple-darwin.tar.gz"
                 sha256 "${SHA256_AARCH64_DARWIN}"
               end
             end
 
             on_linux do
               on_x86_64 do
-                url "https://github.com/hongkongkiwi/research-master-mcp/releases/download/v${VERSION}/research-master-mcp-v${VERSION}-x86_64-unknown-linux-gnu.tar.gz"
+                url "https://github.com/hongkongkiwi/research-master/releases/download/v${VERSION}/research-master-v${VERSION}-x86_64-unknown-linux-gnu.tar.gz"
                 sha256 "${SHA256_X86_64_LINUX}"
               end
 
               on_arm do
-                url "https://github.com/hongkongkiwi/research-master-mcp/releases/download/v${VERSION}/research-master-mcp-v${VERSION}-aarch64-unknown-linux-gnu.tar.gz"
+                url "https://github.com/hongkongkiwi/research-master/releases/download/v${VERSION}/research-master-v${VERSION}-aarch64-unknown-linux-gnu.tar.gz"
                 sha256 "${SHA256_AARCH64_LINUX}"
               end
             end
 
             def install
-              bin.install "research-master-mcp"
+              bin.install "research-master"
               if (buildpath/"research-master.example.toml").exist?
                 etc.install "research-master.example.toml"
               end
@@ -732,7 +732,7 @@ jobs:
                   {
                     "mcpServers": {
                       "research-master": {
-                        "command": "#{bin}/research-master-mcp",
+                        "command": "#{bin}/research-master",
                         "args": ["serve"]
                       }
                     }
@@ -741,12 +741,12 @@ jobs:
             end
 
             test do
-              assert_match version.to_s, shell_output("#{bin}/research-master-mcp --version").strip
+              assert_match version.to_s, shell_output("#{bin}/research-master --version").strip
             end
           end
           EOF
 
-          cat homebrew-tap/Formula/research-master-mcp.rb
+          cat homebrew-tap/Formula/research-master.rb
 
       - name: Commit and push changes
         working-directory: ./homebrew-tap
@@ -755,6 +755,6 @@ jobs:
           VERSION="${VERSION_RAW#v}"
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add Formula/research-master-mcp.rb
-          git commit -m "Update research-master-mcp to v${VERSION}"
+          git add Formula/research-master.rb
+          git commit -m "Update research-master to v${VERSION}"
           git push

@@ -9,7 +9,9 @@ use crate::sources::{
     CitationRequest, DownloadRequest, DownloadResult, ReadRequest, ReadResult, Source,
     SourceCapabilities, SourceError,
 };
-use crate::utils::{api_retry_config, with_retry, HttpClient, RateLimitedRequestBuilder};
+use crate::utils::{
+    api_retry_config, with_retry, CircuitBreaker, HttpClient, RateLimitedRequestBuilder,
+};
 
 const SEMANTIC_API_BASE: &str = "https://api.semanticscholar.org/graph/v1";
 
@@ -26,6 +28,8 @@ const DEFAULT_SEMANTIC_RATE_LIMIT: u32 = 1;
 pub struct SemanticScholarSource {
     client: Arc<HttpClient>,
     api_key: Option<String>,
+    /// Circuit breaker for handling transient failures
+    circuit_breaker: Arc<CircuitBreaker>,
 }
 
 impl SemanticScholarSource {
@@ -45,6 +49,7 @@ impl SemanticScholarSource {
         Ok(Self {
             client: Arc::new(HttpClient::with_rate_limit(user_agent, rate_limit)?),
             api_key: std::env::var("SEMANTIC_SCHOLAR_API_KEY").ok(),
+            circuit_breaker: Arc::new(CircuitBreaker::default_for("semantic")),
         })
     }
 
@@ -57,6 +62,7 @@ impl SemanticScholarSource {
         Ok(Self {
             client: Arc::new(HttpClient::with_rate_limit(user_agent, rate_limit)?),
             api_key: Some(api_key),
+            circuit_breaker: Arc::new(CircuitBreaker::default_for("semantic")),
         })
     }
 
@@ -158,16 +164,33 @@ impl Source for SemanticScholarSource {
             query.max_results
         );
 
+        // Check circuit breaker before making request
+        if !self.circuit_breaker.can_request() {
+            tracing::warn!(
+                "Semantic Scholar: circuit is open (too many failures) - skipping request"
+            );
+            return Ok(SearchResponse::new(vec![], "Semantic Scholar", &query.query));
+        }
+
         // Clone values for retry closure
         let client = Arc::clone(&self.client);
         let api_key = self.api_key.clone();
         let url_for_retry = url.clone();
+        let circuit_breaker = Arc::clone(&self.circuit_breaker);
 
         let result: Result<S2SearchResponse, SourceError> = with_retry(api_retry_config(), || {
             let client = Arc::clone(&client);
             let api_key = api_key.clone();
             let url = url_for_retry.clone();
+            let circuit_breaker = Arc::clone(&circuit_breaker);
             async move {
+                // Check circuit breaker before each attempt
+                if !circuit_breaker.can_request() {
+                    return Err(SourceError::Api(
+                        "Semantic Scholar circuit is open".to_string(),
+                    ));
+                }
+
                 let mut request = client.get(&format!("{}{}", SEMANTIC_API_BASE, url));
                 if let Some(ref key) = api_key {
                     request = request.header("x-api-key", key);
@@ -180,8 +203,9 @@ impl Source for SemanticScholarSource {
                     let status = response.status();
                     // Handle rate limiting
                     if status == reqwest::StatusCode::TOO_MANY_REQUESTS {
-                        tracing::debug!(
-                            "Semantic Scholar API rate-limited - returning empty results"
+                        circuit_breaker.record_failure();
+                        tracing::warn!(
+                            "Semantic Scholar API rate-limited - circuit breaker recorded failure"
                         );
                         return Err(SourceError::Api(
                             "Semantic Scholar rate-limited".to_string(),
@@ -189,16 +213,22 @@ impl Source for SemanticScholarSource {
                     }
                     // Check for service unavailable
                     if status == reqwest::StatusCode::SERVICE_UNAVAILABLE {
-                        tracing::debug!(
-                            "Semantic Scholar API unavailable - returning empty results"
+                        circuit_breaker.record_failure();
+                        tracing::warn!(
+                            "Semantic Scholar API unavailable - circuit breaker recorded failure"
                         );
                         return Err(SourceError::Api("Semantic Scholar unavailable".to_string()));
                     }
+                    // Record failure for other errors
+                    circuit_breaker.record_failure();
                     return Err(SourceError::Api(format!(
                         "Semantic Scholar API returned status: {}",
                         response.status()
                     )));
                 }
+
+                // Record success
+                circuit_breaker.record_success();
 
                 response
                     .json()
@@ -212,15 +242,15 @@ impl Source for SemanticScholarSource {
         let data = match result {
             Ok(d) => d,
             Err(SourceError::Api(msg)) if msg.contains("rate-limited") => {
-                tracing::debug!("Semantic Scholar rate-limited - returning empty results");
+                tracing::warn!("Semantic Scholar: rate-limited - returning empty results");
                 return Ok(SearchResponse::new(
                     vec![],
                     "Semantic Scholar",
                     &query.query,
                 ));
             }
-            Err(SourceError::Api(msg)) if msg.contains("unavailable") => {
-                tracing::debug!("Semantic Scholar unavailable - returning empty results");
+            Err(SourceError::Api(msg)) if msg.contains("unavailable") || msg.contains("circuit") => {
+                tracing::warn!("Semantic Scholar: unavailable - returning empty results");
                 return Ok(SearchResponse::new(
                     vec![],
                     "Semantic Scholar",

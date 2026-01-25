@@ -14,7 +14,7 @@
 //! # Examples
 //!
 //! ```rust
-//! use research_master_mcp::models::{Paper, PaperBuilder, SourceType, SearchQuery};
+//! use research_master::models::{Paper, PaperBuilder, SourceType, SearchQuery};
 //!
 //! // Create a paper using the builder
 //! let paper = PaperBuilder::new(

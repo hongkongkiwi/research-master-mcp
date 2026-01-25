@@ -1,15 +1,15 @@
-# Research Master MCP
+# Research Master
 
 A Model Context Protocol (MCP) server for searching and downloading academic papers from multiple research sources.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Rust](https://img.shields.io/badge/rust-1.80%2B-orange.svg)](https://www.rust-lang.org/)
-[![Crates.io](https://img.shields.io/crates/v/research-master-mcp)](https://crates.io/crates/research-master-mcp)
-[![GitHub Release](https://img.shields.io/github/v/release/hongkongkiwi/research-master-mcp)](https://github.com/hongkongkiwi/research-master-mcp/releases)
+[![Crates.io](https://img.shields.io/crates/v/research-master)](https://crates.io/crates/research-master)
+[![GitHub Release](https://img.shields.io/github/v/release/hongkongkiwi/research-master)](https://github.com/hongkongkiwi/research-master/releases)
 
 ## Overview
 
-Research Master MCP is a comprehensive academic research server that provides unified access to **28 major research repositories and databases**. It implements the Model Context Protocol (MCP) to integrate seamlessly with AI assistants like Claude Desktop, enabling powerful literature search, paper discovery, and citation analysis capabilities.
+Research Master is a comprehensive academic research server that provides unified access to **28 major research repositories and databases**. It implements the Model Context Protocol (MCP) to integrate seamlessly with AI assistants like Claude Desktop, enabling powerful literature search, paper discovery, and citation analysis capabilities.
 
 ## Quick Start
 
@@ -17,8 +17,8 @@ Research Master MCP is a comprehensive academic research server that provides un
 
 **macOS (Homebrew):**
 ```bash
-brew tap hongkongkiwi/research-master-mcp
-brew install research-master-mcp
+brew tap hongkongkiwi/research-master
+brew install research-master
 ```
 
 **Other methods:** See [Installation](docs/installation.md) for Linux packages, Docker, and building from source.
@@ -31,7 +31,7 @@ Add to your Claude Desktop configuration (`~/Library/Application Support/Claude/
 {
   "mcpServers": {
     "research-master": {
-      "command": "research-master-mcp",
+      "command": "research-master",
       "args": ["serve"]
     }
   }
@@ -80,22 +80,22 @@ See [Sources](docs/sources.md) for supported databases, API requirements, and ra
 
 ```bash
 # Search for papers
-research-master-mcp search "transformer architecture" --year 2020-
+research-master search "transformer architecture" --year 2020-
 
 # Search by author
-research-master-mcp author "Geoffrey Hinton"
+research-master author "Geoffrey Hinton"
 
 # Download a paper
-research-master-mcp download 2301.12345 --source arxiv --output ./papers
+research-master download 2301.12345 --source arxiv --output ./papers
 
 # Look up by DOI
-research-master-mcp lookup 10.48550/arXiv.2301.12345
+research-master lookup 10.48550/arXiv.2301.12345
 
 # Start MCP server
-research-master-mcp serve --stdio
+research-master serve --stdio
 
 # Show all environment variables
-research-master-mcp --env
+research-master --env
 ```
 
 ## Contributing
@@ -125,4 +125,4 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ## Contact
 
 - GitHub: [@hongkongkiwi](https://github.com/hongkongkiwi)
-- Repository: [https://github.com/hongkongkiwi/research-master-mcp](https://github.com/hongkongkiwi/research-master-mcp)
+- Repository: [https://github.com/hongkongkiwi/research-master](https://github.com/hongkongkiwi/research-master)

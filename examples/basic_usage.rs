@@ -1,10 +1,10 @@
-//! Basic usage example for Research Master MCP library.
+//! Basic usage example for Research Master library.
 //!
 //! This example demonstrates how to use the library to search for papers
 //! across multiple research sources.
 
-use research_master_mcp::models::{SearchQuery, SortBy};
-use research_master_mcp::sources::SourceRegistry;
+use research_master::models::{SearchQuery, SortBy};
+use research_master::sources::SourceRegistry;
 use std::sync::Arc;
 
 #[tokio::main]

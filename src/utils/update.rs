@@ -50,7 +50,7 @@ pub fn detect_installation() -> InstallationMethod {
     if let Ok(homebrew_prefix) = std::env::var("HOMEBREW_PREFIX") {
         let homebrew_bin = PathBuf::from(homebrew_prefix)
             .join("bin")
-            .join("research-master-mcp");
+            .join("research-master");
         if exe_path == homebrew_bin
             || exe_path.starts_with(homebrew_bin.parent().unwrap_or(&homebrew_bin))
         {
@@ -62,7 +62,7 @@ pub fn detect_installation() -> InstallationMethod {
     if let Ok(cargo_home) = std::env::var("CARGO_HOME") {
         let cargo_bin = PathBuf::from(cargo_home)
             .join("bin")
-            .join("research-master-mcp");
+            .join("research-master");
         if exe_path == cargo_bin {
             return InstallationMethod::Cargo { path: exe_path };
         }
@@ -70,9 +70,9 @@ pub fn detect_installation() -> InstallationMethod {
 
     // Check common Homebrew locations
     let homebrew_paths = [
-        PathBuf::from("/opt/homebrew/bin/research-master-mcp"),
-        PathBuf::from("/usr/local/bin/research-master-mcp"),
-        PathBuf::from("/home/linuxbrew/.linuxbrew/bin/research-master-mcp"),
+        PathBuf::from("/opt/homebrew/bin/research-master"),
+        PathBuf::from("/usr/local/bin/research-master"),
+        PathBuf::from("/home/linuxbrew/.linuxbrew/bin/research-master"),
     ];
 
     for hb_path in &homebrew_paths {
@@ -88,16 +88,16 @@ pub fn detect_installation() -> InstallationMethod {
 pub fn get_update_instructions(method: &InstallationMethod) -> String {
     match method {
         InstallationMethod::Homebrew { .. } => {
-            "You seem to have installed via Homebrew. Run:\n  brew upgrade research-master-mcp".to_string()
+            "You seem to have installed via Homebrew. Run:\n  brew upgrade research-master".to_string()
         }
         InstallationMethod::Cargo { .. } => {
-            "You seem to have installed via cargo. Run:\n  cargo install research-master-mcp".to_string()
+            "You seem to have installed via cargo. Run:\n  cargo install research-master".to_string()
         }
         InstallationMethod::Direct { .. } => {
             "I'll download and install the latest version for you.".to_string()
         }
         InstallationMethod::Unknown => {
-            "Unable to detect installation method.\n\nIf you installed via:\n  - Homebrew: run 'brew upgrade research-master-mcp'\n  - cargo: run 'cargo install research-master-mcp'\n  - Direct download: I'll download the latest binary".to_string()
+            "Unable to detect installation method.\n\nIf you installed via:\n  - Homebrew: run 'brew upgrade research-master'\n  - cargo: run 'cargo install research-master'\n  - Direct download: I'll download the latest binary".to_string()
         }
     }
 }
@@ -120,7 +120,7 @@ pub struct ReleaseInfo {
 /// A single release asset
 #[derive(Debug, Clone)]
 pub struct ReleaseAsset {
-    /// Asset name (e.g., "research-master-mcp-x86_64-apple-darwin.tar.gz")
+    /// Asset name (e.g., "research-master-x86_64-apple-darwin.tar.gz")
     pub name: String,
     /// Download URL
     pub download_url: String,
@@ -130,8 +130,8 @@ pub struct ReleaseAsset {
 pub async fn fetch_latest_release() -> Result<ReleaseInfo> {
     let client = reqwest::Client::new();
     let response = client
-        .get("https://api.github.com/repos/hongkongkiwi/research-master-mcp/releases/latest")
-        .header("User-Agent", "research-master-mcp")
+        .get("https://api.github.com/repos/hongkongkiwi/research-master/releases/latest")
+        .header("User-Agent", "research-master")
         .send()
         .await
         .context("Failed to fetch latest release")?;
@@ -323,7 +323,7 @@ fn extract_tar_gz(archive_path: &Path, dest_dir: &Path) -> Result<PathBuf> {
         if path.is_file()
             && path
                 .file_name()
-                .map(|n| n.to_string_lossy().starts_with("research-master-mcp"))
+                .map(|n| n.to_string_lossy().starts_with("research-master"))
                 .unwrap_or(false)
         {
             // Make executable
@@ -371,7 +371,7 @@ fn extract_zip(archive_path: &Path, dest_dir: &Path) -> Result<PathBuf> {
         if path.is_file()
             && path
                 .file_name()
-                .map(|n| n.to_string_lossy().starts_with("research-master-mcp"))
+                .map(|n| n.to_string_lossy().starts_with("research-master"))
                 .unwrap_or(false)
         {
             return Ok(path);
@@ -448,12 +448,12 @@ pub fn cleanup_temp_files(files: Vec<PathBuf>) {
 /// Fetch and verify SHA256 checksum for a file
 pub async fn fetch_and_verify_sha256(asset_name: &str, _temp_dir: &Path) -> Result<String> {
     let client = reqwest::Client::new();
-    let checksums_url = "https://github.com/hongkongkiwi/research-master-mcp/releases/download/latest/SHA256SUMS.txt";
+    let checksums_url = "https://github.com/hongkongkiwi/research-master/releases/download/latest/SHA256SUMS.txt";
 
     eprintln!("Downloading SHA256 checksums...");
     let response = client
         .get(checksums_url)
-        .header("User-Agent", "research-master-mcp")
+        .header("User-Agent", "research-master")
         .send()
         .await
         .context("Failed to download checksums file")?;
@@ -472,8 +472,8 @@ pub async fn fetch_and_verify_sha256(asset_name: &str, _temp_dir: &Path) -> Resu
             let filename = parts.last().unwrap_or(&"");
 
             // Handle both formats:
-            // e.g., "abc123...  research-master-mcp-x86_64-unknown-linux-musl.tar.gz"
-            // or "abc123...  ./research-master-mcp-x86_64-unknown-linux-musl.tar.gz"
+            // e.g., "abc123...  research-master-x86_64-unknown-linux-musl.tar.gz"
+            // or "abc123...  ./research-master-x86_64-unknown-linux-musl.tar.gz"
             let normalized_filename = filename.trim_start_matches("./");
 
             if normalized_filename == asset_name || filename.contains(asset_name) {
@@ -513,12 +513,12 @@ pub fn verify_sha256(file_path: &Path, expected_hash: &str) -> Result<bool> {
 /// Fetch the GPG signature for SHA256SUMS.txt
 pub async fn fetch_sha256_signature() -> Result<String> {
     let client = reqwest::Client::new();
-    let signature_url = "https://github.com/hongkongkiwi/research-master-mcp/releases/download/latest/SHA256SUMS.txt.asc";
+    let signature_url = "https://github.com/hongkongkiwi/research-master/releases/download/latest/SHA256SUMS.txt.asc";
 
     eprintln!("Downloading GPG signature...");
     let response = client
         .get(signature_url)
-        .header("User-Agent", "research-master-mcp")
+        .header("User-Agent", "research-master")
         .send()
         .await
         .context("Failed to download GPG signature")?;

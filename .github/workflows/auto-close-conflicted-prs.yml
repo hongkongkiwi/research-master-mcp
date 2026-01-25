@@ -9,7 +9,7 @@ on:
 jobs:
   close-conflicted-prs:
     runs-on: ubuntu-latest
-    if: ${{ github.repository == 'hongkongkiwi/research-master-mcp' }}
+    if: ${{ github.repository == 'hongkongkiwi/research-master' }}
     steps:
       - name: Close conflicted Dependabot PRs
         uses: actions/github-script@v8

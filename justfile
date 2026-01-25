@@ -104,26 +104,36 @@ check: fmt-check clippy doc test
     @echo "All checks passed!"
 
 # ============================================
-# GIT HOOKS (cargo-husky)
+# GIT HOOKS (lefthook)
 # ============================================
 
-# Install git hooks via cargo-husky
+# Install lefthook git hooks
 hooks-install:
-    @if grep -q 'cargo-husky' Cargo.toml 2>/dev/null; then \
-        cargo husky install; \
-        echo "Git hooks installed"; \
+    @if command -v lefthook &> /dev/null; then \
+        lefthook install; \
+        echo "Git hooks installed via lefthook"; \
     else \
-        echo "cargo-husky not configured. Add to Cargo.toml or install manually:"; \
-        echo "  cargo install cargo-husky"; \
-        echo "  cargo husky install"; \
+        echo "lefthook not found. Install via:"; \
+        echo "  brew install lefthook (macOS)"; \
+        echo "  cargo install lefthook --locked"; \
+        echo "  or: scoop install lefthook (Windows)"; \
     fi
 
-# Run cargo-husky hooks manually
+# Run lefthook hooks manually
 hooks-run:
-    @if command -v cargo &> /dev/null; then \
-        cargo husky run; \
+    @if command -v lefthook &> /dev/null; then \
+        lefthook run pre-commit; \
     else \
-        echo "Cargo not found"; \
+        echo "lefthook not found"; \
+    fi
+
+# Uninstall lefthook git hooks
+hooks-uninstall:
+    @if command -v lefthook &> /dev/null; then \
+        lefthook uninstall; \
+        echo "Git hooks uninstalled"; \
+    else \
+        echo "lefthook not found"; \
     fi
 
 # ============================================
@@ -211,7 +221,7 @@ release TYPE="patch":
     echo ""
     echo "Release v$NEW_VERSION created and pushed!"
     echo "GitHub Actions will now build and publish the release."
-    echo "Monitor at: https://github.com/hongkongkiwi/research-master-mcp/actions"
+    echo "Monitor at: https://github.com/hongkongkiwi/research-master/actions"
 
 # Draft release notes (generates template)
 release-notes:
@@ -228,7 +238,7 @@ release-notes:
     echo ""
     echo "### Security"
     echo ""
-    echo "**Full Changelog**: https://github.com/hongkongkiwi/research-master-mcp/compare/$(git describe --tags --abbrev=0 2>/dev/null || echo "previous")...v$(grep '^version = ' Cargo.toml | head -1 | sed 's/version = "\(.*\)"/\1/')
+    echo "**Full Changelog**: https://github.com/hongkongkiwi/research-master/compare/$(git describe --tags --abbrev=0 2>/dev/null || echo "previous")...v$(grep '^version = ' Cargo.toml | head -1 | sed 's/version = "\(.*\)"/\1/')
 
 # Local dry-run release build (builds all platforms locally)
 release-local:
@@ -236,7 +246,7 @@ release-local:
     echo "Building release artifacts locally..."
     cargo build --release
     echo ""
-    echo "Binary built at: target/release/research-master-mcp"
+    echo "Binary built at: target/release/research-master"
     echo ""
     echo "To create a full release:"
     echo "  1. Update version in Cargo.toml"
@@ -278,8 +288,8 @@ install-github VERSION="":
     if [ -z "$VERSION" ]; then
         VERSION=$(grep '^version = ' Cargo.toml | head -1 | sed 's/version = "\(.*\)"/\1/')
     fi
-    echo "Installing research-master-mcp v$VERSION from source..."
-    cargo install --git https://github.com/hongkongkiwi/research-master-mcp --tag "v$VERSION" --locked
+    echo "Installing research-master v$VERSION from source..."
+    cargo install --git https://github.com/hongkongkiwi/research-master --tag "v$VERSION" --locked
 
 # ============================================
 # DEPENDENCY COMMANDS
@@ -333,6 +343,11 @@ help:
     @echo "  clippy-fix      - Auto-fix clippy issues"
     @echo "  doc             - Generate documentation"
     @echo "  check           - Run all checks"
+    @echo ""
+    @echo "Git Hooks:"
+    @echo "  hooks-install   - Install lefthook git hooks"
+    @echo "  hooks-run       - Run lefthook hooks manually"
+    @echo "  hooks-uninstall - Uninstall lefthook git hooks"
     @echo ""
     @echo "Security:"
     @echo "  audit           - Check for vulnerabilities"

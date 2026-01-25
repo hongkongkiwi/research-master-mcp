@@ -6,7 +6,7 @@
 //! # Usage
 //!
 //! ```rust
-//! use research_master_mcp::utils::ProgressReporter;
+//! use research_master::utils::ProgressReporter;
 //!
 //! let reporter = ProgressReporter::new("Processing papers", 100);
 //! reporter.inc();

@@ -10,7 +10,7 @@
 //! # Usage
 //!
 //! ```rust
-//! use research_master_mcp::utils::{CircuitBreaker, CircuitState};
+//! use research_master::utils::{CircuitBreaker, CircuitState};
 //!
 //! let breaker = CircuitBreaker::new("semantic", 5, std::time::Duration::from_secs(60));
 //!

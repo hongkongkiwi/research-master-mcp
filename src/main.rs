@@ -1,13 +1,13 @@
 use anyhow::Result;
 use clap::{Parser, Subcommand, ValueEnum};
 use clap_complete::shells::{Bash, Elvish, Fish, PowerShell, Zsh};
-use research_master_mcp::config::{find_config_file, get_config, load_config};
-use research_master_mcp::mcp::server::McpServer;
-use research_master_mcp::models::{
+use research_master::config::{find_config_file, get_config, load_config};
+use research_master::mcp::server::McpServer;
+use research_master::models::{
     CitationRequest, DownloadRequest, ReadRequest, SearchQuery, SortBy, SortOrder,
 };
-use research_master_mcp::sources::{SourceCapabilities, SourceRegistry};
-use research_master_mcp::utils::{
+use research_master::sources::{SourceCapabilities, SourceRegistry};
+use research_master::utils::{
     deduplicate_papers, find_duplicates, CacheService, DuplicateStrategy,
 };
 use std::io::IsTerminal;
@@ -16,68 +16,68 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
-/// Research Master MCP - Search and download academic papers from multiple research sources
+/// Research Master - Search and download academic papers from multiple research sources
 #[derive(Parser, Debug)]
-#[command(name = "research-master-mcp")]
+#[command(name = "research-master")]
 #[command(version = env!("CARGO_PKG_VERSION"))]
 #[command(author = "hongkongkiwi")]
 #[command(about = "Search and download academic papers from multiple research sources", long_about = None)]
 #[command(after_help = "EXAMPLES:
     # Search for papers across all sources
-    research-master-mcp search \"transformer attention mechanism\"
+    research-master search \"transformer attention mechanism\"
 
     # Search for papers on arXiv only
-    research-master-mcp search \"quantum computing\" --source arxiv
+    research-master search \"quantum computing\" --source arxiv
 
     # Search with year filter and limit results
-    research-master-mcp search \"climate change\" --year 2020-2023 --max-results 5
+    research-master search \"climate change\" --year 2020-2023 --max-results 5
 
     # Search by author
-    research-master-mcp author \"Yoshua Bengio\" --max-results 10
+    research-master author \"Yoshua Bengio\" --max-results 10
 
     # Download a paper by arXiv ID
-    research-master-mcp download 2310.12345 --source arxiv --output ./papers/
+    research-master download 2310.12345 --source arxiv --output ./papers/
 
     # Read/extract text from a PDF
-    research-master-mcp read 2310.12345 --source arxiv --path ./paper.pdf
+    research-master read 2310.12345 --source arxiv --path ./paper.pdf
 
     # Look up a paper by DOI
-    research-master-mcp lookup 10.1038/nature12373
+    research-master lookup 10.1038/nature12373
 
     # Get citations for a paper
-    research-master-mcp citations 2310.12345 --source arxiv
+    research-master citations 2310.12345 --source arxiv
 
     # Get related papers
-    research-master-mcp related 2310.12345 --source arxiv
+    research-master related 2310.12345 --source arxiv
 
     # List all available sources
-    research-master-mcp sources
+    research-master sources
 
     # Run MCP server for Claude Desktop
-    research-master-mcp mcp
+    research-master mcp
 
     # Manage configuration
-    research-master-mcp config init     # Initialize config
-    research-master-mcp config show     # Show current config
-    research-master-mcp config edit     # Edit config file
+    research-master config init     # Initialize config
+    research-master config show     # Show current config
+    research-master config edit     # Edit config file
 
     # Export papers to various formats
-    research-master-mcp export --input papers.json --format bibtex -O output.bib
-    research-master-mcp export --input papers.json --format csv -O output.csv
-    research-master-mcp export --input papers.json --format json -O output.json
-    research-master-mcp export --input papers.json --format ris -O output.ris
+    research-master export --input papers.json --format bibtex -O output.bib
+    research-master export --input papers.json --format csv -O output.csv
+    research-master export --input papers.json --format json -O output.json
+    research-master export --input papers.json --format ris -O output.ris
 
     # Bulk download from a file of paper IDs
-    research-master-mcp bulk-download ./paper_ids.txt -o ./downloads/
+    research-master bulk-download ./paper_ids.txt -o ./downloads/
 
     # Manage API keys
-    research-master-mcp api-keys list              # List configured keys
-    research-master-mcp api-keys set --source semantic  # Set key
+    research-master api-keys list              # List configured keys
+    research-master api-keys set --source semantic  # Set key
 
     # Generate shell completions
-    research-master-mcp completions bash
-    research-master-mcp completions zsh
-    research-master-mcp completions fish
+    research-master completions bash
+    research-master completions zsh
+    research-master completions fish
 ")]
 #[command(propagate_version = true)]
 struct Cli {
@@ -727,7 +727,7 @@ async fn main() -> Result<()> {
     let subscriber = tracing_subscriber::registry()
         .with(tracing_subscriber::EnvFilter::new(
             std::env::var("RUST_LOG")
-                .unwrap_or_else(|_| format!("research_master_mcp={}", env_filter)),
+                .unwrap_or_else(|_| format!("research_master={}", env_filter)),
         ))
         .with(tracing_subscriber::fmt::layer());
 
@@ -828,7 +828,7 @@ async fn main() -> Result<()> {
                     // Check cache first
                     if let Some(ref cache_service) = cache {
                         match cache_service.get_search(&search_query, source_id) {
-                            research_master_mcp::utils::CacheResult::Hit(response) => {
+                            research_master::utils::CacheResult::Hit(response) => {
                                 if !quiet {
                                     eprintln!(
                                         "[CACHE HIT] Found {} papers from {}",
@@ -838,7 +838,7 @@ async fn main() -> Result<()> {
                                 }
                                 return response.papers;
                             }
-                            research_master_mcp::utils::CacheResult::Expired => {
+                            research_master::utils::CacheResult::Expired => {
                                 if !quiet {
                                     eprintln!(
                                         "[CACHE EXPIRED] Fetching fresh results from {}",
@@ -846,7 +846,7 @@ async fn main() -> Result<()> {
                                     );
                                 }
                             }
-                            research_master_mcp::utils::CacheResult::Miss => {
+                            research_master::utils::CacheResult::Miss => {
                                 if !quiet {
                                     eprintln!("[CACHE MISS] Fetching from {}", source_id);
                                 }
@@ -1183,7 +1183,7 @@ async fn main() -> Result<()> {
             show,
         }) => {
             let json_str = std::fs::read_to_string(&input)?;
-            let papers: Vec<research_master_mcp::models::Paper> = serde_json::from_str(&json_str)?;
+            let papers: Vec<research_master::models::Paper> = serde_json::from_str(&json_str)?;
 
             let dup_strategy = match strategy {
                 DedupStrategy::First => DuplicateStrategy::First,
@@ -1373,7 +1373,7 @@ async fn main() -> Result<()> {
 
         Some(Commands::Update { force, dry_run }) => {
             use anyhow::Context as _;
-            use research_master_mcp::utils::{
+            use research_master::utils::{
                 detect_installation, download_and_extract_asset, fetch_and_verify_sha256,
                 fetch_latest_release, fetch_sha256_signature, find_asset_for_platform,
                 get_current_target, get_update_instructions, replace_binary, verify_gpg_signature,
@@ -1439,7 +1439,7 @@ async fn main() -> Result<()> {
                 };
                 println!("{}", notes);
                 if latest.body.len() > 500 {
-                    println!("...\n(Full notes available at https://github.com/hongkongkiwi/research-master-mcp/releases/tag/v{})", latest.version);
+                    println!("...\n(Full notes available at https://github.com/hongkongkiwi/research-master/releases/tag/v{})", latest.version);
                 }
             }
 
@@ -1447,7 +1447,7 @@ async fn main() -> Result<()> {
             match &install_method {
                 InstallationMethod::Homebrew { .. } | InstallationMethod::Cargo { .. } => {
                     println!("\n{}", instructions);
-                    println!("\nAfter updating, run 'research-master-mcp --version' to verify.");
+                    println!("\nAfter updating, run 'research-master --version' to verify.");
                 }
                 InstallationMethod::Direct { .. } | InstallationMethod::Unknown => {
                     // Attempt self-update
@@ -1465,7 +1465,7 @@ async fn main() -> Result<()> {
                         Some(a) => a,
                         None => {
                             eprintln!("No release asset found for platform: {}", target);
-                            eprintln!("Please download manually from: https://github.com/hongkongkiwi/research-master-mcp/releases/tag/v{}", latest.version);
+                            eprintln!("Please download manually from: https://github.com/hongkongkiwi/research-master/releases/tag/v{}", latest.version);
                             return Ok(());
                         }
                     };
@@ -1473,7 +1473,7 @@ async fn main() -> Result<()> {
                     println!("\nAsset: {}", asset.name);
 
                     // Create temp directory
-                    let temp_dir = std::env::temp_dir().join("research-master-mcp-update");
+                    let temp_dir = std::env::temp_dir().join("research-master-update");
                     let _ = std::fs::create_dir_all(&temp_dir);
 
                     // Download and extract
@@ -1577,7 +1577,7 @@ async fn main() -> Result<()> {
                                             .file_name()
                                             .map(|n| {
                                                 n.to_string_lossy()
-                                                    .starts_with("research-master-mcp")
+                                                    .starts_with("research-master")
                                             })
                                             .unwrap_or(false)
                                     {
@@ -1645,9 +1645,9 @@ async fn main() -> Result<()> {
             match action {
                 ConfigAction::Init => {
                     println!("Initializing configuration...");
-                    println!("Config file location: ~/.config/research-master-mcp/config.toml");
-                    println!("Run 'research-master-mcp config show' to view current config.");
-                    println!("Run 'research-master-mcp config edit' to edit config.");
+                    println!("Config file location: ~/.config/research-master/config.toml");
+                    println!("Run 'research-master config show' to view current config.");
+                    println!("Run 'research-master config edit' to edit config.");
                 }
                 ConfigAction::Show => {
                     let config_path = find_config_file();
@@ -1663,14 +1663,14 @@ async fn main() -> Result<()> {
                         }
                     } else {
                         println!("No config file found.");
-                        println!("Run 'research-master-mcp config init' to create one.");
+                        println!("Run 'research-master config init' to create one.");
                     }
                 }
                 ConfigAction::Edit => {
                     let config_path = find_config_file().unwrap_or_else(|| {
                         let path = dirs::config_dir()
                             .unwrap_or_else(|| std::path::PathBuf::from("."))
-                            .join("research-master-mcp")
+                            .join("research-master")
                             .join("config.toml");
                         println!("Creating new config at: {}", path.display());
                         let _ = std::fs::create_dir_all(path.parent().unwrap());
@@ -1680,7 +1680,7 @@ async fn main() -> Result<()> {
                     if !config_path.exists() {
                         println!("Creating new config file: {}", config_path.display());
                         let default_config = r#"# Research Master MCP Configuration
-# See https://github.com/hongkongkiwi/research-master-mcp for documentation
+# See https://github.com/hongkongkiwi/research-master for documentation
 
 [general]
 # Default output format: auto, table, json, plain
@@ -1698,7 +1698,7 @@ concurrency = 5
 # Enable caching (requires RESEARCH_MASTER_CACHE_ENABLED=true)
 enabled = false
 # Cache directory
-directory = "~/.cache/research-master-mcp"
+directory = "~/.cache/research-master"
 
 [api_keys]
 # Add your API keys here (uncomment and replace with your keys)
@@ -1751,7 +1751,7 @@ directory = "~/.cache/research-master-mcp"
                 format, input, output
             );
             println!("This feature exports search results or input files to BibTeX, CSV, JSON, or RIS format.");
-            println!("Example: research-master-mcp export --input papers.json --format bibtex -O output.bib");
+            println!("Example: research-master export --input papers.json --format bibtex -O output.bib");
         }
 
         Some(Commands::BulkDownload {
@@ -1780,9 +1780,9 @@ directory = "~/.cache/research-master-mcp"
             ApiKeyAction::Set => {
                 if let Some(src) = source {
                     println!("Set API key for: {}", src);
-                    println!("Run 'research-master-mcp doctor --check-api-keys' to verify keys.");
+                    println!("Run 'research-master doctor --check-api-keys' to verify keys.");
                 } else {
-                    println!("Usage: research-master-mcp api-keys set --source <source-name>");
+                    println!("Usage: research-master api-keys set --source <source-name>");
                 }
             }
             ApiKeyAction::List => {
@@ -1804,7 +1804,7 @@ directory = "~/.cache/research-master-mcp"
                     std::env::var("OPENALEX_EMAIL").unwrap_or_else(|_| "not set".to_string())
                 );
                 println!(
-                    "\nRun 'research-master-mcp doctor --check-api-keys' to verify configuration."
+                    "\nRun 'research-master doctor --check-api-keys' to verify configuration."
                 );
             }
             ApiKeyAction::Remove => {
@@ -1812,7 +1812,7 @@ directory = "~/.cache/research-master-mcp"
                     println!("Remove API key for: {}", src);
                     println!("Unset the corresponding environment variable to disable.");
                 } else {
-                    println!("Usage: research-master-mcp api-keys remove --source <source-name>");
+                    println!("Usage: research-master api-keys remove --source <source-name>");
                 }
             }
         },
@@ -1858,14 +1858,14 @@ directory = "~/.cache/research-master-mcp"
                     println!("  autoload -U compinit");
                     println!("  compinit");
                     println!(
-                        "  {} completions zsh > ~/.zsh/completion/_research-master-mcp",
+                        "  {} completions zsh > ~/.zsh/completion/_research-master",
                         bin_name
                     );
                 }
                 Shell::Fish => {
                     println!("  # Fish handles completions automatically when placed in:");
                     println!("  mkdir -p ~/.config/fish/completions/");
-                    println!("  {} completions fish > ~/.config/fish/completions/research-master-mcp.fish", bin_name);
+                    println!("  {} completions fish > ~/.config/fish/completions/research-master.fish", bin_name);
                 }
                 Shell::PowerShell => {
                     println!("  # Add to your PowerShell profile:");
@@ -1899,7 +1899,7 @@ directory = "~/.cache/research-master-mcp"
 fn get_source(
     registry: &SourceRegistry,
     source: Source,
-) -> Result<&std::sync::Arc<dyn research_master_mcp::sources::Source>> {
+) -> Result<&std::sync::Arc<dyn research_master::sources::Source>> {
     let source_id = match source {
         Source::All => anyhow::bail!("Please specify a specific source"),
         s => source_to_id(s),
@@ -1913,7 +1913,7 @@ fn get_sources(
     registry: &SourceRegistry,
     source: Source,
     capability: SourceCapabilities,
-) -> Vec<&std::sync::Arc<dyn research_master_mcp::sources::Source>> {
+) -> Vec<&std::sync::Arc<dyn research_master::sources::Source>> {
     match source {
         Source::All => registry.with_capability(capability),
         s => {
@@ -1957,7 +1957,7 @@ fn source_to_id(source: Source) -> &'static str {
     }
 }
 
-fn output_papers(papers: &[research_master_mcp::models::Paper], format: OutputFormat) {
+fn output_papers(papers: &[research_master::models::Paper], format: OutputFormat) {
     let actual_format = if format == OutputFormat::Auto {
         if std::io::stdout().is_terminal() {
             OutputFormat::Table
@@ -2047,7 +2047,7 @@ mod tests {
 
     #[test]
     fn test_cli_default_values() {
-        let cli = Cli::parse_from(["research-master-mcp"]);
+        let cli = Cli::parse_from(["research-master"]);
         assert_eq!(cli.verbose, 0);
         assert!(!cli.quiet);
         assert_eq!(cli.output, OutputFormat::Auto);
@@ -2058,55 +2058,55 @@ mod tests {
 
     #[test]
     fn test_cli_verbose_flag() {
-        let cli = Cli::parse_from(["research-master-mcp", "-v"]);
+        let cli = Cli::parse_from(["research-master", "-v"]);
         assert_eq!(cli.verbose, 1);
 
-        let cli = Cli::parse_from(["research-master-mcp", "-vv"]);
+        let cli = Cli::parse_from(["research-master", "-vv"]);
         assert_eq!(cli.verbose, 2);
 
-        let cli = Cli::parse_from(["research-master-mcp", "--verbose"]);
+        let cli = Cli::parse_from(["research-master", "--verbose"]);
         assert_eq!(cli.verbose, 1);
     }
 
     #[test]
     fn test_cli_quiet_flag() {
-        let cli = Cli::parse_from(["research-master-mcp", "-q"]);
+        let cli = Cli::parse_from(["research-master", "-q"]);
         assert!(cli.quiet);
 
-        let cli = Cli::parse_from(["research-master-mcp", "--quiet"]);
+        let cli = Cli::parse_from(["research-master", "--quiet"]);
         assert!(cli.quiet);
     }
 
     #[test]
     fn test_cli_output_format() {
-        let cli = Cli::parse_from(["research-master-mcp", "-o", "json"]);
+        let cli = Cli::parse_from(["research-master", "-o", "json"]);
         assert_eq!(cli.output, OutputFormat::Json);
 
-        let cli = Cli::parse_from(["research-master-mcp", "--output", "table"]);
+        let cli = Cli::parse_from(["research-master", "--output", "table"]);
         assert_eq!(cli.output, OutputFormat::Table);
     }
 
     #[test]
     fn test_cli_timeout() {
-        let cli = Cli::parse_from(["research-master-mcp", "--timeout", "60"]);
+        let cli = Cli::parse_from(["research-master", "--timeout", "60"]);
         assert_eq!(cli.timeout, 60);
     }
 
     #[test]
     fn test_cli_config_flag() {
-        let cli = Cli::parse_from(["research-master-mcp", "--config", "/path/to/config.toml"]);
+        let cli = Cli::parse_from(["research-master", "--config", "/path/to/config.toml"]);
         assert_eq!(cli.config, Some(PathBuf::from("/path/to/config.toml")));
     }
 
     #[test]
     fn test_cli_no_cache_flag() {
-        let cli = Cli::parse_from(["research-master-mcp", "--no-cache"]);
+        let cli = Cli::parse_from(["research-master", "--no-cache"]);
         assert!(cli.no_cache);
     }
 
     #[test]
     fn test_cli_search_command() {
-        let cli = Cli::parse_from(["research-master-mcp", "search", "machine learning"]);
+        let cli = Cli::parse_from(["research-master", "search", "machine learning"]);
         match &cli.command {
             Some(Commands::Search {
                 query, max_results, ..
@@ -2121,7 +2121,7 @@ mod tests {
     #[test]
     fn test_cli_search_with_options() {
         let cli = Cli::parse_from([
-            "research-master-mcp",
+            "research-master",
             "search",
             "neural networks",
             "--max-results",
@@ -2150,7 +2150,7 @@ mod tests {
     #[test]
     fn test_cli_download_command() {
         let cli = Cli::parse_from([
-            "research-master-mcp",
+            "research-master",
             "download",
             "2301.12345",
             "--source",
@@ -2174,7 +2174,7 @@ mod tests {
 
     #[test]
     fn test_cli_doi_command() {
-        let cli = Cli::parse_from(["research-master-mcp", "doi", "10.1234/test"]);
+        let cli = Cli::parse_from(["research-master", "doi", "10.1234/test"]);
         match &cli.command {
             Some(Commands::LookupByDoi { doi, .. }) => {
                 assert_eq!(doi, "10.1234/test");
@@ -2185,7 +2185,7 @@ mod tests {
 
     #[test]
     fn test_cli_sources_command() {
-        let cli = Cli::parse_from(["research-master-mcp", "sources"]);
+        let cli = Cli::parse_from(["research-master", "sources"]);
         match &cli.command {
             Some(Commands::Sources { detailed, .. }) => {
                 assert!(!*detailed);
@@ -2196,7 +2196,7 @@ mod tests {
 
     #[test]
     fn test_cli_sources_detailed() {
-        let cli = Cli::parse_from(["research-master-mcp", "sources", "--detailed"]);
+        let cli = Cli::parse_from(["research-master", "sources", "--detailed"]);
         match &cli.command {
             Some(Commands::Sources { detailed, .. }) => {
                 assert!(*detailed);
@@ -2207,7 +2207,7 @@ mod tests {
 
     #[test]
     fn test_cli_serve_command() {
-        let cli = Cli::parse_from(["research-master-mcp", "serve"]);
+        let cli = Cli::parse_from(["research-master", "serve"]);
         match &cli.command {
             Some(Commands::Mcp {
                 stdio, port, host, ..
@@ -2223,14 +2223,14 @@ mod tests {
     #[test]
     fn test_cli_serve_http_mode() {
         // Just verify the command parses - stdio defaults to true so http doesn't override it
-        let cli = Cli::parse_from(["research-master-mcp", "serve", "--http"]);
+        let cli = Cli::parse_from(["research-master", "serve", "--http"]);
         assert!(matches!(cli.command, Some(Commands::Mcp { .. })));
     }
 
     // Author command tests
     #[test]
     fn test_cli_author_command() {
-        let cli = Cli::parse_from(["research-master-mcp", "author", "Geoffrey Hinton"]);
+        let cli = Cli::parse_from(["research-master", "author", "Geoffrey Hinton"]);
         match &cli.command {
             Some(Commands::Author { author, .. }) => {
                 assert_eq!(author, "Geoffrey Hinton");
@@ -2242,7 +2242,7 @@ mod tests {
     #[test]
     fn test_cli_author_with_source() {
         let cli = Cli::parse_from([
-            "research-master-mcp",
+            "research-master",
             "author",
             "Geoffrey Hinton",
             "--source",
@@ -2261,7 +2261,7 @@ mod tests {
     #[test]
     fn test_cli_read_command() {
         let cli = Cli::parse_from([
-            "research-master-mcp",
+            "research-master",
             "read",
             "2301.12345",
             "--source",
@@ -2280,7 +2280,7 @@ mod tests {
     #[test]
     fn test_cli_read_with_options() {
         let cli = Cli::parse_from([
-            "research-master-mcp",
+            "research-master",
             "read",
             "2301.12345",
             "--source",
@@ -2317,7 +2317,7 @@ mod tests {
     #[test]
     fn test_cli_citations_command() {
         let cli = Cli::parse_from([
-            "research-master-mcp",
+            "research-master",
             "citations",
             "2301.12345",
             "--source",
@@ -2334,7 +2334,7 @@ mod tests {
     #[test]
     fn test_cli_citations_with_options() {
         let cli = Cli::parse_from([
-            "research-master-mcp",
+            "research-master",
             "citations",
             "2301.12345",
             "--source",
@@ -2360,7 +2360,7 @@ mod tests {
     #[test]
     fn test_cli_references_command() {
         let cli = Cli::parse_from([
-            "research-master-mcp",
+            "research-master",
             "references",
             "1706.03762",
             "--source",
@@ -2377,7 +2377,7 @@ mod tests {
     #[test]
     fn test_cli_references_alias() {
         let cli = Cli::parse_from([
-            "research-master-mcp",
+            "research-master",
             "ref",
             "1706.03762",
             "--source",
@@ -2390,7 +2390,7 @@ mod tests {
     #[test]
     fn test_cli_related_command() {
         let cli = Cli::parse_from([
-            "research-master-mcp",
+            "research-master",
             "related",
             "1706.03762",
             "--source",
@@ -2407,7 +2407,7 @@ mod tests {
     #[test]
     fn test_cli_related_alias() {
         let cli = Cli::parse_from([
-            "research-master-mcp",
+            "research-master",
             "rel",
             "1706.03762",
             "--source",
@@ -2419,7 +2419,7 @@ mod tests {
     // Lookup command tests
     #[test]
     fn test_cli_lookup_command() {
-        let cli = Cli::parse_from(["research-master-mcp", "doi", "10.1234/test"]);
+        let cli = Cli::parse_from(["research-master", "doi", "10.1234/test"]);
         match &cli.command {
             Some(Commands::LookupByDoi { doi, .. }) => {
                 assert_eq!(doi, "10.1234/test");
@@ -2431,7 +2431,7 @@ mod tests {
     #[test]
     fn test_cli_lookup_with_source() {
         let cli = Cli::parse_from([
-            "research-master-mcp",
+            "research-master",
             "doi",
             "10.1234/test",
             "--source",
@@ -2449,7 +2449,7 @@ mod tests {
     // Cache command tests
     #[test]
     fn test_cli_cache_status() {
-        let cli = Cli::parse_from(["research-master-mcp", "cache", "status"]);
+        let cli = Cli::parse_from(["research-master", "cache", "status"]);
         assert!(matches!(
             cli.command,
             Some(Commands::Cache {
@@ -2460,7 +2460,7 @@ mod tests {
 
     #[test]
     fn test_cli_cache_clear() {
-        let cli = Cli::parse_from(["research-master-mcp", "cache", "clear"]);
+        let cli = Cli::parse_from(["research-master", "cache", "clear"]);
         assert!(matches!(
             cli.command,
             Some(Commands::Cache {
@@ -2471,7 +2471,7 @@ mod tests {
 
     #[test]
     fn test_cli_cache_clear_searches() {
-        let cli = Cli::parse_from(["research-master-mcp", "cache", "clear-searches"]);
+        let cli = Cli::parse_from(["research-master", "cache", "clear-searches"]);
         assert!(matches!(
             cli.command,
             Some(Commands::Cache {
@@ -2482,7 +2482,7 @@ mod tests {
 
     #[test]
     fn test_cli_cache_clear_citations() {
-        let cli = Cli::parse_from(["research-master-mcp", "cache", "clear-citations"]);
+        let cli = Cli::parse_from(["research-master", "cache", "clear-citations"]);
         assert!(matches!(
             cli.command,
             Some(Commands::Cache {
@@ -2494,7 +2494,7 @@ mod tests {
     // Doctor command tests
     #[test]
     fn test_cli_doctor_command() {
-        let cli = Cli::parse_from(["research-master-mcp", "doctor"]);
+        let cli = Cli::parse_from(["research-master", "doctor"]);
         match &cli.command {
             Some(Commands::Doctor {
                 check_connectivity,
@@ -2512,7 +2512,7 @@ mod tests {
     #[test]
     fn test_cli_doctor_with_options() {
         let cli = Cli::parse_from([
-            "research-master-mcp",
+            "research-master",
             "doctor",
             "--check-connectivity",
             "--check-api-keys",
@@ -2534,14 +2534,14 @@ mod tests {
 
     #[test]
     fn test_cli_doctor_alias() {
-        let cli = Cli::parse_from(["research-master-mcp", "diag"]);
+        let cli = Cli::parse_from(["research-master", "diag"]);
         assert!(matches!(cli.command, Some(Commands::Doctor { .. })));
     }
 
     // Update command tests
     #[test]
     fn test_cli_update_command() {
-        let cli = Cli::parse_from(["research-master-mcp", "update"]);
+        let cli = Cli::parse_from(["research-master", "update"]);
         match &cli.command {
             Some(Commands::Update { force, dry_run }) => {
                 assert!(!*force);
@@ -2553,7 +2553,7 @@ mod tests {
 
     #[test]
     fn test_cli_update_with_options() {
-        let cli = Cli::parse_from(["research-master-mcp", "update", "--force", "--dry-run"]);
+        let cli = Cli::parse_from(["research-master", "update", "--force", "--dry-run"]);
         match &cli.command {
             Some(Commands::Update { force, dry_run }) => {
                 assert!(*force);
@@ -2566,7 +2566,7 @@ mod tests {
     // Completions command tests
     #[test]
     fn test_cli_completions_bash() {
-        let cli = Cli::parse_from(["research-master-mcp", "completions", "bash"]);
+        let cli = Cli::parse_from(["research-master", "completions", "bash"]);
         match &cli.command {
             Some(Commands::Completions { shell }) => {
                 assert!(matches!(shell, Shell::Bash));
@@ -2577,7 +2577,7 @@ mod tests {
 
     #[test]
     fn test_cli_completions_zsh() {
-        let cli = Cli::parse_from(["research-master-mcp", "completions", "zsh"]);
+        let cli = Cli::parse_from(["research-master", "completions", "zsh"]);
         match &cli.command {
             Some(Commands::Completions { shell }) => {
                 assert!(matches!(shell, Shell::Zsh));
@@ -2588,7 +2588,7 @@ mod tests {
 
     #[test]
     fn test_cli_completions_fish() {
-        let cli = Cli::parse_from(["research-master-mcp", "completions", "fish"]);
+        let cli = Cli::parse_from(["research-master", "completions", "fish"]);
         match &cli.command {
             Some(Commands::Completions { shell }) => {
                 assert!(matches!(shell, Shell::Fish));
@@ -2599,7 +2599,7 @@ mod tests {
 
     #[test]
     fn test_cli_completions_powershell() {
-        let cli = Cli::parse_from(["research-master-mcp", "completions", "power-shell"]);
+        let cli = Cli::parse_from(["research-master", "completions", "power-shell"]);
         match &cli.command {
             Some(Commands::Completions { shell }) => {
                 assert!(matches!(shell, Shell::PowerShell));
@@ -2610,14 +2610,14 @@ mod tests {
 
     #[test]
     fn test_cli_completions_alias() {
-        let cli = Cli::parse_from(["research-master-mcp", "completion", "bash"]);
+        let cli = Cli::parse_from(["research-master", "completion", "bash"]);
         assert!(matches!(cli.command, Some(Commands::Completions { .. })));
     }
 
     // Dedupe command tests
     #[test]
     fn test_cli_dedupe_command() {
-        let cli = Cli::parse_from(["research-master-mcp", "dedupe", "papers.json"]);
+        let cli = Cli::parse_from(["research-master", "dedupe", "papers.json"]);
         match &cli.command {
             Some(Commands::Dedupe { input, .. }) => {
                 assert_eq!(input.to_string_lossy(), "papers.json");
@@ -2629,7 +2629,7 @@ mod tests {
     #[test]
     fn test_cli_dedupe_with_options() {
         let cli = Cli::parse_from([
-            "research-master-mcp",
+            "research-master",
             "dedupe",
             "papers.json",
             "-O",
@@ -2659,7 +2659,7 @@ mod tests {
 
     #[test]
     fn test_cli_dedupe_alias() {
-        let cli = Cli::parse_from(["research-master-mcp", "dedup", "papers.json"]);
+        let cli = Cli::parse_from(["research-master", "dedup", "papers.json"]);
         assert!(matches!(cli.command, Some(Commands::Dedupe { .. })));
     }
 
@@ -2667,7 +2667,7 @@ mod tests {
     #[test]
     fn test_cli_search_all_options() {
         let cli = Cli::parse_from([
-            "research-master-mcp",
+            "research-master",
             "search",
             "transformer",
             "--source",
@@ -2830,7 +2830,7 @@ mod tests {
     #[test]
     fn test_cli_download_all_options() {
         let cli = Cli::parse_from([
-            "research-master-mcp",
+            "research-master",
             "download",
             "2301.12345",
             "--source",
@@ -2872,7 +2872,7 @@ mod tests {
     #[test]
     fn test_cli_sources_with_capability() {
         let cli = Cli::parse_from([
-            "research-master-mcp",
+            "research-master",
             "sources",
             "--with-capability",
             "download",
@@ -2891,7 +2891,7 @@ mod tests {
     #[test]
     fn test_cli_author_all_options() {
         let cli = Cli::parse_from([
-            "research-master-mcp",
+            "research-master",
             "author",
             "Geoffrey Hinton",
             "--source",

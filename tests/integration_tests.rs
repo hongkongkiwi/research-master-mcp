@@ -1,11 +1,41 @@
-//! Integration tests for Research Master MCP
+//! Integration tests for Research Master
 //!
 //! These tests verify the full functionality of the MCP server and research sources.
 
-use research_master_mcp::mcp::server::McpServer;
-use research_master_mcp::models::{SearchQuery, SourceType};
-use research_master_mcp::sources::{SourceCapabilities, SourceRegistry};
+use research_master::mcp::server::McpServer;
+use research_master::models::{SearchQuery, SourceType};
+use research_master::sources::{SourceCapabilities, SourceRegistry};
 use std::sync::Arc;
+
+/// Set up environment variables for sources that require API keys
+/// This allows tests to pass even when API keys are not set in the environment
+fn setup_api_keys() {
+    // Set dummy API keys for sources that require them
+    std::env::set_var("ACM_API_KEY", "test_key_for_integration_tests");
+    std::env::set_var("SPRINGER_API_KEY", "test_key_for_integration_tests");
+    std::env::set_var("MDPI_API_KEY", "test_key_for_integration_tests");
+    std::env::set_var("IEEE_XPLORE_API_KEY", "test_key_for_integration_tests");
+    std::env::set_var("JSTOR_API_KEY", "test_key_for_integration_tests");
+}
+
+/// Clean up API key environment variables after tests
+fn cleanup_api_keys() {
+    std::env::remove_var("ACM_API_KEY");
+    std::env::remove_var("SPRINGER_API_KEY");
+    std::env::remove_var("MDPI_API_KEY");
+    std::env::remove_var("IEEE_XPLORE_API_KEY");
+    std::env::remove_var("JSTOR_API_KEY");
+}
+
+/// Wrapper to run tests with API keys set
+fn with_api_keys<F>(test: F)
+where
+    F: FnOnce(),
+{
+    setup_api_keys();
+    test();
+    cleanup_api_keys();
+}
 
 fn expected_source_count() -> usize {
     let mut count = 0;
@@ -101,58 +131,62 @@ fn expected_source_count() -> usize {
 /// Test that the server can be created successfully
 #[tokio::test]
 async fn test_server_initialization() {
-    let registry = SourceRegistry::new();
-    let server = McpServer::new(Arc::new(registry));
-    assert!(server.is_ok());
+    with_api_keys(|| {
+        let registry = SourceRegistry::new();
+        let server = McpServer::new(Arc::new(registry));
+        assert!(server.is_ok());
+    });
 }
 
 /// Test that all sources are registered
 #[tokio::test]
 async fn test_all_sources_registered() {
-    let registry = SourceRegistry::new();
-    let sources: Vec<_> = registry.all().collect();
+    with_api_keys(|| {
+        let registry = SourceRegistry::new();
+        let sources: Vec<_> = registry.all().collect();
 
-    let expected = expected_source_count();
-    assert_eq!(sources.len(), expected);
+        let expected = expected_source_count();
+        assert_eq!(sources.len(), expected);
 
-    // Check each source exists
-    let source_ids: Vec<&str> = sources.iter().map(|s| s.id()).collect();
-    assert!(source_ids.contains(&"arxiv"));
-    assert!(source_ids.contains(&"pubmed"));
-    assert!(source_ids.contains(&"biorxiv"));
-    assert!(source_ids.contains(&"semantic"));
-    assert!(source_ids.contains(&"openalex"));
-    assert!(source_ids.contains(&"crossref"));
-    assert!(source_ids.contains(&"iacr"));
-    assert!(source_ids.contains(&"pmc"));
-    assert!(source_ids.contains(&"hal"));
-    assert!(source_ids.contains(&"dblp"));
-    assert!(source_ids.contains(&"ssrn"));
-    assert!(source_ids.contains(&"dimensions"));
-    assert!(source_ids.contains(&"ieee_xplore"));
-    if cfg!(feature = "source-europe_pmc") {
-        assert!(source_ids.contains(&"europe_pmc"));
-    } else {
-        assert!(!source_ids.contains(&"europe_pmc"));
-    }
-    assert!(source_ids.contains(&"core"));
-    assert!(source_ids.contains(&"zenodo"));
-    assert!(source_ids.contains(&"unpaywall"));
-    assert!(source_ids.contains(&"mdpi"));
-    assert!(source_ids.contains(&"jstor"));
-    assert!(source_ids.contains(&"scispace"));
-    assert!(source_ids.contains(&"acm"));
-    assert!(source_ids.contains(&"connected_papers"));
-    assert!(source_ids.contains(&"doaj"));
-    assert!(source_ids.contains(&"worldwidescience"));
-    assert!(source_ids.contains(&"osf"));
-    assert!(source_ids.contains(&"base"));
-    assert!(source_ids.contains(&"springer"));
-    if cfg!(feature = "source-google_scholar") {
-        assert!(source_ids.contains(&"google_scholar"));
-    } else {
-        assert!(!source_ids.contains(&"google_scholar"));
-    }
+        // Check each source exists
+        let source_ids: Vec<&str> = sources.iter().map(|s| s.id()).collect();
+        assert!(source_ids.contains(&"arxiv"));
+        assert!(source_ids.contains(&"pubmed"));
+        assert!(source_ids.contains(&"biorxiv"));
+        assert!(source_ids.contains(&"semantic"));
+        assert!(source_ids.contains(&"openalex"));
+        assert!(source_ids.contains(&"crossref"));
+        assert!(source_ids.contains(&"iacr"));
+        assert!(source_ids.contains(&"pmc"));
+        assert!(source_ids.contains(&"hal"));
+        assert!(source_ids.contains(&"dblp"));
+        assert!(source_ids.contains(&"ssrn"));
+        assert!(source_ids.contains(&"dimensions"));
+        assert!(source_ids.contains(&"ieee_xplore"));
+        if cfg!(feature = "source-europe_pmc") {
+            assert!(source_ids.contains(&"europe_pmc"));
+        } else {
+            assert!(!source_ids.contains(&"europe_pmc"));
+        }
+        assert!(source_ids.contains(&"core"));
+        assert!(source_ids.contains(&"zenodo"));
+        assert!(source_ids.contains(&"unpaywall"));
+        assert!(source_ids.contains(&"mdpi"));
+        assert!(source_ids.contains(&"jstor"));
+        assert!(source_ids.contains(&"scispace"));
+        assert!(source_ids.contains(&"acm"));
+        assert!(source_ids.contains(&"connected_papers"));
+        assert!(source_ids.contains(&"doaj"));
+        assert!(source_ids.contains(&"worldwidescience"));
+        assert!(source_ids.contains(&"osf"));
+        assert!(source_ids.contains(&"base"));
+        assert!(source_ids.contains(&"springer"));
+        if cfg!(feature = "source-google_scholar") {
+            assert!(source_ids.contains(&"google_scholar"));
+        } else {
+            assert!(!source_ids.contains(&"google_scholar"));
+        }
+    });
 }
 
 /// Test source capabilities are properly reported
@@ -214,56 +248,62 @@ fn test_invalid_query_handling() {
 /// Test source retrieval by name
 #[tokio::test]
 async fn test_get_source_by_name() {
-    let registry = SourceRegistry::new();
+    with_api_keys(|| {
+        let registry = SourceRegistry::new();
 
-    // Test getting existing sources
-    assert!(registry.get("arxiv").is_some());
-    assert!(registry.get("pubmed").is_some());
-    assert!(registry.get("semantic").is_some());
+        // Test getting existing sources
+        assert!(registry.get("arxiv").is_some());
+        assert!(registry.get("pubmed").is_some());
+        assert!(registry.get("semantic").is_some());
 
-    // Test getting non-existent source
-    assert!(registry.get("nonexistent").is_none());
+        // Test getting non-existent source
+        assert!(registry.get("nonexistent").is_none());
+    });
 }
 
 /// Test getting sources by capability
 #[tokio::test]
 async fn test_get_sources_by_capability() {
-    let registry = SourceRegistry::new();
+    with_api_keys(|| {
+        let registry = SourceRegistry::new();
 
-    // Get all searchable sources
-    let searchable = registry.with_capability(SourceCapabilities::SEARCH);
+        // Get all searchable sources
+        let searchable = registry.with_capability(SourceCapabilities::SEARCH);
 
-    assert!(!searchable.is_empty());
-    assert!(searchable.len() >= 8); // At least 8 sources should support search
+        assert!(!searchable.is_empty());
+        assert!(searchable.len() >= 8); // At least 8 sources should support search
 
-    // Get all DOI lookup sources
-    let doi_lookup = registry.with_capability(SourceCapabilities::DOI_LOOKUP);
+        // Get all DOI lookup sources
+        let doi_lookup = registry.with_capability(SourceCapabilities::DOI_LOOKUP);
 
-    assert!(!doi_lookup.is_empty());
+        assert!(!doi_lookup.is_empty());
+    });
 }
 
 /// Test helper methods on registry
 #[tokio::test]
 async fn test_registry_helper_methods() {
-    let registry = SourceRegistry::new();
+    with_api_keys(|| {
+        let registry = SourceRegistry::new();
 
-    // Test has() method
-    assert!(registry.has("arxiv"));
-    assert!(!registry.has("nonexistent"));
+        // Test has() method
+        assert!(registry.has("arxiv"));
+        assert!(!registry.has("nonexistent"));
 
-    // Test len() method - should match enabled feature set
-    assert_eq!(registry.len(), expected_source_count());
+        // Test len() method - should match enabled feature set
+        assert_eq!(registry.len(), expected_source_count());
 
-    // Test is_empty() method
-    assert!(!registry.is_empty());
+        // Test is_empty() method
+        assert!(!registry.is_empty());
 
-    // Test searchable() helper
-    let searchable = registry.searchable();
-    assert!(!searchable.is_empty());
+        // Test searchable() helper
+        let searchable = registry.searchable();
+        assert!(!searchable.is_empty());
 
-    // Test downloadable() helper
-    let downloadable = registry.downloadable();
-    assert!(!downloadable.is_empty());
+        // Test downloadable() helper
+        let downloadable = registry.downloadable();
+        assert!(!downloadable.is_empty());
+    });
 }
 
 /// Test source metadata
@@ -279,7 +319,7 @@ async fn test_source_metadata() {
 /// Test Paper model
 #[test]
 fn test_paper_model() {
-    use research_master_mcp::models::PaperBuilder;
+    use research_master::models::PaperBuilder;
 
     let paper = PaperBuilder::new(
         "1234.5678",
@@ -310,7 +350,7 @@ fn test_paper_model() {
 /// Test Paper with PDF
 #[test]
 fn test_paper_with_pdf() {
-    use research_master_mcp::models::PaperBuilder;
+    use research_master::models::PaperBuilder;
 
     let paper = PaperBuilder::new("1234", "Test", "https://example.com", SourceType::Arxiv)
         .pdf_url("https://example.com/paper.pdf")
@@ -326,7 +366,7 @@ fn test_paper_with_pdf() {
 /// Test Paper categories and keywords
 #[test]
 fn test_paper_categories_keywords() {
-    use research_master_mcp::models::PaperBuilder;
+    use research_master::models::PaperBuilder;
 
     let paper = PaperBuilder::new("1234", "Test", "https://example.com", SourceType::Arxiv)
         .categories("Machine Learning; AI")

@@ -17,7 +17,7 @@
 //! over standard input/output:
 //!
 //! ```rust,no_run
-//! use research_master_mcp::{mcp::McpServer, sources::SourceRegistry};
+//! use research_master::{mcp::McpServer, sources::SourceRegistry};
 //! use std::sync::Arc;
 //!
 //! # #[tokio::main]
@@ -34,7 +34,7 @@
 //! For web-based clients using Server-Sent Events:
 //!
 //! ```rust,no_run
-//! use research_master_mcp::{mcp::McpServer, sources::SourceRegistry};
+//! use research_master::{mcp::McpServer, sources::SourceRegistry};
 //! use std::sync::Arc;
 //!
 //! # #[tokio::main]
