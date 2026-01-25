@@ -26,8 +26,10 @@ pub struct ConnectedPapersSource {
 
 impl ConnectedPapersSource {
     pub fn new() -> Result<Self, SourceError> {
+        let user_agent = concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION"));
+        // Use 60s timeout for potentially slow API responses
         Ok(Self {
-            client: Arc::new(HttpClient::new()?),
+            client: Arc::new(HttpClient::with_timeout(user_agent, 60)?),
         })
     }
 }

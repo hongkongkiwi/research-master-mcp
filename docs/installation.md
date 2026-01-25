@@ -12,7 +12,7 @@ brew tap hongkongkiwi/research-master
 brew install research-master
 
 # Start the MCP server
-research-master serve --stdio
+research-master mcp --stdio
 ```
 
 ## Packages & Images Summary
@@ -207,17 +207,17 @@ Download and install from [poppler-windows](https://github.com/oschwartz10612/po
 docker build -t research-master .
 
 # Run with stdio mode
-docker run --rm -i research-master serve --stdio
+docker run --rm -i research-master mcp --stdio
 
 # Or use pre-built image (includes Poppler for PDF text extraction)
-docker run --rm -i ghcr.io/hongkongkiwi/research-master serve --stdio
+docker run --rm -i ghcr.io/hongkongkiwi/research-master mcp --stdio
 ```
 
 ### OCR Variant (for scanned PDFs)
 
 ```bash
 # OCR variant (adds Tesseract for scanned PDFs)
-docker run --rm -i ghcr.io/hongkongkiwi/research-master-ocr serve --stdio
+docker run --rm -i ghcr.io/hongkongkiwi/research-master-ocr mcp --stdio
 
 # Build OCR image with extra languages (e.g., English + German)
 docker build -f Dockerfile.ocr -t research-master-ocr --build-arg OCR_LANGS="eng deu" .
@@ -229,7 +229,7 @@ docker build -f Dockerfile.ocr -t research-master-ocr --build-arg OCR_LANGS="eng
 docker run --rm -i \
   -v ~/.config/research-master:/root/.config/research-master \
   -v ./downloads:/downloads \
-  ghcr.io/hongkongkiwi/research-master serve --stdio
+  ghcr.io/hongkongkiwi/research-master mcp --stdio
 ```
 
 ## Verifying Installation

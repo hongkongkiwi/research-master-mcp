@@ -32,7 +32,7 @@ Add to your Claude Desktop configuration (`~/Library/Application Support/Claude/
   "mcpServers": {
     "research-master": {
       "command": "research-master",
-      "args": ["serve"]
+      "args": ["mcp"]
     }
   }
 }
@@ -92,7 +92,7 @@ research-master download 2301.12345 --source arxiv --output ./papers
 research-master lookup 10.48550/arXiv.2301.12345
 
 # Start MCP server
-research-master serve --stdio
+research-master mcp --stdio
 
 # Show all environment variables
 research-master --env

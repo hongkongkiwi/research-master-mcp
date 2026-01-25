@@ -21,4 +21,4 @@ USER appuser
 
 # Default command
 ENTRYPOINT ["research-master"]
-CMD ["serve"]
+CMD ["mcp"]

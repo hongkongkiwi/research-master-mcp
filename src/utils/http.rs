@@ -180,11 +180,8 @@ impl RateLimitedRequestBuilder {
 impl HttpClient {
     /// Create a new HTTP client with default settings and rate limiting
     pub fn new() -> Result<Self, SourceError> {
-        Self::with_user_agent(concat!(
-            env!("CARGO_PKG_NAME"),
-            "/",
-            env!("CARGO_PKG_VERSION")
-        ))
+        let user_agent = concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION"));
+        Self::with_user_agent(user_agent)
     }
 
     /// Create a new HTTP client with a custom user agent
@@ -195,6 +192,36 @@ impl HttpClient {
         let mut builder = Client::builder()
             .user_agent(user_agent)
             .timeout(Duration::from_secs(30))
+            .connect_timeout(Duration::from_secs(10))
+            .pool_idle_timeout(Duration::from_secs(90));
+
+        // Apply proxy if configured
+        if let Some(proxy_url) = proxy.http_proxy {
+            builder = builder.proxy(reqwest::Proxy::http(&proxy_url)?);
+        }
+        if let Some(proxy_url) = proxy.https_proxy {
+            builder = builder.proxy(reqwest::Proxy::https(&proxy_url)?);
+        }
+
+        let client = builder
+            .build()
+            .map_err(|e| SourceError::Network(format!("Failed to create HTTP client: {}", e)))?;
+
+        Ok(Self {
+            client: Arc::new(client),
+            rate_limiter,
+            no_proxy: proxy.no_proxy,
+        })
+    }
+
+    /// Create HTTP client with custom timeout
+    pub fn with_timeout(user_agent: &str, timeout_secs: u64) -> Result<Self, SourceError> {
+        let rate_limiter = Self::create_rate_limiter();
+        let proxy = create_proxy_config();
+
+        let mut builder = Client::builder()
+            .user_agent(user_agent)
+            .timeout(Duration::from_secs(timeout_secs))
             .connect_timeout(Duration::from_secs(10))
             .pool_idle_timeout(Duration::from_secs(90));
 

@@ -26,8 +26,10 @@ pub struct DimensionsSource {
 impl DimensionsSource {
     pub fn new() -> Result<Self, SourceError> {
         let api_key = std::env::var("DIMENSIONS_API_KEY").ok();
+        let user_agent = concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION"));
+        // Use 90s timeout for GraphQL queries that may take longer
         Ok(Self {
-            client: Arc::new(HttpClient::new()?),
+            client: Arc::new(HttpClient::with_timeout(user_agent, 90)?),
             api_key,
         })
     }

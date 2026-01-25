@@ -733,7 +733,7 @@ jobs:
                     "mcpServers": {
                       "research-master": {
                         "command": "#{bin}/research-master",
-                        "args": ["serve"]
+                        "args": ["mcp"]
                       }
                     }
                   }

@@ -3854,6 +3854,7 @@ dependencies = [
  "toml 0.8.23",
  "tracing",
  "tracing-subscriber",
+ "unicode-width 0.1.14",
  "url",
  "urlencoding",
  "zip 2.4.2",

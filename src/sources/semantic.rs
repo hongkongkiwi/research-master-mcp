@@ -21,6 +21,12 @@ const SEMANTIC_SCHOLAR_RATE_LIMIT_ENV: &str = "SEMANTIC_SCHOLAR_RATE_LIMIT";
 /// Default rate limit for Semantic Scholar (1 request per second without API key)
 const DEFAULT_SEMANTIC_RATE_LIMIT: u32 = 1;
 
+/// Environment variable for Semantic Scholar circuit breaker failure threshold
+const SEMANTIC_SCHOLAR_CIRCUIT_BREAKER_THRESHOLD_ENV: &str = "SEMANTIC_SCHOLAR_CIRCUIT_BREAKER_THRESHOLD";
+
+/// Default circuit breaker failure threshold for Semantic Scholar
+const DEFAULT_SEMANTIC_CIRCUIT_BREAKER_THRESHOLD: usize = 10;
+
 /// Semantic Scholar research source
 ///
 /// Uses Semantic Scholar GraphQL/REST API.
@@ -41,15 +47,28 @@ impl SemanticScholarSource {
             .unwrap_or(DEFAULT_SEMANTIC_RATE_LIMIT)
     }
 
+    /// Get the circuit breaker failure threshold from environment variable or use default
+    fn get_circuit_breaker_threshold() -> usize {
+        std::env::var(SEMANTIC_SCHOLAR_CIRCUIT_BREAKER_THRESHOLD_ENV)
+            .ok()
+            .and_then(|s| s.parse::<usize>().ok())
+            .unwrap_or(DEFAULT_SEMANTIC_CIRCUIT_BREAKER_THRESHOLD)
+    }
+
     /// Create a new Semantic Scholar source
     pub fn new() -> Result<Self, SourceError> {
         let rate_limit = Self::get_rate_limit();
         let user_agent = concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION"));
+        let circuit_threshold = Self::get_circuit_breaker_threshold();
 
         Ok(Self {
             client: Arc::new(HttpClient::with_rate_limit(user_agent, rate_limit)?),
             api_key: std::env::var("SEMANTIC_SCHOLAR_API_KEY").ok(),
-            circuit_breaker: Arc::new(CircuitBreaker::default_for("semantic")),
+            circuit_breaker: Arc::new(CircuitBreaker::new(
+                "semantic",
+                circuit_threshold,
+                std::time::Duration::from_secs(60),
+            )),
         })
     }
 
@@ -58,11 +77,16 @@ impl SemanticScholarSource {
     pub fn with_api_key(api_key: String) -> Result<Self, SourceError> {
         let rate_limit = Self::get_rate_limit();
         let user_agent = concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION"));
+        let circuit_threshold = Self::get_circuit_breaker_threshold();
 
         Ok(Self {
             client: Arc::new(HttpClient::with_rate_limit(user_agent, rate_limit)?),
             api_key: Some(api_key),
-            circuit_breaker: Arc::new(CircuitBreaker::default_for("semantic")),
+            circuit_breaker: Arc::new(CircuitBreaker::new(
+                "semantic",
+                circuit_threshold,
+                std::time::Duration::from_secs(60),
+            )),
         })
     }
 

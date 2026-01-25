@@ -9,7 +9,7 @@ This guide covers CLI commands and MCP server usage.
 For integration with Claude Desktop or other MCP clients:
 
 ```bash
-research-master serve --stdio
+research-master mcp --stdio
 ```
 
 ### HTTP/SSE Mode
@@ -17,7 +17,7 @@ research-master serve --stdio
 For clients that support HTTP-based MCP connections:
 
 ```bash
-research-master serve --port 3000 --host 0.0.0.0
+research-master mcp --port 3000 --host 0.0.0.0
 ```
 
 Then configure your client to connect to `http://localhost:3000/sse`.
@@ -380,7 +380,7 @@ research-master dedupe papers.json --strategy first
 research-master --env
 
 # Start MCP server
-research-master serve --stdio
+research-master mcp --stdio
 ```
 
 ## Next Steps

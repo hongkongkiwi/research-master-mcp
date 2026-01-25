@@ -41,6 +41,7 @@
 mod cache;
 mod circuit_breaker;
 mod dedup;
+mod display;
 mod http;
 mod pdf;
 mod progress;
@@ -75,4 +76,10 @@ pub use update::{
 };
 pub use validate::{
     sanitize_filename, sanitize_paper_id, validate_doi, validate_url, ValidationError,
+};
+pub use display::{
+    calculate_column_widths, format_authors, format_source, format_title, format_year,
+    get_paper_table_columns, terminal_info, terminal_width, terminal_height, is_terminal,
+    truncate_at_word, truncate_with_ellipsis, calculate_dynamic_column_widths, ColumnConfig,
+    Terminal,
 };

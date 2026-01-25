@@ -9,10 +9,11 @@ use research_master::models::{
 use research_master::sources::{SourceCapabilities, SourceRegistry};
 use research_master::utils::{
     deduplicate_papers, find_duplicates, CacheService, DuplicateStrategy,
+    format_authors, format_source, format_title, format_year, get_paper_table_columns,
+    is_terminal, terminal_width,
 };
 use std::io::IsTerminal;
 use std::path::PathBuf;
-use terminal_size::terminal_size;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
@@ -630,6 +631,45 @@ enum Commands {
         /// Shell to generate completions for
         #[arg(value_enum)]
         shell: Shell,
+    },
+
+    /// Show search and download history
+    #[command(alias = "hist")]
+    History {
+        /// Maximum number of items to show
+        #[arg(long, short, default_value_t = 20)]
+        limit: usize,
+
+        /// Show only searches
+        #[arg(long)]
+        searches: bool,
+
+        /// Show only downloads
+        #[arg(long)]
+        downloads: bool,
+
+        /// Clear history after showing
+        #[arg(long)]
+        clear: bool,
+    },
+
+    /// Clear cache, history, or downloads
+    Clear {
+        /// Clear all cached data
+        #[arg(long)]
+        cache: bool,
+
+        /// Clear search history
+        #[arg(long)]
+        history: bool,
+
+        /// Clear downloaded papers
+        #[arg(long)]
+        downloads: bool,
+
+        /// Clear everything (cache, history, downloads)
+        #[arg(long, short = 'a')]
+        all: bool,
     },
 }
 
@@ -1917,7 +1957,7 @@ directory = "~/.cache/research-master"
             println!("  author <name>    - Search by author");
             println!("  download <id>    - Download a paper");
             println!("  sources          - List available sources");
-            println!("  serve            - Run MCP server");
+            println!("  mcp              - Run MCP server");
         }
     }
 
@@ -2014,15 +2054,21 @@ fn output_papers(papers: &[research_master::models::Paper], format: OutputFormat
             }
         }
         OutputFormat::Table => {
-            use comfy_table::{Attribute, Cell, Table};
+            use comfy_table::{
+                Attribute, Cell, ColumnConstraint, Table, Width,
+            };
+
+            // Use our robust terminal width detection with fallback
+            let width = if is_terminal() && terminal_width() > 0 {
+                terminal_width()
+            } else {
+                100 // Fallback for non-terminal or unknown size
+            };
+
+            let (title_width, authors_width, source_width, year_width) = get_paper_table_columns(width);
+
             let mut table = Table::new();
             table.load_preset(comfy_table::presets::UTF8_FULL);
-
-            // Set up dynamic column widths based on terminal size
-            let term_width = terminal_size().map(|(w, _)| w.0 as usize).unwrap_or(100);
-            // Allocate: Title=50%, Authors=30%, Source=12%, Year=8%
-            let title_width = (term_width as f64 * 0.50).max(30.0).min(80.0) as usize;
-            let authors_width = (term_width as f64 * 0.30).max(20.0).min(50.0) as usize;
 
             table.set_header(vec![
                 Cell::new("Title").add_attribute(Attribute::Bold),
@@ -2031,29 +2077,29 @@ fn output_papers(papers: &[research_master::models::Paper], format: OutputFormat
                 Cell::new("Year").add_attribute(Attribute::Bold),
             ]);
 
+            // Set column constraints for proper text fitting
+            table.set_constraints([
+                ColumnConstraint::Absolute(Width::Fixed(title_width as u16)),
+                ColumnConstraint::Absolute(Width::Fixed(authors_width as u16)),
+                ColumnConstraint::Absolute(Width::Fixed(source_width as u16)),
+                ColumnConstraint::Absolute(Width::Fixed(year_width as u16)),
+            ]);
+
             for paper in papers {
-                let year = paper
-                    .published_date
-                    .as_ref()
-                    .map(|d| d.chars().take(4).collect::<String>())
-                    .unwrap_or_else(|| "?".to_string());
+                let year = format_year(
+                    paper.published_date.as_ref()
+                        .map(|d| d.as_str())
+                        .unwrap_or("?"),
+                );
 
-                let title = if paper.title.len() > title_width + 3 {
-                    format!("{}...", &paper.title[..title_width.saturating_sub(3)])
-                } else {
-                    paper.title.clone()
-                };
-
-                let authors = if paper.authors.len() > authors_width + 3 {
-                    format!("{}...", &paper.authors[..authors_width.saturating_sub(3)])
-                } else {
-                    paper.authors.clone()
-                };
+                let title = format_title(&paper.title, title_width);
+                let authors = format_authors(&paper.authors, authors_width);
+                let source = format_source(&paper.source.to_string(), source_width);
 
                 table.add_row(vec![
                     Cell::new(title).add_attribute(Attribute::Bold),
                     Cell::new(authors),
-                    Cell::new(paper.source.to_string()),
+                    Cell::new(source),
                     Cell::new(year),
                 ]);
             }
@@ -2246,8 +2292,8 @@ mod tests {
     }
 
     #[test]
-    fn test_cli_serve_command() {
-        let cli = Cli::parse_from(["research-master", "serve"]);
+    fn test_cli_mcp_command() {
+        let cli = Cli::parse_from(["research-master", "mcp"]);
         match &cli.command {
             Some(Commands::Mcp {
                 stdio, port, host, ..
@@ -2256,14 +2302,14 @@ mod tests {
                 assert_eq!(*port, 3000);
                 assert_eq!(host, "127.0.0.1");
             }
-            _ => panic!("Expected Serve command"),
+            _ => panic!("Expected Mcp command"),
         }
     }
 
     #[test]
-    fn test_cli_serve_http_mode() {
+    fn test_cli_mcp_http_mode() {
         // Just verify the command parses - stdio defaults to true so http doesn't override it
-        let cli = Cli::parse_from(["research-master", "serve", "--http"]);
+        let cli = Cli::parse_from(["research-master", "mcp", "--http"]);
         assert!(matches!(cli.command, Some(Commands::Mcp { .. })));
     }
 
